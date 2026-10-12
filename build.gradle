@@ -1,0 +1,100 @@
+task openBuildDirFabric {
+    doLast {
+        if (System.properties['os.name'].toString().toLowerCase().contains('windows')) {
+            def buildDir = file("${project.projectDir}/fabric/build/libs").absolutePath
+            def command = ['explorer', buildDir]
+            new ProcessBuilder(command).start()
+        } else {
+            println "Skipping openBuildDir task as it is not running on Windows."
+        }
+    }
+}
+
+task openBuildDirNeoForge {
+    doLast {
+        if (System.properties['os.name'].toString().toLowerCase().contains('windows')) {
+            def buildDir = file("${project.projectDir}/neoforge/build/libs").absolutePath
+            def command = ['explorer', buildDir]
+            new ProcessBuilder(command).start()
+        } else {
+            println "Skipping openBuildDir task as it is not running on Windows."
+        }
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    base {
+        archivesName = "${archives_name}-${project.name.toLowerCase()}-${minecraft_version}"
+    }
+
+    processResources {
+        var replaceProperties =
+                [
+                        "mod_id"                                : mod_id,
+                        "mod_version"                           : mod_version,
+                        "mod_name"                              : mod_name,
+                        "mod_description"                       : mod_description,
+                        "mod_author_1"                          : mod_author_1,
+                        "mod_author_2"                          : mod_author_2,
+                        "mod_author_3"                          : mod_author_3,
+                        "mod_homepage"                          : mod_homepage,
+                        "mod_source"                            : mod_source,
+                        "mod_issues"                            : mod_issues,
+                        "mod_license"                           : mod_license,
+                        "mod_mocap_version"                     : mod_mocap_version,
+
+                        "maven_group"                           : maven_group,
+                        "archives_name"                         : archives_name,
+
+                        "minecraft_version"                     : minecraft_version,
+
+                        "voicechat_version"                     : voicechat_version,
+                        "voicechat_interaction_version"         : voicechat_interaction_version,
+
+                        "fabric_loader_version"                 : fabric_loader_version,
+                        "fabric_api_version"                    : fabric_api_version,
+                        "neoforge_version"                      : neoforge_version,
+                ]
+
+        filesMatching(["pack.mcmeta", "fabric.mod.json", "META-INF/neoforge.mods.toml", "*.mixins.json"]) {
+            expand replaceProperties
+        }
+        inputs.properties replaceProperties
+    }
+
+    if (project.name == "fabric") {
+        tasks.named("jar") {
+            finalizedBy rootProject.tasks.named("openBuildDirFabric")
+        }
+    } else if (project.name == "neoforge") {
+        tasks.named("jar") {
+            finalizedBy rootProject.tasks.named("openBuildDirNeoForge")
+        }
+    }
+
+    if (project.name in ["fabric", "neoforge"]) {
+        dependencies
+            {
+                compileOnly project(":common")
+            }
+
+        processResources { from project(":common").sourceSets.main.resources }
+        tasks.named("compileJava", JavaCompile) { source project(":common").sourceSets.main.allSource }
+    }
+
+    java {
+        // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
+        // if it is present.
+        // If you remove this line, sources will not be generated.
+        // withSourcesJar()
+
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        it.options.release = 21
+    }
+}

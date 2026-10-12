@@ -1,0 +1,159 @@
+package com.fl1s.rewritten.timetravel.commands;
+
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import com.fl1s.rewritten.timetravel.PlayerData;
+import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.types.TypeInterface;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
+
+public class CommandUtils {
+    public static List<String> getTrackedItemsFromReflection() {
+        List<String> trackedItems = new ArrayList<>();
+
+        Class<?> timeTravelClass = TimeTravel.class;
+
+        for (Field field : timeTravelClass.getDeclaredFields()) {
+            if (field.getName().startsWith("track") && field.getType() == boolean.class) {
+                try {
+                    // In case fields aren't public
+                    field.setAccessible(true);
+
+                    if (field.getBoolean(null)) {
+                        String rawName = field.getName();
+
+                        // Convert "trackItems" to "Items"
+                        String baseName = rawName.substring("track".length());
+
+                        // Convert camelCase ("Items") to space-separated ("Items") and then lowercase ("items")
+                        String readableName = Pattern.compile("(?<=[a-z])(?=[A-Z])").matcher(baseName).replaceAll(" ").toLowerCase();
+                        trackedItems.add(readableName);
+                    }
+                } catch (IllegalAccessException e) {
+                    LoopCommands.LOOP_COMMANDS_LOGGER.error("Failed to access reflection field: " + field.getName(), e);
+                }
+            }
+        }
+        return trackedItems;
+    }
+
+    public static @NotNull String formatList(List<String> items) {
+        if (items.size() == 0) return "";
+        if (items.size() == 1) return items.get(0);
+        if (items.size() == 2) return items.get(0) + " and " + items.get(1);
+
+        // For three or more items: use commas, and "and" for the last item
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) {
+                if (i == items.size() - 1) {
+                    sb.append(", and ");
+                } else {
+                    sb.append(", ");
+                }
+            }
+            sb.append(items.get(i));
+        }
+        return sb.toString();
+    }
+
+    public static <T extends Enum<T>> CompletableFuture<Suggestions> EnumSuggestion(SuggestionsBuilder builder, Class<T> enumClass) {
+        return SharedSuggestionProvider.suggest(Arrays.stream(enumClass.getEnumConstants()).filter(e -> e instanceof TypeInterface).map(e -> ((TypeInterface) e).getCommandName()), builder);
+    }
+
+    public static CompletableFuture<Suggestions> PlayerSuggestion(SuggestionsBuilder builder) {
+        return SharedSuggestionProvider.suggest(TimeTravel.loopSceneManager.getRecordingPlayers().stream().filter(PlayerData::getActive).map(PlayerData::getName), builder);
+    }
+
+    public static CompletableFuture<Suggestions> FileSuggestion(SuggestionsBuilder builder, Path path, boolean includeExtension) {
+        try {
+            return SharedSuggestionProvider.suggest(Files.walk(path).toList().stream().filter(p -> p.toFile().isFile()).map(p -> {
+                String filepath = Arrays.stream(p.toString().replace("\\", "/").split(path.toString().replace("\\", "/") + "/")).toList().getLast().replace("\\", "/");
+
+                return (includeExtension) ? filepath : filepath.substring(0, filepath.lastIndexOf("."));
+            }), builder);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static CompletableFuture<Suggestions> SkinSuggestion(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        return FileSuggestion(builder, TimeTravel.worldFolder.resolve("mocap_files").resolve("skins"), false);
+    }
+
+    public static CompletableFuture<Suggestions> TimeSuggestion(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        String input = builder.getRemaining().toLowerCase();
+
+        java.util.regex.Matcher matcher = Pattern.compile("^([0-9]*\\.?[0-9]+)([a-zA-Z]*)$").matcher(input);
+        if (matcher.matches()) {
+            String num = matcher.group(1);
+            String currentSuffix = matcher.group(2);
+            List<String> suffixes = Arrays.asList("s", "m", "h", "d", "t", "sec", "min", "hr", "day", "tick", "seconds", "minutes", "hours", "days", "ticks");
+            for (String suffix : suffixes) {
+                if (suffix.startsWith(currentSuffix)) {
+                    builder.suggest(num + suffix);
+                }
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    public static int parseDurationToTicks(String durationStr) throws IllegalArgumentException {
+        if (durationStr == null || durationStr.isBlank()) {
+            throw new IllegalArgumentException("Duration cannot be empty");
+        }
+
+        java.util.regex.Matcher matcher = Pattern.compile("^([0-9]*\\.?[0-9]+)([a-zA-Z]*)$").matcher(durationStr);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Invalid duration format: " + durationStr);
+        }
+
+        float value = Float.parseFloat(matcher.group(1));
+        String suffix = matcher.group(2).toLowerCase();
+
+        return switch (suffix) {
+            case "d", "day", "days" -> Math.round(value * 1728000);
+            case "h", "hr", "hrs", "hour", "hours" -> Math.round(value * 72000);
+            case "m", "min", "mins", "minute", "minutes" -> Math.round(value * 1200);
+            case "s", "sec", "secs", "second", "seconds" -> Math.round(value * 20);
+            case "t", "tick", "ticks", "" -> Math.round(value);
+            default -> throw new IllegalArgumentException("Unknown time unit: " + suffix);
+        };
+    }
+
+
+    @SuppressWarnings("unchecked")
+    public static LiteralArgumentBuilder<CommandSourceStack> toggleCommand(Supplier<Boolean> getter, String name, Command command) {
+        String spacedName = Pattern.compile("(?<=[a-z])(?=[A-Z])").matcher(name).replaceAll(" ").toLowerCase();
+        String finalName = spacedName.substring(0,1).toUpperCase() + spacedName.substring(1).toLowerCase();
+
+        LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal(name);
+
+        return LiteralArgumentBuilder.<CommandSourceStack>literal(name)
+                .executes(context -> {
+                    context.getSource().sendSuccess(() -> Component.literal(finalName + " is set to: " + getter.get()), false);
+                    return 1;
+                })
+                .then(Commands.argument("value", BoolArgumentType.bool())
+                        .executes(command));
+    }
+}

@@ -1,0 +1,38 @@
+{
+	"schemaVersion": 1,
+	"id": "${mod_id}",
+	"version": "${mod_version}",
+	"name": "${mod_name}",
+	"description": "${mod_description}",
+	"authors": ["${mod_author_1}", "${mod_author_2}", "${mod_author_3}"],
+	"contact": {
+		"homepage": "${mod_homepage}",
+		"sources": "${mod_source}",
+		"issues": "${mod_issues}"
+	},
+	"license": "${mod_license}",
+	"icon": "icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.fl1s.rewritten.fabric.TimeTravelFabric"
+		],
+		"client": [
+			"com.fl1s.rewritten.fabric.TimeTravelFabricClient"
+		],
+        "voicechat": [
+          "com.fl1s.rewritten.fabric.compat.voicechat.TimeTravelVoicechatPluginFabric"
+        ]
+    },
+	"depends": {
+		"minecraft": "${minecraft_version}",
+		"fabricloader": ">=${fabric_loader_version}",
+		"fabric-api": "*",
+		"mocap": "${mod_mocap_version}+mc${minecraft_version}",
+		"java": ">=21"
+	},
+    "suggests": {
+        "voicechat_api": ">=${voicechat_version}",
+        "vcinteraction": ">=${voicechat_interaction_version}"
+    }
+}
