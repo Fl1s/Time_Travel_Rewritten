@@ -2,16 +2,12 @@ package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
-import com.fl1s.rewritten.timetravel.mocap.GhostPlayback;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
-import com.fl1s.rewritten.timetravel.util.Levels;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,7 +19,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 public class TimeTravel {
@@ -62,29 +60,9 @@ public class TimeTravel {
 	public static LoopSceneManager loopSceneManager;
 	public static Path worldFolder;
 
-	public static final int GHOST_SYNC_SKIP_LIMIT = 8000;
-	public static final int GHOST_SKIP_PER_TICK = 40;
+	public static int ghostLookaheadTicks = 0;
+
 	private static TimelineSession session;
-	record PendingPiece(long startTick, String recording, String playerName, int skipTicks, int visitId,
-						int segment, long visitStartTick) {}
-
-	static final class Ghost {
-		final GhostPlayback root;
-		final String playerName;
-		final int visitId;
-		final GhostFx fx;
-		int pendingSkip;
-
-		Ghost(GhostPlayback root, String playerName, int visitId, GhostFx fx, int pendingSkip) {
-			this.root = root;
-			this.playerName = playerName;
-			this.visitId = visitId;
-			this.fx = fx;
-			this.pendingSkip = pendingSkip;
-		}
-	}
-
-	record PendingSound(long tick, String dim, double x, double y, double z, int dir, String playerName, int visitId) {}
 
 	public static void resetSession() {
 		session = new TimelineSession();
@@ -104,9 +82,6 @@ public class TimeTravel {
 		return s == null ? -1 : s.lastJumpOrigin;
 	}
 
-	public static int ghostLookaheadTicks = 0;
-	public static final long PENDING_VISIT_WINDOW = 1200;
-
 	public static void queueTask(Runnable task) {
 		TimelineSession s = session;
 		if (s != null) s.delayedTasks.add(task);
@@ -116,6 +91,7 @@ public class TimeTravel {
 		LOOP_LOGGER.info("Initializing TimeTravel mod (Common)");
 	}
 
+	//timeline contol
 	public static void startLoop() {
 		if (isLooping) {
 			LOOP_LOGGER.info("Timeline already running");
@@ -130,10 +106,13 @@ public class TimeTravel {
 		config.isLooping = true;
 		dayTimeOrigin = serverLevel.getDayTime() - timelineTick;
 		config.dayTimeOrigin = dayTimeOrigin;
-		session().idle = false;
 
-		forEachOnlineRecorded(TimeTravel::beginVisit);
-		session().needsRebuild = true;
+		GhostManager ghosts = session().ghosts;
+		ghosts.setIdle(false);
+		ghosts.markNeedsRebuild();
+
+		VisitManager visits = session().visits;
+		forEachOnlineRecorded(visits::beginVisit);
 		BlockJournal.rebuildUpcoming();
 		MobJournal.rebuildUpcoming();
 		EntityJournal.rebuildUpcoming();
@@ -141,10 +120,10 @@ public class TimeTravel {
 		ProcessJournal.rebuildUpcoming();
 		ChatTimeline.rebuildUpcoming();
 		AdvancementTimeline.rebuildUpcoming();
+		ProcessJournal.snapshotOrigins(server.getPlayerList().getPlayers());
 		config.save();
 		broadcastSync();
 		LOOP_LOGGER.info("Timeline started at tick {}", timelineTick);
-		ProcessJournal.snapshotOrigins(server.getPlayerList().getPlayers());
 	}
 
 	public static void stopLoop() {
@@ -152,10 +131,9 @@ public class TimeTravel {
 		LOOP_LOGGER.info("Stopping timeline at tick {}", timelineTick);
 
 		BlockJournal.flushWatches();
-		endAllVisits();
-		stopGhosts();
-		session().pending.clear();
-		session().pendingSounds.clear();
+		session().visits.endAllVisits();
+		session().ghosts.stopAll();
+		session().ghosts.clearPending();
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
@@ -175,9 +153,8 @@ public class TimeTravel {
 
 	public static void resetTimeline() {
 		stopLoop();
-		stopGhosts();
-		session().pending.clear();
-		session().pendingSounds.clear();
+		session().ghosts.stopAll();
+		session().ghosts.clearPending();
 
 		removeAllRecordings();
 		BlockJournal.clear();
@@ -196,7 +173,7 @@ public class TimeTravel {
 		config.nextVisitId = 1;
 		loopSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
 		session().lastJumpOrigin = -1;
-		session().needsRebuild = true;
+		session().ghosts.markNeedsRebuild();
 		config.save();
 		broadcastSync();
 	}
@@ -230,16 +207,17 @@ public class TimeTravel {
 		BlockJournal.flushWatches();
 		EntityJournal.fastForward(from, target);
 		ProcessJournal.beforeJump();
-		endAllVisits(dir);
+		session().visits.endAllVisits(dir);
 
-		stopGhosts();
+		GhostManager ghosts = session().ghosts;
+		ghosts.stopAll();
 
 		timelineTick = target;
 		config.timelineTick = target;
 		if (syncDayTime) {
 			serverLevel.setDayTime(dayTimeOrigin + target);
 		}
-		session().idle = false;
+		ghosts.setIdle(false);
 
 		BlockJournal.onJump(from, target);
 		MobJournal.onJump(from, target);
@@ -249,10 +227,11 @@ public class TimeTravel {
 		ChatTimeline.onJump(target);
 		AdvancementTimeline.onJump();
 
-		forEachOnlineRecorded((p, pd) -> beginVisit(p, pd, dir));
-		rebuildPending();
-		flushPending();
-		flushSounds();
+		VisitManager visits = session().visits;
+		forEachOnlineRecorded((p, pd) -> visits.beginVisit(p, pd, dir));
+		ghosts.rebuild();
+		ghosts.flushPending();
+		ghosts.flushSounds();
 
 		loopSceneManager.saveRecordingPlayers();
 		config.save();
@@ -266,8 +245,8 @@ public class TimeTravel {
 	}
 
 	public static void onServerTick() {
-		Runnable task;
 		TimelineSession s = session();
+		Runnable task;
 		while ((task = s.delayedTasks.poll()) != null) {
 			try {
 				task.run();
@@ -280,19 +259,20 @@ public class TimeTravel {
 
 		if (!isLooping || !MocapAdapter.isReady()) return;
 
+		GhostManager ghosts = s.ghosts;
 		if (countOnlineRecorded() == 0) {
-			if (!s.idle) {
-				s.idle = true;
-				stopGhosts();
-				s.needsRebuild = true;
+			if (!ghosts.isIdle()) {
+				ghosts.setIdle(true);
+				ghosts.stopAll();
+				ghosts.markNeedsRebuild();
 			}
 			return;
 		}
-		s.idle = false;
+		ghosts.setIdle(false);
 
-		if (s.needsRebuild) rebuildPending();
-		flushPending();
-		flushSounds();
+		if (ghosts.consumeNeedsRebuild()) ghosts.rebuild();
+		ghosts.flushPending();
+		ghosts.flushSounds();
 
 		timelineTick++;
 		config.timelineTick = timelineTick;
@@ -306,21 +286,11 @@ public class TimeTravel {
 		if (syncDayTime) {
 			serverLevel.setDayTime(dayTimeOrigin + timelineTick);
 		}
-		for (Ghost ghost : s.ghostRoots) {
-			if (ghost.pendingSkip > 0) {
-				int step = Math.min(ghost.pendingSkip, GHOST_SKIP_PER_TICK);
-				ghost.root.tick(step);
-				ghost.pendingSkip -= step;
-				continue;
-			}
-			if (!ghost.root.isFinished()) ghost.fx.tick();
-		}
+		ghosts.tickActive();
 		if (trackVoice) VoicechatCompat.onTick();
-		pollDeaths();
-		pollGhostKills();
+		s.deathChain.tick();
 
 		if (timelineTick % 20 == 0) broadcastSync();
-		if (timelineTick % 100 == 0) s.ghostRoots.removeIf(g -> g.root.isFinished());
 		if (timelineTick % 1200 == 0) config.save();
 		if (timelineTick % 1200 == 0) MobBinding.prune();
 		if (timelineTick % 6000 == 0) {
@@ -351,20 +321,22 @@ public class TimeTravel {
 				player.getName().getString(), timelineTick, pd.getPieceStarts().size());
 	}
 
+	//player lifecycle
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
-			beginVisit(player, pd);
-			if (session().idle) { session().idle = false; session().needsRebuild = true; }
-		}
-		if (isLooping) {
-			ProcessJournal.snapshotOrigins(java.util.List.of(player));
+			session().visits.beginVisit(player, pd);
+			GhostManager ghosts = session().ghosts;
+			if (ghosts.isIdle()) {
+				ghosts.setIdle(false);
+				ghosts.markNeedsRebuild();
+			}
 		}
 		sendSync(player);
 	}
 
 	public static void onPlayerLeft(PlayerData pd) {
 		if (isLooping && pd != null && pd.getCurrentVisit() != null) {
-			endVisit(pd);
+			session().visits.endVisit(pd);
 			loopSceneManager.saveRecordingPlayers();
 			config.save();
 		}
@@ -372,8 +344,8 @@ public class TimeTravel {
 
 	public static void onServerStopping() {
 		if (isLooping) {
-			endAllVisits();
-			stopGhosts();
+			session().visits.endAllVisits();
+			session().ghosts.stopAll();
 			loopSceneManager.saveRecordingPlayers();
 			config.isLooping = true;
 			config.timelineTick = timelineTick;
@@ -390,6 +362,7 @@ public class TimeTravel {
 		VoicechatInteractionCompat.clearCooldowns();
 	}
 
+	//visits and recording
 	private static void beginVisit(ServerPlayer player, PlayerData pd) {
 		beginVisit(player, pd, 0);
 	}
@@ -407,52 +380,6 @@ public class TimeTravel {
 		pd.setLastDimensionKey(player.level().dimension());
 		startChunk(player, pd);
 	}
-
-	private static void endVisit(PlayerData pd) {
-		endVisit(pd, 0);
-	}
-
-	private static void endVisit(PlayerData pd, int departDir) {
-		Visit visit = pd.getCurrentVisit();
-		if (visit == null) return;
-
-		ServerPlayer online = server.getPlayerList().getPlayerByName(pd.getName());
-		if (online != null) {
-			visit.endDim = online.level().dimension().location().toString();
-			visit.ex = online.getX();
-			visit.ey = online.getY();
-			visit.ez = online.getZ();
-		}
-		visit.departDir = (online != null) ? departDir : 0;
-
-		finishChunk(pd);
-		visit.endTick = timelineTick;
-		pd.setCurrentVisit(null);
-
-		if (visit.doomed) {
-			for (Visit.Piece piece : visit.pieces) deleteRecording(piece.recording);
-			VoicechatCompat.deleteVisitAudio(pd, visit.id);
-			LOOP_LOGGER.info("Visit {} of '{}' was doomed by a death chain - erased", visit.id, pd.getName());
-		} else if (!visit.pieces.isEmpty() && visit.endTick > visit.startTick) {
-			pd.getVisits().add(visit);
-			if (trackVoice) VoicechatCompat.saveVisitAudio(pd, visit.id);
-			LOOP_LOGGER.info("Visit {} of '{}' saved: ticks {}..{}, {} piece(s)",
-					visit.id, pd.getName(), visit.startTick, visit.endTick, visit.pieces.size());
-		} else {
-			LOOP_LOGGER.info("Visit {} of '{}' was empty - dropped", visit.id, pd.getName());
-		}
-	}
-
-	private static void endAllVisits() {
-		endAllVisits(0);
-	}
-
-	private static void endAllVisits(int departDir) {
-		for (PlayerData pd : new ArrayList<>(loopSceneManager.getRecordingPlayers())) {
-			if (pd.getCurrentVisit() != null) endVisit(pd, departDir);
-		}
-	}
-
 	private static void startChunk(ServerPlayer player, PlayerData pd) {
 		pd.clearPieceStarts();
 		pd.addPieceStart(timelineTick);
@@ -460,295 +387,34 @@ public class TimeTravel {
 		MocapAdapter.startRecording(player, pd.getName());
 	}
 
-	private static void finishChunk(PlayerData pd) {
-		Visit visit = pd.getCurrentVisit();
-		if (visit == null) {
-			MocapAdapter.discardAllRecordings(pd.getName());
-			return;
-		}
-		ArrayList<Long> starts = pd.getPieceStarts();
-		int i = 0;
-		for (var handle : MocapAdapter.stopAllRecordings(pd.getName())) {
-			long startTick = startFor(starts, i);
-			String name = String.format("%s_v%d_p%d", pd.getName().toLowerCase(), visit.id, pd.nextPieceNumber());
-			if (MocapAdapter.save(handle, name)) {
-				visit.pieces.add(new Visit.Piece(name, startTick));
-			} else {
-				LOOP_LOGGER.error("Failed to save recording '{}' for player: {}", name, pd.getName());
-			}
-			i++;
-		}
-	}
-
-	private static long startFor(List<Long> starts, int index) {
-		if (starts.isEmpty()) return timelineTick;
-		return starts.get(Math.min(index, starts.size() - 1));
-	}
-
-	private static void rebuildPending() {
-		TimelineSession s = session();
-		s.pending.clear();
-		s.pendingSounds.clear();
-		loopSceneManager.forEachRecordingPlayer(pd -> {
-			for (Visit visit : pd.getVisits()) {
-				if (visit.pieces.isEmpty()) continue;
-
-				if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= timelineTick) {
-					s.pendingSounds.add(new PendingSound(visit.startTick, visit.startDim, visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id));
-				}
-				if (visit.departDir != 0 && visit.endDim != null && visit.endTick > timelineTick) {
-					s.pendingSounds.add(new PendingSound(visit.endTick, visit.endDim, visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id));
-				}
-
-				for (int i = 0; i < visit.pieces.size(); i++) {
-					Visit.Piece piece = visit.pieces.get(i);
-					long end = (i + 1 < visit.pieces.size()) ? visit.pieces.get(i + 1).startTick : visit.endTick;
-					if (piece.startTick >= timelineTick) {
-						s.pending.add(new PendingPiece(piece.startTick, piece.recording, pd.getName(), 0, visit.id, i, visit.startTick));
-					} else if (end > timelineTick) {
-						s.pending.add(new PendingPiece(timelineTick, piece.recording, pd.getName(), (int) (timelineTick - piece.startTick), visit.id, i, visit.startTick));
-					}
-				}
-			}
-		});
-		s.needsRebuild = false;
-		LOOP_LOGGER.info("Ghost queue rebuilt at tick {}: {} piece(s) pending", timelineTick, s.pending.size());
-	}
-
-	private static void flushPending() {
-		TimelineSession s = session();
-		while (!s.pending.isEmpty() && s.pending.peek().startTick() <= timelineTick + ghostLookaheadTicks) {
-			PendingPiece piece = s.pending.poll();
-			startGhost(piece, (int) Math.max(0, piece.startTick() - timelineTick));
-		}
-	}
-
-	private static void pollDeaths() {
-		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-			if (isGhost(player)) continue;
-			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
-			if (pd == null || !pd.getActive()) continue;
-			Visit visit = pd.getCurrentVisit();
-			if (visit == null) continue;
-
-			boolean dead = player.isDeadOrDying();
-			if (dead && !visit.wasDead) {
-				visit.deathTicks.add(timelineTick);
-				if (visit.deathTick < 0) visit.deathTick = timelineTick;
-			}
-			visit.wasDead = dead;
-		}
-	}
-
-	private static void pollGhostKills() {
-		TimelineSession s = session();
-		if (s.ghostRoots.isEmpty()) return;
-
-		for (Ghost ghost : new ArrayList<>(s.ghostRoots)) {
-			GhostFx fx = ghost.fx;
-			if (!fx.isDead()) {
-				fx.killHandled = false;
-				continue;
-			}
-			if (fx.killHandled) continue;
-			fx.killHandled = true;
-
-			if (!chainDeath || timelineTick <= fx.graceUntil) continue;
-			if (isRecordedDeath(ghost.playerName, ghost.visitId)) continue;
-
-			LOOP_LOGGER.info("Clone of {} (visit {}) was killed during playback!!! Collapsing the chain", ghost.playerName, ghost.visitId);
-			collapseChain(ghost.playerName, ghost.visitId);
-		}
-	}
-
-	private static boolean isRecordedDeath(String playerName, int visitId) {
-		PlayerData pd = loopSceneManager.getRecordingPlayer(playerName);
-		if (pd == null) return true;
-		for (Visit v : pd.getVisits()) {
-			if (v.id != visitId) continue;
-			for (long d : v.deathTicks) {
-				if (Math.abs(timelineTick - d) <= 15) return true;
-			}
-			return v.deathTick >= 0 && Math.abs(timelineTick - v.deathTick) <= 15;
-		}
-		return true;
-	}
-
-	private static void collapseChain(String playerName, int fromVisitId) {
-		PlayerData pd = loopSceneManager.getRecordingPlayer(playerName);
-		if (pd == null) return;
-
-		TimelineSession s = session();
-		Set<Integer> ids = new HashSet<>();
-		List<Visit> doomedVisits = new ArrayList<>();
-		for (Visit v : pd.getVisits()) {
-			if (v.id >= fromVisitId) {
-				doomedVisits.add(v);
-				ids.add(v.id);
-			}
-		}
-		Visit live = pd.getCurrentVisit();
-		boolean killLive = live != null && live.id >= fromVisitId;
-		if (killLive) {
-			live.doomed = true;
-			ids.add(live.id);
-		}
-		if (ids.isEmpty()) return;
-
-		s.ghostRoots.removeIf(g -> {
-			if (!g.playerName.equals(playerName) || g.visitId < fromVisitId) return false;
-			try {
-				if (!g.root.isFinished()) g.root.stop();
-			} catch (Exception e) {
-				LOOP_LOGGER.error("Failed to stop ghost of a collapsed chain", e);
-			}
-			return true;
-		});
-		VoicechatCompat.stopPlaybackFrom(playerName, fromVisitId);
-		s.pending.removeIf(pp -> pp.playerName().equals(playerName) && pp.visitId() >= fromVisitId);
-		s.pendingSounds.removeIf(ps -> ps.playerName().equals(playerName) && ps.visitId() >= fromVisitId);
-
-		for (Visit v : doomedVisits) {
-			for (Visit.Piece piece : v.pieces) deleteRecording(piece.recording);
-			VoicechatCompat.deleteVisitAudio(pd, v.id);
-		}
-		pd.getVisits().removeIf(v -> v.id >= fromVisitId);
-
-		BlockJournal.eraseVisits(ids);
-		MobJournal.eraseVisits(ids);
-		ChatTimeline.eraseVisits(ids);
-		AdvancementTimeline.eraseVisits(ids);
-		EntityJournal.eraseVisits(ids);
-		EffectJournal.eraseVisits(ids);
-		MobBinding.eraseVisits(ids);
-		ChatTimeline.resend(timelineTick);
-
-		loopSceneManager.saveRecordingPlayers();
-		config.save();
-
-		if (killLive) {
-			ServerPlayer player = server.getPlayerList().getPlayerByName(playerName);
-			if (player != null && player.isAlive()) player.kill();
-		}
-		server.getPlayerList().broadcastSystemMessage(
-				Component.literal("Time paradox: the timeline of " + playerName + " collapsed from visit #" + fromVisitId), false);
-	}
-
-	private static void deleteRecording(String name) {
-		MocapAdapter.deleteRecording(name);
-	}
-
-	private static void flushSounds() {
-		TimelineSession s = session();
-		while (!s.pendingSounds.isEmpty() && s.pendingSounds.peek().tick() <= timelineTick) {
-			playTimeSound(s.pendingSounds.poll());
-		}
-	}
-
-	private static void playTimeSound(PendingSound s) {
-		try {
-			ServerLevel level = server.getLevel(Levels.key(s.dim()));
-			if (level == null) return;
-			if (s.dir() > 0) {
-				level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.6f, 1.7f);
-				level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.4f, 1.5f);
-			} else {
-				level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.6f, 0.6f);
-				level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 1.4f, 0.5f);
-			}
-		} catch (Exception e) {
-			LOOP_LOGGER.error("Failed to play time sound", e);
-		}
-	}
-
-	private static void startGhost(PendingPiece piece, int delayTicks) {
-		PlayerData pd = loopSceneManager.getRecordingPlayer(piece.playerName());
-		if (pd == null) return;
-
-		GhostPlayback playback = MocapAdapter.startPlayback(
-				piece.recording(), pd.getNickname(), pd.getSkin(), delayTicks);
-		if (playback == null) return;
-
-		int pendingSkip = piece.skipTicks();
-		if (pendingSkip > 0) {
-			int syncSkip = Math.min(pendingSkip, GHOST_SYNC_SKIP_LIMIT);
-			playback.tick(syncSkip);
-			pendingSkip -= syncSkip;
-		}
-
-		Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
-		GhostFx fx = new GhostFx(ghostEntity);
-		if (piece.skipTicks() > 0) fx.graceUntil = timelineTick + 10;
-		session().ghostRoots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx, pendingSkip));
-		if (trackVoice && voiceChatLoaded) {
-			VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(), piece.visitStartTick(), ghostEntity);
-		}
-	}
-	private static void stopGhosts() {
+	public static int visitIdOf(Entity e) {
 		TimelineSession s = session;
-		if (s == null) return;
-		for (Ghost ghost : s.ghostRoots) {
-			try {
-				if (!ghost.root.isFinished()) ghost.root.stop();
-			} catch (Exception e) {
-				LOOP_LOGGER.error("Failed to stop ghost playback", e);
-			}
-		}
-		s.ghostRoots.clear();
-		VoicechatCompat.stopPlayback(null);
-	}
-
-	private static boolean isGhost(ServerPlayer player) {
-		return Ghosts.is(player);
-	}
-
-	public static int visitIdOf(Entity entity) {
-		if (!(entity instanceof ServerPlayer player)) return -1;
-		if (isGhost(player)) {
-			for (Ghost ghost : session().ghostRoots) {
-				if (ghost.fx.entity() == entity) return ghost.visitId;
-			}
-			return -1;
-		}
-		PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
-		if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return -1;
-		return pd.getCurrentVisit().id;
+		return s == null ? -1 : s.ghosts.visitIdOf(e);
 	}
 
 	public static GhostFx fxOf(Entity e) {
-		for (Ghost g : session().ghostRoots) if (g.fx.entity() == e) return g.fx;
-		return null;
+		TimelineSession s = session;
+		return s == null ? null : s.ghosts.fxOf(e);
 	}
 
 	public static Entity entityOfVisit(int visitId) {
-		for (Ghost ghost : session().ghostRoots) {
-			if (ghost.visitId != visitId || ghost.root.isFinished()) continue;
-			Entity entity = ghost.fx.entity();
-			if (entity != null && !entity.isRemoved()) return entity;
-		}
-		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-			if (isGhost(player)) continue;
-			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
-			if (pd != null && pd.getCurrentVisit() != null && pd.getCurrentVisit().id == visitId) return player;
-		}
-		return null;
+		TimelineSession s = session;
+		return s == null ? null : s.ghosts.entityOfVisit(visitId);
 	}
 
 	public static boolean visitPending(int visitId) {
-		for (PlayerData pd : loopSceneManager.getRecordingPlayers()) {
-			for (Visit v : pd.getVisits()) {
-				if (v.id == visitId) return v.startTick > timelineTick && v.startTick - timelineTick <= PENDING_VISIT_WINDOW;
-			}
-		}
-		return false;
+		TimelineSession s = session;
+		return s != null && s.ghosts.visitPending(visitId);
 	}
 
 	public static boolean visitKnown(int visitId) {
-		for (PlayerData pd : loopSceneManager.getRecordingPlayers()) {
-			if (pd.getCurrentVisit() != null && pd.getCurrentVisit().id == visitId) return true;
-			for (Visit v : pd.getVisits()) if (v.id == visitId) return true;
-		}
-		return false;
+		TimelineSession s = session;
+		return s != null && s.ghosts.visitKnown(visitId);
+	}
+
+	public static int countPendingGhosts() {
+		TimelineSession s = session;
+		return s == null ? 0 : s.ghosts.countPending();
 	}
 
 	private static void forEachOnlineRecorded(BiConsumer<ServerPlayer, PlayerData> action) {
@@ -770,8 +436,8 @@ public class TimeTravel {
 		return count;
 	}
 
-	public static int countPendingGhosts() {
-		return session().pending.size();
+	private static boolean isGhost(ServerPlayer player) {
+		return Ghosts.is(player);
 	}
 
 	public static void sendSync(ServerPlayer player) {
