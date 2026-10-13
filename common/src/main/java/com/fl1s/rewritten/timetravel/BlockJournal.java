@@ -218,11 +218,19 @@ public final class BlockJournal {
                 }
                 for (BlockPos p : positions) {
                     BlockState st = level.getBlockState(p);
+                    if (st.is(net.minecraft.world.level.block.Blocks.MOVING_PISTON) || st.is(net.minecraft.world.level.block.Blocks.PISTON_HEAD)) {
+                        level.setBlock(p, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+                        continue;
+                    }
                     if (st.isAir()) continue;
                     BlockState fixed = Block.updateFromNeighbourShapes(st, level, p);
-                    if (fixed.equals(st)) continue;
+                    if (fixed.equals(st)) {
+                        level.updateNeighborsAt(p, st.getBlock());
+                        continue;
+                    }
                     if (!fixed.is(st.getBlock()) && level.getBlockEntity(p) != null) level.removeBlockEntity(p);
                     level.setBlock(p, fixed, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                    level.updateNeighborsAt(p, fixed.getBlock());
                 }
             }
         } catch (Exception ex) {
