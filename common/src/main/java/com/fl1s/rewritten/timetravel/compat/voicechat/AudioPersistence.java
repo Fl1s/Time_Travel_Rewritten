@@ -43,7 +43,7 @@ public final class AudioPersistence {
 
     private static ExecutorService createIOPool() {
         return Executors.newFixedThreadPool(Math.max(2,
-                Runtime.getRuntime().availableProcessors() / 2),
+                        Runtime.getRuntime().availableProcessors() / 2),
                 r -> {
                     Thread t = new Thread(r, "TimeTravel-AudioIO");
                     t.setDaemon(true);
@@ -69,13 +69,6 @@ public final class AudioPersistence {
 
     /* ------------- PUBLIC API ------------- */
 
-    /**
-     * Saves all voice data for a player to disk (asynchronously).
-     * Overwrites existing files for the same iteration/segment.
-     *
-     * @param player the player data containing audio and position maps
-     * @return a future that completes when all segments are saved
-     */
     public static CompletableFuture<Void> savePlayerAudio(PlayerData player) {
         return saveIterations(player, new ArrayList<>(player.getAudioKeys()));
     }
@@ -88,7 +81,6 @@ public final class AudioPersistence {
         Path baseDir = getPlayerDir(player.getName());
         List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-        // Save each iteration's audio
         for (int iter : iterations) {
             Map<Integer, List<TimedAudioFrame>> iterAudio = player.getAudio(iter);
             if (iterAudio.isEmpty()) continue;
@@ -98,12 +90,11 @@ public final class AudioPersistence {
                 List<TimedAudioFrame> frames = entry.getValue();
                 if (frames.isEmpty()) continue;
 
-                // Collect position data for each frame's tick
                 final int capturedIter = iter;
                 futures.add(CompletableFuture.runAsync(() -> {
                     try {
                         Path file = baseDir.resolve(fileName(capturedIter, seg));
-                        saveSegment(file, frames, player, capturedIter, seg);
+                        saveSegment(file, frames);
                         TimeTravel.LOOP_LOGGER.debug(
                                 "[AudioIO] Saved {} frames for {} iter {} seg {}",
                                 frames.size(), player.getName(), capturedIter, seg
@@ -121,12 +112,6 @@ public final class AudioPersistence {
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
 
-    /**
-     * Saves all voice data for ALL recording players (including inactive/disconnected ones,
-     * since they may still have audio data in memory that hasn't been persisted).
-     *
-     * @return a future that completes when everything is saved
-     */
     public static CompletableFuture<Void> saveAllAudio() {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         TimeTravel.loopSceneManager.forEachRecordingPlayer(playerData ->
@@ -135,14 +120,6 @@ public final class AudioPersistence {
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
 
-    /**
-     * Loads voice data from disk into a player's in-memory audio/position maps.
-     * Runs asynchronously. Existing in-memory data for loaded iteration/segments
-     * will NOT be overwritten (in-memory data takes priority).
-     *
-     * @param player the player data to populate
-     * @return a future that completes when loading is done
-     */
     public static CompletableFuture<Void> loadPlayerAudio(PlayerData player) {
         Path playerDir = getPlayerDir(player.getName());
 
@@ -180,15 +157,11 @@ public final class AudioPersistence {
                         continue;
                     }
 
-                    List<FrameWithPosition> framesWithPos = loadSegment(file);
-                    if (framesWithPos == null || framesWithPos.isEmpty()) continue;
+                    List<TimedAudioFrame> frames = loadSegment(file);
+                    if (frames == null || frames.isEmpty()) continue;
 
-                    // Feed frames into the player's data structures
-                    for (FrameWithPosition fwp : framesWithPos) {
-                        player.addVoiceFrameForLoad(
-                                iter, seg,
-                                fwp.tick, fwp.opus, fwp.position
-                        );
+                    for (TimedAudioFrame f : frames) {
+                        player.addVoiceFrameForLoad(iter, seg, f.tick(), f.opus(), f.position());
                     }
                     loaded++;
                 }
@@ -206,12 +179,6 @@ public final class AudioPersistence {
         }, getIOPool());
     }
 
-    /**
-     * Loads all voice data for ALL recording players (including currently inactive ones,
-     * so audio is ready when they reconnect).
-     *
-     * @return a future that completes when everything is loaded
-     */
     public static CompletableFuture<Void> loadAllAudio() {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         TimeTravel.loopSceneManager.forEachRecordingPlayer(playerData ->
@@ -220,9 +187,6 @@ public final class AudioPersistence {
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
 
-    /**
-     * Deletes all saved audio files for a specific player and iteration.
-     */
     public static CompletableFuture<Void> deleteIterationAudio(String playerName, int iteration) {
         Path playerDir = getPlayerDir(playerName);
 
@@ -235,9 +199,7 @@ public final class AudioPersistence {
 
                 for (Path file : stream) {
                     Files.deleteIfExists(file);
-                    TimeTravel.LOOP_LOGGER.debug(
-                            "[AudioIO] Deleted {}", file
-                    );
+                    TimeTravel.LOOP_LOGGER.debug("[AudioIO] Deleted {}", file);
                 }
             } catch (IOException e) {
                 TimeTravel.LOOP_LOGGER.error(
@@ -248,23 +210,14 @@ public final class AudioPersistence {
         }, getIOPool());
     }
 
-    /**
-     * Deletes all saved voice audio for every player - the entire
-     * {@code timetravel_rewritten_audio/} directory tree. Also clears in-memory audio
-     * for all recording players.
-     *
-     * @return a future that completes when deletion is done
-     */
     public static CompletableFuture<Void> deleteAllAudio() {
         return CompletableFuture.runAsync(() -> {
-            // Clear in-memory audio for every player
             TimeTravel.loopSceneManager.forEachRecordingPlayer(PlayerData::removeAllAudio);
 
             Path baseDir = getBaseDir();
             if (!Files.isDirectory(baseDir)) return;
 
             try (var walker = Files.walk(baseDir)) {
-                // Delete files first (deepest first), then directories
                 walker.sorted(Comparator.reverseOrder())
                         .forEach(path -> {
                             try {
@@ -284,9 +237,6 @@ public final class AudioPersistence {
         }, getIOPool());
     }
 
-    /**
-     * Shuts down the IO thread pool. Call on server stop.
-     */
     public static void shutdown() {
         ExecutorService pool = ioPool;
         if (pool == null) return;
@@ -303,11 +253,7 @@ public final class AudioPersistence {
 
     /* ------------- BINARY I/O ------------- */
 
-    private static void saveSegment(Path file,
-                                    List<TimedAudioFrame> frames,
-                                    PlayerData player,
-                                    int iter,
-                                    int seg) throws IOException {
+    private static void saveSegment(Path file, List<TimedAudioFrame> frames) throws IOException {
         Files.createDirectories(file.getParent());
 
         try (DataOutputStream out = new DataOutputStream(
@@ -322,8 +268,7 @@ public final class AudioPersistence {
             for (TimedAudioFrame frame : frames) {
                 out.writeInt(frame.tick());
 
-                // Position lookup - use the position recorded at this tick
-                Vec3 pos = player.getPosition(iter, seg, frame.tick());
+                Vec3 pos = frame.position();
                 if (pos != null) {
                     out.writeDouble(pos.x);
                     out.writeDouble(pos.y);
@@ -341,17 +286,14 @@ public final class AudioPersistence {
         }
     }
 
-    private static List<FrameWithPosition> loadSegment(Path file) {
+    private static List<TimedAudioFrame> loadSegment(Path file) {
         try (DataInputStream in = new DataInputStream(
                 new BufferedInputStream(Files.newInputStream(file)))) {
 
-            // Verify magic
             byte[] magic = new byte[4];
             in.readFully(magic);
             if (!Arrays.equals(magic, MAGIC)) {
-                TimeTravel.LOOP_LOGGER.warn(
-                        "[AudioIO] Invalid magic in file: {}", file
-                );
+                TimeTravel.LOOP_LOGGER.warn("[AudioIO] Invalid magic in file: {}", file);
                 return null;
             }
 
@@ -365,7 +307,7 @@ public final class AudioPersistence {
             }
 
             int frameCount = in.readInt();
-            List<FrameWithPosition> frames = new ArrayList<>(frameCount);
+            List<TimedAudioFrame> frames = new ArrayList<>(frameCount);
 
             for (int i = 0; i < frameCount; i++) {
                 int tick = in.readInt();
@@ -376,9 +318,7 @@ public final class AudioPersistence {
                 byte[] opus = new byte[opusLen];
                 in.readFully(opus);
 
-                frames.add(new FrameWithPosition(
-                        tick, opus, new Vec3(x, y, z)
-                ));
+                frames.add(new TimedAudioFrame(tick, opus, new Vec3(x, y, z)));
             }
 
             return frames;
@@ -403,14 +343,9 @@ public final class AudioPersistence {
         return "iter_" + iter + "_seg_" + seg + FILE_EXTENSION;
     }
 
-    /**
-     * Parses "iter_N_seg_M.ttva" → {N, M}, or null if the name doesn't match.
-     */
     private static int[] parseFileName(String name) {
         if (!name.endsWith(FILE_EXTENSION)) return null;
-        // Remove extension
         String stem = name.substring(0, name.length() - FILE_EXTENSION.length());
-        // Expected: "iter_N_seg_M"
         String[] parts = stem.split("_");
         if (parts.length != 4 || !"iter".equals(parts[0]) || !"seg".equals(parts[2])) {
             return null;
@@ -423,8 +358,4 @@ public final class AudioPersistence {
             return null;
         }
     }
-
-    /* ------------- INTERNAL RECORD ------------- */
-
-    private record FrameWithPosition(int tick, byte[] opus, Vec3 position) {}
 }
