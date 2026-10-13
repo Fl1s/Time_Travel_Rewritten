@@ -1,13 +1,10 @@
 package com.fl1s.rewritten.timetravel;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.fl1s.rewritten.timetravel.journal.Journal;
+import com.fl1s.rewritten.timetravel.util.Levels;
 import com.google.gson.reflect.TypeToken;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -25,20 +22,22 @@ import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ThrownEnderpearl;
 
-import java.io.Reader;
-import java.io.Writer;
-import java.lang.reflect.Type;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.UUID;
 
 public final class EntityJournal {
-    private EntityJournal() {}
+    private EntityJournal() {
+    }
 
     public static final String TAG = "tt_replay";
     private static final double OWNER_MAX_DIST_SQ = 5.0 * 5.0;
-    private static final Gson GSON = new GsonBuilder().create();
-    private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {}.getType();
 
     public static final class Entry {
         String dim;
@@ -51,17 +50,17 @@ public final class EntityJournal {
         String owner;
     }
 
-    private record Due(long tick, PrimedTnt tnt) {}
+    private record Due(long tick, PrimedTnt tnt) {
+    }
 
-    private record CloudRef(String dim, long tick) {}
+    private record CloudRef(String dim, long tick) {
+    }
 
-    private static final List<Entry> entries = new ArrayList<>();
+    private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_entities.json", new TypeToken<ArrayList<Entry>>() {
+    }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
+
     private static final Map<UUID, CloudRef> clouds = new HashMap<>();
-    private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(
-            Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
     private static final Map<UUID, String> live = new HashMap<>();
-    private static long nextSeq = 0;
-    private static boolean dirty = false;
     private static boolean replaying = false;
     public static boolean suppress = false;
 
@@ -78,7 +77,8 @@ public final class EntityJournal {
         if (replaying) return false;
         if (MobJournal.isKilling()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (suppress) return isTracked(e);
-        if (BlockJournal.isApplying()) return e instanceof PrimedTnt || e instanceof FallingBlockEntity || e instanceof ItemEntity;
+        if (BlockJournal.isApplying())
+            return e instanceof PrimedTnt || e instanceof FallingBlockEntity || e instanceof ItemEntity;
         if (BlockJournal.isReplayingLive()) return e instanceof ItemEntity;
         return false;
     }
@@ -102,27 +102,24 @@ public final class EntityJournal {
         e.nbt = tag.toString();
         e.item = entity instanceof ItemEntity;
         e.tick = TimeTravel.timelineTick;
-        e.seq = nextSeq++;
+        e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         if (entity instanceof PrimedTnt tnt) e.fuse = tnt.getFuse();
         if (entity instanceof Projectile projectile) {
             Entity owner = projectile.getOwner();
             if (owner != null && !(owner instanceof Player)) e.owner = owner.getUUID().toString();
         }
-        entries.add(e);
+        STORE.entries().add(e);
         live.put(entity.getUUID(), e.dim);
-        dirty = true;
+        STORE.markDirty();
     }
 
     public static void tick() {
-        while (!upcoming.isEmpty() && upcoming.peek().tick <= TimeTravel.timelineTick) {
-            Entry next = upcoming.poll();
-            spawn(next, next.fuse);
-        }
+        STORE.tick(e -> spawn(e, e.fuse));
     }
 
     private static ServerLevel levelOf(String dim) {
-        return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dim)));
+        return TimeTravel.server.getLevel(Levels.key(dim));
     }
 
     private static boolean ownerPresent(ServerLevel level, Entry e) {
@@ -152,8 +149,7 @@ public final class EntityJournal {
             if (e.fuse > 0) {
                 CompoundTag t = TagParser.parseTag(e.nbt);
                 net.minecraft.nbt.ListTag p = t.getList("Pos", 6);
-                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(p.getDouble(0) - 0.6, p.getDouble(1) - 0.6, p.getDouble(2) - 0.6,
-                        p.getDouble(0) + 0.6, p.getDouble(1) + 0.6, p.getDouble(2) + 0.6);
+                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(p.getDouble(0) - 0.6, p.getDouble(1) - 0.6, p.getDouble(2) - 0.6, p.getDouble(0) + 0.6, p.getDouble(1) + 0.6, p.getDouble(2) + 0.6);
                 if (!level.getEntitiesOfClass(PrimedTnt.class, box).isEmpty()) return;
             }
             CompoundTag tag = TagParser.parseTag(e.nbt);
@@ -165,8 +161,7 @@ public final class EntityJournal {
             if (level.addFreshEntity(entity)) {
                 live.put(entity.getUUID(), e.dim);
                 if (entity instanceof PrimedTnt && fuse == e.fuse) {
-                    level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
-                            SoundEvents.TNT_PRIMED, SoundSource.BLOCKS, 1.0f, 1.0f);
+                    level.playSound(null, entity.getX(), entity.getY(), entity.getZ(), SoundEvents.TNT_PRIMED, SoundSource.BLOCKS, 1.0f, 1.0f);
                 }
             }
         } catch (Exception ex) {
@@ -179,9 +174,9 @@ public final class EntityJournal {
     public static void onJump() {
         discardLive();
         discardClouds();
-        rebuildUpcoming();
+        STORE.rebuildUpcoming();
         long now = TimeTravel.timelineTick;
-        for (Entry e : new ArrayList<>(entries)) {
+        for (Entry e : new ArrayList<>(STORE.entries())) {
             if (e.fuse > 0 && e.tick <= now && e.tick + e.fuse > now) {
                 spawn(e, (int) (e.fuse - (now - e.tick)));
             }
@@ -215,16 +210,11 @@ public final class EntityJournal {
     }
 
     public static void rebuildUpcoming() {
-        upcoming.clear();
-        for (Entry e : entries) {
-            if (e.tick > TimeTravel.timelineTick) upcoming.add(e);
-        }
+        STORE.rebuildUpcoming();
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
-        entries.removeIf(e -> visitIds.contains(e.visit));
-        upcoming.removeIf(e -> visitIds.contains(e.visit));
-        dirty = true;
+        STORE.eraseVisits(visitIds);
     }
 
     public static void fastForward(long from, long to) {
@@ -233,15 +223,18 @@ public final class EntityJournal {
         Set<UUID> seen = new HashSet<>();
         collect(from, to, q, seen);
         int guard = 0;
-        while (!q.isEmpty() && guard++ < 512) {
-            Due d = q.poll();
-            if (d.tnt().isRemoved()) continue;
-            TimeTravel.timelineTick = d.tick();
-            d.tnt().setFuse(1);
-            d.tnt().tick();
-            collect(d.tick(), to, q, seen);
+        try {
+            while (!q.isEmpty() && guard++ < 512) {
+                Due d = q.poll();
+                if (d.tnt().isRemoved()) continue;
+                TimeTravel.timelineTick = d.tick();
+                d.tnt().setFuse(1);
+                d.tnt().tick();
+                collect(d.tick(), to, q, seen);
+            }
+        } finally {
+            TimeTravel.timelineTick = from;
         }
-        TimeTravel.timelineTick = from;
     }
 
     private static void collect(long base, long to, PriorityQueue<Due> q, Set<UUID> seen) {
@@ -257,53 +250,23 @@ public final class EntityJournal {
         }
     }
 
-    private static Path file() {
-        return TimeTravel.worldFolder.resolve("timetravel_rewritten_entities.json");
-    }
-
     public static void load() {
-        entries.clear();
-        upcoming.clear();
         live.clear();
         clouds.clear();
-        nextSeq = 0;
-        Path f = file();
-        if (Files.exists(f)) {
-            try (Reader r = Files.newBufferedReader(f)) {
-                List<Entry> loaded = GSON.fromJson(r, LIST_TYPE);
-                if (loaded != null) {
-                    entries.addAll(loaded);
-                    for (Entry e : loaded) nextSeq = Math.max(nextSeq, e.seq + 1);
-                }
-            } catch (Exception ex) {
-                TimeTravel.LOOP_LOGGER.error("Failed to load entity journal", ex);
-            }
-        }
-        dirty = false;
-        rebuildUpcoming();
+        STORE.load();
     }
 
     public static void saveIfDirty() {
-        if (dirty) save();
+        STORE.saveIfDirty();
     }
 
     public static void save() {
-        if (TimeTravel.worldFolder == null) return;
-        try (Writer w = Files.newBufferedWriter(file())) {
-            GSON.toJson(entries, LIST_TYPE, w);
-            dirty = false;
-        } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to save entity journal", ex);
-        }
+        STORE.save();
     }
 
     public static void clear() {
         discardLive();
         clouds.clear();
-        entries.clear();
-        upcoming.clear();
-        nextSeq = 0;
-        dirty = true;
-        save();
+        STORE.clear();
     }
 }

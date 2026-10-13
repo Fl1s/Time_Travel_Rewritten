@@ -1,12 +1,12 @@
 package com.fl1s.rewritten.timetravel;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.fl1s.rewritten.timetravel.journal.Journal;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.util.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -19,14 +19,10 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.LidBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
-import net.minecraft.world.level.block.piston.PistonBaseBlock;
 
-import java.io.Reader;
-import java.io.Writer;
-import java.lang.reflect.Type;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Optional;
+import java.util.Set;
 
 public final class EffectJournal {
     private EffectJournal() {
@@ -36,9 +32,6 @@ public final class EffectJournal {
     private static final int LEVEL_EVENT = 1;
     private static final int BLOCK_EVENT = 2;
     private static final double NEAR_SQ = 8.0 * 8.0;
-    private static final Gson GSON = new GsonBuilder().create();
-    private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {
-    }.getType();
 
     public static final class Entry {
         int kind;
@@ -53,10 +46,9 @@ public final class EffectJournal {
         int visit;
     }
 
-    private static final List<Entry> entries = new ArrayList<>();
-    private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
-    private static long nextSeq = 0;
-    private static boolean dirty = false;
+    private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_effects.json", new TypeToken<ArrayList<Entry>>() {
+    }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
+
     private static boolean replaying = false;
 
     public static void recordSound(ServerLevel level, Player except, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch) {
@@ -75,10 +67,6 @@ public final class EffectJournal {
         e.volume = volume;
         e.pitch = pitch;
         add(e);
-    }
-
-    private static boolean isPistonSound(Holder<SoundEvent> sound) {
-        return sound.unwrapKey().map(k -> k.location().getPath().startsWith("block.piston.")).orElse(false);
     }
 
     public static void recordLevelEvent(ServerLevel level, Player except, int type, BlockPos pos, int data) {
@@ -100,10 +88,11 @@ public final class EffectJournal {
         PlayerData pd = recorder(level, null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
         if (pd == null) return;
 
-        for (int i = entries.size() - 1; i >= 0; i--) {
-            Entry p = entries.get(i);
+        for (int i = STORE.entries().size() - 1; i >= 0; i--) {
+            Entry p = STORE.entries().get(i);
             if (p.tick != TimeTravel.timelineTick) break;
-            if (p.kind == BLOCK_EVENT && p.x == pos.getX() && p.y == pos.getY() && p.z == pos.getZ() && p.a == a && p.b == b) return;
+            if (p.kind == BLOCK_EVENT && p.x == pos.getX() && p.y == pos.getY() && p.z == pos.getZ() && p.a == a && p.b == b)
+                return;
         }
         Entry e = create(BLOCK_EVENT, level, pd, pos.getX(), pos.getY(), pos.getZ());
         e.id = BuiltInRegistries.BLOCK.getKey(block).toString();
@@ -118,7 +107,7 @@ public final class EffectJournal {
     }
 
     private static boolean isGhost(Player p) {
-        return p.getClass().getName().contains("FakePlayer");
+        return Ghosts.is(p);
     }
 
     private static boolean isPlayerHurt(String id) {
@@ -154,32 +143,27 @@ public final class EffectJournal {
         e.y = y;
         e.z = z;
         e.tick = TimeTravel.timelineTick;
-        e.seq = nextSeq++;
+        e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         return e;
     }
 
     private static void add(Entry e) {
-        entries.add(e);
-        dirty = true;
+        STORE.entries().add(e);
+        STORE.markDirty();
     }
 
     public static void tick() {
-        while (!upcoming.isEmpty() && upcoming.peek().tick <= TimeTravel.timelineTick) {
-            play(upcoming.poll());
-        }
+        STORE.tick(EffectJournal::play);
     }
 
     public static void rebuildUpcoming() {
-        upcoming.clear();
-        for (Entry e : entries) {
-            if (e.tick > TimeTravel.timelineTick) upcoming.add(e);
-        }
+        STORE.rebuildUpcoming();
     }
 
     private static void play(Entry e) {
         if (e.kind == SOUND && isPlayerHurt(e.id)) return;
-        ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+        ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
         if (level == null) return;
         replaying = true;
         try {
@@ -200,54 +184,22 @@ public final class EffectJournal {
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
-        entries.removeIf(e -> visitIds.contains(e.visit));
-        upcoming.removeIf(e -> visitIds.contains(e.visit));
-        dirty = true;
-    }
-
-    private static Path file() {
-        return TimeTravel.worldFolder.resolve("timetravel_rewritten_effects.json");
+        STORE.eraseVisits(visitIds);
     }
 
     public static void load() {
-        entries.clear();
-        upcoming.clear();
-        nextSeq = 0;
-        Path f = file();
-        if (Files.exists(f)) {
-            try (Reader r = Files.newBufferedReader(f)) {
-                List<Entry> loaded = GSON.fromJson(r, LIST_TYPE);
-                if (loaded != null) {
-                    entries.addAll(loaded);
-                    for (Entry e : loaded) nextSeq = Math.max(nextSeq, e.seq + 1);
-                }
-            } catch (Exception ex) {
-                TimeTravel.LOOP_LOGGER.error("Failed to load effect journal", ex);
-            }
-        }
-        dirty = false;
-        rebuildUpcoming();
+        STORE.load();
     }
 
     public static void saveIfDirty() {
-        if (dirty) save();
+        STORE.saveIfDirty();
     }
 
     public static void save() {
-        if (TimeTravel.worldFolder == null) return;
-        try (Writer w = Files.newBufferedWriter(file())) {
-            GSON.toJson(entries, LIST_TYPE, w);
-            dirty = false;
-        } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to save effect journal", ex);
-        }
+        STORE.save();
     }
 
     public static void clear() {
-        entries.clear();
-        upcoming.clear();
-        nextSeq = 0;
-        dirty = true;
-        save();
+        STORE.clear();
     }
 }

@@ -9,6 +9,8 @@ import de.maxhenkel.voicechat.api.*;
 import de.maxhenkel.voicechat.api.audiochannel.*;
 import de.maxhenkel.voicechat.api.opus.OpusDecoder;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
+
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -20,9 +22,10 @@ import java.util.concurrent.*;
  * is not installed, every public method is a safe no-op.
  * <p>
  * Voice playback decodes Opus frames into PCM, extracts speech regions
- * (contiguous non-silent sections), and schedules per-region
+ * (contiguous bursts of frames without tick gaps), and schedules per-region
  * {@link AudioPlayer AudioPlayers} so the SVC speaker icon only appears
- * during actual speech.
+ * during actual speech. Each burst is decoded into its own buffer; there is
+ * no full-visit PCM buffer.
  */
 public final class VoicechatImpl {
 
@@ -31,13 +34,18 @@ public final class VoicechatImpl {
     public static VoicechatServerApi serverApi;
     public static VolumeCategory LOOP_CATEGORY;
 
+    /**
+     * SVC requires volume-category IDs to match [a-z_]{1,16}. "tt_voice" is
+     * short enough; "timetravel_rewritten_voice" (26 chars) is rejected by SVC
+     * and, if left unguarded, produced an NPE on every speech region.
+     */
+    private static final String CATEGORY_ID = "tt_voice";
+    private static volatile boolean categoryWarned = false;
+
     /** Active AudioPlayers keyed by "playerName|iter|seg|regionIndex". */
     private static final Map<String, AudioPlayer> players = new ConcurrentHashMap<>();
 
-    /**
-     * Scheduled speech regions waiting to be started at the right tick.
-     * Populated after decode completes; consumed by {@link #onTick()}.
-     */
+    /** Scheduled speech regions waiting to be started at the right tick. */
     private static final List<ScheduledSpeechRegion> scheduledRegions =
             Collections.synchronizedList(new ArrayList<>());
 
@@ -45,7 +53,7 @@ public final class VoicechatImpl {
 
     private static ExecutorService createDecodePool() {
         return Executors.newFixedThreadPool(Math.max(2,
-                Runtime.getRuntime().availableProcessors() / 2),
+                        Runtime.getRuntime().availableProcessors() / 2),
                 r -> {
                     Thread t = new Thread(r, "TimeTravel-VoiceDecode");
                     t.setDaemon(true);
@@ -70,11 +78,35 @@ public final class VoicechatImpl {
     /* ------------- INIT ------------- */
 
     public static void initCategory() {
-        LOOP_CATEGORY = serverApi.volumeCategoryBuilder()
-                .setId(TimeTravel.MOD_ID + "_voice")
-                .setName("Time Travel Voices")
-                .build();
-        serverApi.registerVolumeCategory(LOOP_CATEGORY);
+        try {
+            LOOP_CATEGORY = serverApi.volumeCategoryBuilder()
+                    .setId(CATEGORY_ID)
+                    .setName("TT Voices")
+                    .build();
+            serverApi.registerVolumeCategory(LOOP_CATEGORY);
+        } catch (Exception e) {
+            TimeTravel.LOOP_LOGGER.error("[Voice] Failed to register volume category '{}' - "
+                    + "ghost voices will be silent", CATEGORY_ID, e);
+            LOOP_CATEGORY = null;
+        }
+    }
+
+    /**
+     * Returns the category id, or {@code null} if the category failed to
+     * register. Callers must bail out when this returns {@code null}; otherwise
+     * SVC would throw an NPE on {@code LOOP_CATEGORY.getId()}.
+     */
+    private static String safeCategoryId() {
+        VolumeCategory cat = LOOP_CATEGORY;
+        if (cat == null) {
+            if (!categoryWarned) {
+                categoryWarned = true;
+                TimeTravel.LOOP_LOGGER.warn(
+                        "[Voice] Volume category unavailable - skipping ghost voice playback");
+            }
+            return null;
+        }
+        return cat.getId();
     }
 
     /* ------------- PLAYBACK ------------- */
@@ -90,21 +122,19 @@ public final class VoicechatImpl {
 
         final int gen = generation;
         getDecodePool().execute(() -> {
-            short[] pcm = decodeSegment(frames, data, visitId, segment);
-            if (pcm == null || pcm.length == 0) return;
-
-            List<SpeechRegion> regions = extractSpeechRegions(pcm);
+            List<DecodedRegion> regions = decodeSpeechRegions(frames);
+            if (regions.isEmpty()) return;
 
             TimeTravel.server.execute(() -> {
                 if (gen != generation) return;
                 for (int ri = 0; ri < regions.size(); ri++) {
-                    SpeechRegion region = regions.get(ri);
-                    int relStartTick = region.startSample / SAMPLES_PER_TICK;
+                    DecodedRegion region = regions.get(ri);
                     String key = key(data.getName(), visitId, segment) + "|" + ri;
 
                     scheduledRegions.add(new ScheduledSpeechRegion(
-                            key, data, visitId, segment, ri, region.pcm, entity,
-                            visitStartTick + relStartTick, relStartTick
+                            key, data, visitId, segment, ri, region.pcm(), entity,
+                            visitStartTick + region.startTick(), region.startTick(),
+                            region.position()
                     ));
                 }
             });
@@ -132,92 +162,61 @@ public final class VoicechatImpl {
 
     /* ------------- DECODING ------------- */
 
-    /**
-     * Decodes a list of timed Opus frames into a full-duration PCM buffer.
-     * <p>
-     * Each frame carries the server tick at which it was captured.
-     * Within continuous speech (consecutive ticks with audio), frames are
-     * placed <b>contiguously</b> (back-to-back) so there are no intra-speech
-     * silence pops.  The tick is used only to position the <i>start</i> of
-     * each speech burst; a new burst begins whenever there is a gap of one
-     * or more ticks with no frames.
-     * <p>
-     * Gaps between speech bursts remain as zero-filled silence.
-     */
-    private static short[] decodeSegment(List<TimedAudioFrame> frames,
-                                  PlayerData data,
-                                  int iter,
-                                  int seg) {
-        // Find the maximum tick in the frames to properly size the buffer
-        int maxTick = 0;
-        for (TimedAudioFrame frame : frames) {
-            if (frame.tick() > maxTick) {
-                maxTick = frame.tick();
-            }
-        }
+    private record DecodedRegion(int startTick, short[] pcm, Vec3 position) {}
 
-        // Buffer sized to the max duration + 1 tick of padding
-        int bufferSamples = (maxTick + 1) * SAMPLES_PER_TICK;
-        short[] pcm = new short[bufferSamples];
+    private static List<DecodedRegion> decodeSpeechRegions(List<TimedAudioFrame> frames) {
+        List<DecodedRegion> result = new ArrayList<>();
+        if (frames.isEmpty()) return result;
 
         OpusDecoder decoder = serverApi.createDecoder();
         try {
-            int writeHead   = -1;   // next sample position to write at
-            int prevTick    = -1;   // tick of the previous frame
-            int framesPlaced = 0;
-
-            for (TimedAudioFrame frame : frames) {
-                int tickStart = frame.tick() * SAMPLES_PER_TICK;
-
-                if (writeHead < 0 || frame.tick() > prevTick + 1) {
-                    // First frame ever, or a silence gap (skipped tick) -
-                    // jump the write head to this tick's start position.
-                    writeHead = tickStart;
+            int i = 0;
+            while (i < frames.size()) {
+                int burstStart = i;
+                int prevTick = frames.get(i).tick();
+                i++;
+                while (i < frames.size() && frames.get(i).tick() <= prevTick + 1) {
+                    prevTick = frames.get(i).tick();
+                    i++;
                 }
-                // else: same tick or next consecutive tick -
-                //        keep writeHead where it is (contiguous placement).
 
-                prevTick = frame.tick();
+                int burstSize = i - burstStart;
+                short[] pcm = new short[burstSize * FRAME_SIZE];
+                int writeHead = 0;
+                boolean hasSignal = false;
 
-                // Bounds check
-                if (writeHead + FRAME_SIZE > pcm.length) continue;
+                for (int j = burstStart; j < i; j++) {
+                    short[] decoded = decoder.decode(frames.get(j).opus());
+                    int copyLen = Math.min(decoded.length, FRAME_SIZE);
+                    System.arraycopy(decoded, 0, pcm, writeHead, copyLen);
+                    if (!hasSignal) {
+                        for (int k = 0; k < copyLen; k++) {
+                            if (decoded[k] != 0) {
+                                hasSignal = true;
+                                break;
+                            }
+                        }
+                    }
+                    writeHead += FRAME_SIZE;
+                }
 
-                short[] decoded = decoder.decode(frame.opus());
-                System.arraycopy(decoded, 0, pcm, writeHead,
-                        Math.min(decoded.length, FRAME_SIZE));
-                writeHead += FRAME_SIZE;
-                framesPlaced++;
+                if (hasSignal) {
+                    result.add(new DecodedRegion(
+                            frames.get(burstStart).tick(),
+                            pcm,
+                            frames.get(burstStart).position()));
+                }
             }
-
-            TimeTravel.LOOP_LOGGER.debug(
-                    "[Voice] Decoded {}/{} frames for {} i{} s{}",
-                    framesPlaced, frames.size(), data.getName(), iter, seg
-            );
-
-            return pcm;
-
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error(
-                    "[Voice] Decode failed for {} i{} s{}",
-                    data.getName(), iter, seg, e
-            );
-            return null;
+            TimeTravel.LOOP_LOGGER.error("[Voice] Decode failed", e);
         } finally {
             decoder.close();
         }
+        return result;
     }
 
     /* ------------- VOICE DISTANCE ------------ */
 
-    /**
-     * Returns the voice distance to use for audio channels.
-     * <p>
-     * Reads SVC's {@code max_voice_distance} from the server config via the
-     * {@link de.maxhenkel.voicechat.api.config.ConfigAccessor} API. Falls back
-     * to our own {@link TimeTravel#voiceAudioDistance} if the API is unavailable.
-     *
-     * @return the voice distance in blocks
-     */
     private static float getVoiceDistance() {
         if (serverApi == null) return TimeTravel.voiceAudioDistance;
         try {
@@ -229,68 +228,16 @@ public final class VoicechatImpl {
 
     /* ------------- CONSTANTS ------------- */
 
-    // 48 kHz · 50 ms/tick = 2400 samples per tick
     private static final int SAMPLES_PER_TICK = 2400;
-    // Each Opus frame = 20 ms = 960 samples
     private static final int FRAME_SIZE = 960;
-    // Minimum consecutive silent frames to split speech regions
-    private static final int SILENCE_GAP_FRAMES = 5; // ~100ms
-
-    /* ------------- SPEECH REGION EXTRACTION ------------- */
-
-    /** A contiguous block of non-silent PCM audio and its position in the full buffer. */
-    private record SpeechRegion(int startSample, short[] pcm) {}
-
-    /**
-     * Scans a full-duration PCM buffer and extracts contiguous speech regions.
-     * A speech region begins at the first non-silent frame and ends after
-     * {@link #SILENCE_GAP_FRAMES} consecutive silent frames.
-     */
-    private static List<SpeechRegion> extractSpeechRegions(short[] fullPcm) {
-        List<SpeechRegion> regions = new ArrayList<>();
-        int regionStart = -1;
-        int silentCount = 0;
-        int lastNonSilentEnd = 0;
-
-        for (int i = 0; i + FRAME_SIZE <= fullPcm.length; i += FRAME_SIZE) {
-            boolean silent = true;
-            for (int j = i; j < i + FRAME_SIZE; j++) {
-                if (fullPcm[j] != 0) { silent = false; break; }
-            }
-
-            if (!silent) {
-                if (regionStart < 0) regionStart = i;
-                silentCount = 0;
-                lastNonSilentEnd = i + FRAME_SIZE;
-            } else if (regionStart >= 0) {
-                silentCount++;
-                if (silentCount >= SILENCE_GAP_FRAMES) {
-                    short[] regionPcm = new short[lastNonSilentEnd - regionStart];
-                    System.arraycopy(fullPcm, regionStart, regionPcm, 0, regionPcm.length);
-                    regions.add(new SpeechRegion(regionStart, regionPcm));
-                    regionStart = -1;
-                    silentCount = 0;
-                }
-            }
-        }
-        // Flush trailing region
-        if (regionStart >= 0) {
-            short[] regionPcm = new short[lastNonSilentEnd - regionStart];
-            System.arraycopy(fullPcm, regionStart, regionPcm, 0, regionPcm.length);
-            regions.add(new SpeechRegion(regionStart, regionPcm));
-        }
-        return regions;
-    }
 
     /* ------------- CHANNEL START ------------- */
 
-    /**
-     * Starts an {@link EntityAudioChannel} for a single speech region.
-     * The AudioPlayer feeds only the region's PCM (no silence padding),
-     * so the SVC speaker icon only appears during actual speech.
-     */
     private static void startRegionEntityChannel(String key, short[] regionPcm,
-                                          net.minecraft.world.entity.Entity mcEntity) {
+                                                 net.minecraft.world.entity.Entity mcEntity) {
+        String catId = safeCategoryId();
+        if (catId == null) return;
+
         de.maxhenkel.voicechat.api.Entity svcEntity = serverApi.fromEntity(mcEntity);
         EntityAudioChannel channel = serverApi.createEntityAudioChannel(
                 UUID.randomUUID(), svcEntity
@@ -299,7 +246,7 @@ public final class VoicechatImpl {
             TimeTravel.LOOP_LOGGER.warn("[Voice] Failed to create EntityAudioChannel for key={}", key);
             return;
         }
-        channel.setCategory(LOOP_CATEGORY.getId());
+        channel.setCategory(catId);
         channel.setDistance(getVoiceDistance());
 
         AudioPlayer player = createSimpleAudioPlayer(channel, regionPcm, mcEntity);
@@ -307,27 +254,14 @@ public final class VoicechatImpl {
         player.startPlaying();
     }
 
-    /**
-     * Starts a {@link LocationalAudioChannel} for a speech region.
-     * Used as a fallback when no entity is available, or when
-     * {@link TimeTravel#showPlayerVoiceIcon} is {@code false} (to play audio
-     * at the entity's position without showing the SVC speaker icon).
-     *
-     * @param key             the unique key for this region
-     * @param regionPcm       trimmed PCM containing only the speech audio
-     * @param data            the player data (used for position lookup when entity is null)
-     * @param iter            the iteration index
-     * @param seg             the segment index
-     * @param regionStartTick the start tick of this region within the iteration
-     * @param boundEntity     the mocap entity (for position + game event emission), or null
-     */
     private static void startRegionLocationalChannel(String key, short[] regionPcm,
-                                              PlayerData data, int iter, int seg,
-                                              int regionStartTick,
-                                              net.minecraft.world.entity.Entity boundEntity) {
-        // Resolve the level from the bound entity's dimension (it may be in the
-        // Nether/End if the recording was split across dimensions). Fall back to
-        // the overworld if no entity is available.
+                                                     PlayerData data, int iter, int seg,
+                                                     int regionStartTick,
+                                                     net.minecraft.world.entity.Entity boundEntity,
+                                                     Vec3 position) {
+        String catId = safeCategoryId();
+        if (catId == null) return;
+
         ServerLevel mcLevel = (boundEntity != null && boundEntity.level() instanceof ServerLevel sl)
                 ? sl : TimeTravel.serverLevel;
         de.maxhenkel.voicechat.api.ServerLevel level =
@@ -338,17 +272,20 @@ public final class VoicechatImpl {
             px = boundEntity.getX();
             py = boundEntity.getY();
             pz = boundEntity.getZ();
+        } else if (position != null) {
+            px = position.x;
+            py = position.y;
+            pz = position.z;
         } else {
-            var pos = data.getPosition(iter, seg, regionStartTick);
-            px = pos != null ? pos.x : 0;
-            py = pos != null ? pos.y : 0;
-            pz = pos != null ? pos.z : 0;
+            px = 0;
+            py = 0;
+            pz = 0;
         }
 
         LocationalAudioChannel channel = serverApi.createLocationalAudioChannel(
                 UUID.randomUUID(), level, serverApi.createPosition(px, py, pz)
         );
-        channel.setCategory(LOOP_CATEGORY.getId());
+        channel.setCategory(catId);
         channel.setDistance(getVoiceDistance());
 
         AudioPlayer player = createSimpleAudioPlayer(channel, regionPcm, boundEntity);
@@ -356,24 +293,15 @@ public final class VoicechatImpl {
         player.startPlaying();
     }
 
-    /**
-     * Creates a simple AudioPlayer that feeds PCM frames sequentially until
-     * exhausted. No tick-gating - the region is started at the right tick by
-     * {@link #onTick()}, and the AudioPlayer runs at its native rate.
-     *
-     * @param channel     the SVC audio channel
-     * @param regionPcm   trimmed PCM containing only the speech audio
-     * @param boundEntity the mocap entity (for game event emission), or null
-     */
     private static AudioPlayer createSimpleAudioPlayer(AudioChannel channel, short[] regionPcm,
-                                                net.minecraft.world.entity.Entity boundEntity) {
+                                                       net.minecraft.world.entity.Entity boundEntity) {
         final int[] cursor = {0};
 
         return serverApi.createAudioPlayer(
                 channel,
                 serverApi.createEncoder(),
                 () -> {
-                    if (cursor[0] + FRAME_SIZE > regionPcm.length) return null; // done
+                    if (cursor[0] + FRAME_SIZE > regionPcm.length) return null;
 
                     short[] out = new short[FRAME_SIZE];
                     System.arraycopy(regionPcm, cursor[0], out, 0, FRAME_SIZE);
@@ -393,19 +321,11 @@ public final class VoicechatImpl {
 
     /* ------------- TICK UPDATE ------------- */
 
-    /**
-     * Processes scheduled speech regions. Call once per server tick while looping.
-     * No-op when SVC is not loaded.
-     */
     public static void onTick() {
         if (!TimeTravel.voiceChatLoaded) return;
         processScheduledRegions();
     }
 
-    /**
-     * Each tick, checks scheduled speech regions and starts an AudioPlayer
-     * for any region whose start tick has arrived.
-     */
     private static void processScheduledRegions() {
         if (scheduledRegions.isEmpty()) return;
 
@@ -432,38 +352,17 @@ public final class VoicechatImpl {
             if (region.entity != null && region.entity.isRemoved()) continue;
 
             if (region.entity != null && TimeTravel.showPlayerVoiceIcon) {
-                // Entity channel - audio follows entity, speaker icon visible
                 startRegionEntityChannel(region.key, pcm, region.entity);
             } else {
-                // Locational channel - no speaker icon; positioned at entity
-                // (or fallback position if entity is null)
                 startRegionLocationalChannel(region.key, pcm,
                         region.data, region.iter, region.seg,
-                        region.relStartTick, region.entity);
+                        region.relStartTick, region.entity, region.position);
             }
         }
     }
 
     /* ------------- ENTITY LOOKUP ------------- */
 
-    /**
-     * Scans <b>all loaded server levels</b> for mocap FakePlayer entities matching
-     * the given nickname. When dimension-split recordings are used, mocap spawns
-     * FakePlayer entities in the dimension the recording was made in (e.g. Nether,
-     * End), so scanning only the overworld would miss them.
-     * <p>
-     * The returned list is sorted by <b>entity ID</b> to guarantee scene order.
-     * Mocap creates entities sequentially during {@code ScenePlayback.start()},
-     * iterating scene elements in order. Each call to {@code level.addNewPlayer()}
-     * assigns an incrementing entity ID, so sorting by ID recovers the scene
-     * element order even when entities are spread across multiple dimensions.
-     * <p>
-     * Called from {@link TimeTravel#startPlaybackForAllPlayers()} after the scene
-     * has been started so that all entities are already spawned.
-     *
-     * @param nickname the display name of the mocap entities
-     * @return list of matching entities in scene order (may be empty)
-     */
     public static List<net.minecraft.world.entity.Entity> findAllMocapEntities(String nickname) {
         List<net.minecraft.world.entity.Entity> result = new ArrayList<>();
         if (nickname == null || TimeTravel.server == null) return result;
@@ -473,8 +372,6 @@ public final class VoicechatImpl {
             realPlayerUUIDs.add(sp.getUUID());
         }
 
-        // Scan ALL dimensions - mocap spawns FakePlayer entities in the dimension
-        // the recording was made in (assigned via dimensionId in RecordingData).
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             for (net.minecraft.world.entity.Entity entity : level.getAllEntities()) {
                 if (entity instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
@@ -486,16 +383,12 @@ public final class VoicechatImpl {
             }
         }
 
-        // Sort by entity ID to recover scene-element order. Mocap creates
-        // FakePlayer entities sequentially, so lower ID = earlier scene element.
         result.sort(Comparator.comparingInt(net.minecraft.world.entity.Entity::getId));
-
         return result;
     }
 
     /* ------------- PERSISTENCE ------------- */
 
-    /** Saves all voice data to disk. No-op when SVC is not loaded. */
     public static CompletableFuture<Void> saveAudio() {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
         TimeTravel.LOOP_LOGGER.info("[Voice] Saving all audio to disk...");
@@ -504,7 +397,6 @@ public final class VoicechatImpl {
         );
     }
 
-    /** Saves voice data for a single player to disk. No-op when SVC is not loaded. */
     public static CompletableFuture<Void> savePlayerAudio(PlayerData playerData) {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
         TimeTravel.LOOP_LOGGER.info("[Voice] Saving audio for player {}...", playerData.getName());
@@ -513,7 +405,6 @@ public final class VoicechatImpl {
         );
     }
 
-    /** Loads all voice data from disk into memory. No-op when SVC is not loaded. */
     public static CompletableFuture<Void> loadAudio() {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
         TimeTravel.LOOP_LOGGER.info("[Voice] Loading audio from disk...");
@@ -522,10 +413,6 @@ public final class VoicechatImpl {
         );
     }
 
-    /**
-     * Deletes all voice audio from disk and clears in-memory audio for all players.
-     * No-op when SVC is not loaded.
-     */
     public static CompletableFuture<Void> deleteAllAudio() {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
         TimeTravel.LOOP_LOGGER.info("[Voice] Deleting all voice audio...");
@@ -534,7 +421,6 @@ public final class VoicechatImpl {
         );
     }
 
-    /** Cleans up thread pools and resources. Call on server stop. No-op when SVC is not loaded. */
     public static void shutdown() {
         if (!TimeTravel.voiceChatLoaded) return;
         stopPlayback(null);
@@ -546,10 +432,6 @@ public final class VoicechatImpl {
 
     /* ------------- STOP ------------- */
 
-    /**
-     * Stops voice playback for the given player, or all playback if
-     * {@code player} is {@code null} or empty. No-op when SVC is not loaded.
-     */
     public static void stopPlayback(String player) {
         if (!TimeTravel.voiceChatLoaded) return;
         generation++;
@@ -602,12 +484,10 @@ public final class VoicechatImpl {
         return p + "|" + i + "|" + s;
     }
 
-    /**
-     * A decoded speech region waiting to be started at the right tick.
-     */
     private record ScheduledSpeechRegion(
             String key, PlayerData data, int iter, int seg, int regionIndex,
             short[] pcm, net.minecraft.world.entity.Entity entity,
-            long absStartTick, int relStartTick
+            long absStartTick, int relStartTick,
+            Vec3 position
     ) {}
 }

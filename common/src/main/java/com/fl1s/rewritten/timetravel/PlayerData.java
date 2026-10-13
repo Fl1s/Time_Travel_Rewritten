@@ -10,11 +10,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 public class PlayerData {
     // -- Persisted fields (serialized to config JSON via Gson) --
@@ -72,9 +71,8 @@ public class PlayerData {
         this.chunkStartTick = 0;
         this.pieceCounter = 0;
         this.lastJumpServerTick = -1;
-        // Audio maps are transient (saved separately by AudioPersistence)
+        // Audio is transient (saved separately by AudioPersistence)
         this.audio = new ConcurrentHashMap<>();
-        this.positions = new ConcurrentHashMap<>();
     }
 
     public long getLastJumpServerTick() {
@@ -203,8 +201,6 @@ public class PlayerData {
         this.active = active;
     }
 
-
-
     public List<Visit> getVisits() {
         return visits;
     }
@@ -257,19 +253,17 @@ public class PlayerData {
         return activeSegment;
     }
 
+    // Audio is stored as a list of frames, each carrying its own tick and
+    // position. This avoids a second map (previously a TreeMap keyed by tick)
+    // being written from the voice-chat thread while the IO pool reads it.
     private transient Map<Integer, Map<Integer, List<TimedAudioFrame>>> audio = new ConcurrentHashMap<>();
-    private transient Map<Integer, Map<Integer, TreeMap<Integer, Vec3>>> positions = new ConcurrentHashMap<>();
 
     public void addVoiceFrame(int iteration, int tick, byte[] opus, Vec3 pos) {
         int seg = activeSegment;
 
         audio.computeIfAbsent(iteration, i -> new ConcurrentHashMap<>())
-                .computeIfAbsent(seg, s -> new CopyOnWriteArrayList<>())
-                .add(new TimedAudioFrame(tick, opus));
-
-        positions.computeIfAbsent(iteration, i -> new ConcurrentHashMap<>())
-                .computeIfAbsent(seg, s -> new TreeMap<>())
-                .put(tick, pos);
+                .computeIfAbsent(seg, s -> Collections.synchronizedList(new ArrayList<>()))
+                .add(new TimedAudioFrame(tick, opus, pos));
     }
 
     /**
@@ -280,12 +274,8 @@ public class PlayerData {
      */
     public void addVoiceFrameForLoad(int iteration, int segment, int tick, byte[] opus, Vec3 pos) {
         audio.computeIfAbsent(iteration, i -> new ConcurrentHashMap<>())
-                .computeIfAbsent(segment, s -> new CopyOnWriteArrayList<>())
-                .add(new TimedAudioFrame(tick, opus));
-
-        positions.computeIfAbsent(iteration, i -> new ConcurrentHashMap<>())
-                .computeIfAbsent(segment, s -> new TreeMap<>())
-                .put(tick, pos);
+                .computeIfAbsent(segment, s -> Collections.synchronizedList(new ArrayList<>()))
+                .add(new TimedAudioFrame(tick, opus, pos));
     }
 
     public java.util.Set<Integer> getAudioKeys() {
@@ -297,34 +287,18 @@ public class PlayerData {
     }
 
     /**
-     * Removes all in-memory audio and position data for the given iteration.
+     * Removes all in-memory audio data for the given iteration.
      * Called when old scene entries are trimmed to keep memory in sync with disk.
      */
     public void removeAudio(int iteration) {
         audio.remove(iteration);
-        positions.remove(iteration);
     }
 
     /**
-     * Removes all in-memory audio and position data for every iteration.
+     * Removes all in-memory audio data for every iteration.
      * Called on loop reset to clear all voice data.
      */
     public void removeAllAudio() {
         audio.clear();
-        positions.clear();
-    }
-
-    /**
-     * Look up the player position for a given tick using floor-key lookup.
-     * Returns the position at the latest tick <= the requested tick,
-     * or null if no positions were recorded for this iteration/segment.
-     */
-    public Vec3 getPosition(int iteration, int segment, int tick) {
-        var segMap = positions.get(iteration);
-        if (segMap == null) return null;
-        var tree = segMap.get(segment);
-        if (tree == null || tree.isEmpty()) return null;
-        var entry = tree.floorEntry(tick);
-        return entry != null ? entry.getValue() : tree.firstEntry().getValue();
     }
 }
