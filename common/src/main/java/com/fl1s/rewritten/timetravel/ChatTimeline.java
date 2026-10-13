@@ -36,6 +36,8 @@ public final class ChatTimeline {
     private static long nextSeq = 0;
     private static boolean dirty = false;
 
+    record Line(long tick, long seq, Component text) {}
+
     public static void onPlayerChat(ServerPlayer player, String text) {
         if (!TimeTravel.isLooping || !TimeTravel.trackChat || TimeTravel.loopSceneManager == null) return;
         if (player.getClass().getName().contains("FakePlayer")) return;
@@ -79,15 +81,16 @@ public final class ChatTimeline {
     public static void resend(long upTo) {
         if (!TimeTravel.trackChat || TimeTravel.server == null) return;
 
-        List<Entry> history = new ArrayList<>();
-        for (Entry e : entries) if (e.tick <= upTo) history.add(e);
-        history.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
+        List<Line> history = new ArrayList<>();
+        for (Entry e : entries) if (e.tick <= upTo) history.add(new Line(e.tick, e.seq, component(e)));
+        AdvancementTimeline.collect(upTo, history);
+        history.sort(Comparator.comparingLong(Line::tick).thenComparingLong(Line::seq));
         if (history.size() > RESEND_LIMIT) history = history.subList(history.size() - RESEND_LIMIT, history.size());
 
         for (ServerPlayer player : new ArrayList<>(TimeTravel.server.getPlayerList().getPlayers())) {
             if (player.getClass().getName().contains("FakePlayer")) continue;
             TimelineNet.sendToPlayer(player, ClearChatPayload.INSTANCE);
-            for (Entry e : history) player.sendSystemMessage(component(e));
+            for (Line l : history) player.sendSystemMessage(l.text());
         }
     }
 

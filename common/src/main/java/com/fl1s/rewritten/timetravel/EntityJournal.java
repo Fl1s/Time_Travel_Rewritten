@@ -36,6 +36,7 @@ public final class EntityJournal {
     private EntityJournal() {}
 
     public static final String TAG = "tt_replay";
+    private static final double OWNER_MAX_DIST_SQ = 5.0 * 5.0;
     private static final Gson GSON = new GsonBuilder().create();
     private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {}.getType();
 
@@ -126,14 +127,18 @@ public final class EntityJournal {
 
     private static boolean ownerPresent(ServerLevel level, Entry e) {
         try {
+            net.minecraft.nbt.ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
+            double x = p.getDouble(0), y = p.getDouble(1), z = p.getDouble(2);
+
             Entity owner = level.getEntity(UUID.fromString(e.owner));
             if (owner == null) {
-                net.minecraft.nbt.ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
-                return !level.isLoaded(net.minecraft.core.BlockPos.containing(p.getDouble(0), p.getDouble(1), p.getDouble(2)));
+                return !level.isLoaded(net.minecraft.core.BlockPos.containing(x, y, z));
             }
-            return !owner.isRemoved() && !(owner instanceof LivingEntity living && living.isDeadOrDying());
+            if (!MobJournal.isDoomed(owner)) return false;
+            if (owner.isRemoved() || (owner instanceof LivingEntity living && living.isDeadOrDying())) return false;
+            return owner.level() == level && owner.distanceToSqr(x, y, z) <= OWNER_MAX_DIST_SQ;
         } catch (Exception ex) {
-            return true;
+            return false;
         }
     }
 

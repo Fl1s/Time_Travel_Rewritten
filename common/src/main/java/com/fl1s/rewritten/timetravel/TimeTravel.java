@@ -142,6 +142,7 @@ public class TimeTravel {
 		EffectJournal.rebuildUpcoming();
 		ProcessJournal.rebuildUpcoming();
 		ChatTimeline.rebuildUpcoming();
+		AdvancementTimeline.rebuildUpcoming();
 		config.save();
 		broadcastSync();
 		LOOP_LOGGER.info("Timeline started at tick {}", timelineTick);
@@ -158,6 +159,7 @@ public class TimeTravel {
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
+		AdvancementTimeline.save();
 		EntityJournal.save();
 		EffectJournal.save();
 		MobBinding.save();
@@ -181,6 +183,7 @@ public class TimeTravel {
 		MobJournal.clear();
 		ProcessJournal.clear();
 		ChatTimeline.clear();
+		AdvancementTimeline.clear();
 		EntityJournal.clear();
 		EffectJournal.clear();
 		MobBinding.clear();
@@ -243,6 +246,7 @@ public class TimeTravel {
 		EffectJournal.rebuildUpcoming();
 		ProcessJournal.afterJump(from, target);
 		ChatTimeline.onJump(target);
+		AdvancementTimeline.onJump();
 
 		forEachOnlineRecorded((p, pd) -> beginVisit(p, pd, dir));
 		rebuildPending();
@@ -295,6 +299,7 @@ public class TimeTravel {
 		MobJournal.tick();
 		ProcessJournal.tick();
 		ChatTimeline.tick();
+		AdvancementTimeline.tick();
 		EffectJournal.tick();
 		if (syncDayTime) {
 			serverLevel.setDayTime(dayTimeOrigin + timelineTick);
@@ -314,6 +319,7 @@ public class TimeTravel {
 			BlockJournal.saveIfDirty();
 			MobJournal.saveIfDirty();
 			ChatTimeline.saveIfDirty();
+			AdvancementTimeline.saveIfDirty();
 			EntityJournal.saveIfDirty();
 			EffectJournal.saveIfDirty();
 			MobBinding.saveIfDirty();
@@ -366,6 +372,7 @@ public class TimeTravel {
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
+		AdvancementTimeline.save();
 		EntityJournal.save();
 		EffectJournal.save();
 		MobBinding.save();
@@ -656,6 +663,7 @@ public class TimeTravel {
 		BlockJournal.eraseVisits(ids);
 		MobJournal.eraseVisits(ids);
 		ChatTimeline.eraseVisits(ids);
+		AdvancementTimeline.eraseVisits(ids);
 		EntityJournal.eraseVisits(ids);
 		EffectJournal.eraseVisits(ids);
 		MobBinding.eraseVisits(ids);
@@ -774,6 +782,11 @@ public class TimeTravel {
 		PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
 		if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return -1;
 		return pd.getCurrentVisit().id;
+	}
+
+	public static GhostFx fxOf(Entity e) {
+		for (Ghost g : ghostRoots) if (g.fx().entity() == e) return g.fx();
+		return null;
 	}
 
 	public static Entity entityOfVisit(int visitId) {

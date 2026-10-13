@@ -42,6 +42,7 @@ public final class MobJournal {
     private static final double RANGE = 96.0;
     private static final long STEER_WINDOW = 1200;
     private static final long GLIDE_TICKS = 10;
+    private static final long NAV_TICKS = 200;;
     private static final double MAX_SPEED_MOD = 4.0;
     private static final double NEAR_PLAYER = 48.0;
     private static final int TRAIL_STEP = 2;
@@ -105,6 +106,13 @@ public final class MobJournal {
         if (e == null) return false;
         if (e.getClass().getName().contains("FakePlayer")) return true;
         return e instanceof PrimedTnt && e.getTags().contains(EntityJournal.TAG);
+    }
+
+    public static float capGhostDamage(LivingEntity victim, DamageSource src, float amount) {
+        if (killing || !TimeTravel.isLooping) return amount;
+        if (!(victim instanceof Mob) || !isDoomed(victim)) return amount;
+        if (!isReplayEntity(src.getEntity()) && !isReplayEntity(src.getDirectEntity())) return amount;
+        return Math.max(0.0f, Math.min(amount, victim.getHealth() - 1.0f));
     }
 
     public static void onEntityDeath(LivingEntity entity, boolean explode) {
@@ -278,14 +286,13 @@ public final class MobJournal {
             boolean trailed = e.trail != null && !e.trail.isEmpty();
             long due = trailed ? e.trail.get(0).tick : e.tick;
             long remaining = due - now;
-            if (remaining <= 0 || remaining > STEER_WINDOW) continue;
+            if (remaining <= 0 || remaining > NAV_TICKS) continue;
             if (remaining > GLIDE_TICKS && !nav) continue;
 
             Vec3 target = trailed ? positionAt(e, due) : deathPos(e);
             if (target == null) continue;
 
-            ServerLevel level = TimeTravel.server.getLevel(
-                    ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
             if (level == null) continue;
             if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || mob.isRemoved()) continue;
 
@@ -295,7 +302,7 @@ public final class MobJournal {
 
             if (remaining <= GLIDE_TICKS) {
                 mob.getNavigation().stop();
-                if (level.getNearestPlayer(pos.x, pos.y, pos.z, NEAR_PLAYER, false) == null) {
+                if (!seenByRealPlayer(level, pos) && !seenByRealPlayer(level, target)) {
                     mob.teleportTo(target.x, target.y, target.z);
                 } else {
                     Vec3 next = pos.add(target.subtract(pos).scale(1.0 / remaining));
@@ -308,11 +315,16 @@ public final class MobJournal {
             double base = Math.max(0.05, mob.getAttributeValue(Attributes.MOVEMENT_SPEED));
             double needed = dist / (remaining - GLIDE_TICKS);
             double modifier = needed / base;
-            if (modifier > 0.6) {
-                mob.getNavigation().moveTo(target.x, target.y, target.z,
-                        Math.min(MAX_SPEED_MOD, Math.max(1.0, modifier)));
-            }
+            mob.getNavigation().moveTo(target.x, target.y, target.z, Math.min(MAX_SPEED_MOD, Math.max(0.4, modifier)));
         }
+    }
+
+    private static boolean seenByRealPlayer(ServerLevel level, Vec3 p) {
+        for (ServerPlayer sp : level.players()) {
+            if (sp.getClass().getName().contains("FakePlayer") || sp.isSpectator()) continue;
+            if (sp.distanceToSqr(p) <= NEAR_PLAYER * NEAR_PLAYER) return true;
+        }
+        return false;
     }
 
     public static void onJump(long from, long to) {
@@ -420,14 +432,32 @@ public final class MobJournal {
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
+        long now = TimeTravel.timelineTick;
         List<Entry> mine = new ArrayList<>();
         for (Entry e : entries) if (visitIds.contains(e.visit)) mine.add(e);
         mine.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
-        for (Entry e : mine) if (e.tick <= TimeTravel.timelineTick) apply(e, false, false);
+        for (Entry e : mine) {
+            if (e.tick <= now) apply(e, false, false);
+            else release(e);
+        }
         entries.removeAll(mine);
         upcoming.removeAll(mine);
-        rebuildCanon();
+        rebuildUpcoming();
         dirty = true;
+    }
+
+    private static void release(Entry e) {
+        try {
+            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            if (level == null) return;
+            if (level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob && !mob.isRemoved()) {
+                mob.getNavigation().stop();
+                mob.setDeltaMovement(Vec3.ZERO);
+                mob.fallDistance = 0;
+            }
+        } catch (Exception ex) {
+            TimeTravel.LOOP_LOGGER.error("Failed to release mob {}", e.uuid, ex);
+        }
     }
 
     private static Path file() {
