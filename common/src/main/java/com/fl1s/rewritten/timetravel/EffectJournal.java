@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.LidBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
 
 import java.io.Reader;
 import java.io.Writer;
@@ -75,6 +76,10 @@ public final class EffectJournal {
         add(e);
     }
 
+    private static boolean isPistonSound(Holder<SoundEvent> sound) {
+        return sound.unwrapKey().map(k -> k.location().getPath().startsWith("block.piston.")).orElse(false);
+    }
+
     public static void recordLevelEvent(ServerLevel level, Player except, int type, BlockPos pos, int data) {
         if (!TimeTravel.isLooping || replaying || except == null) return;
         PlayerData pd = recorder(level, except, pos.getX(), pos.getY(), pos.getZ());
@@ -94,6 +99,11 @@ public final class EffectJournal {
         PlayerData pd = recorder(level, null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
         if (pd == null) return;
 
+        for (int i = entries.size() - 1; i >= 0; i--) {
+            Entry p = entries.get(i);
+            if (p.tick != TimeTravel.timelineTick) break;
+            if (p.kind == BLOCK_EVENT && p.x == pos.getX() && p.y == pos.getY() && p.z == pos.getZ() && p.a == a && p.b == b) return;
+        }
         Entry e = create(BLOCK_EVENT, level, pd, pos.getX(), pos.getY(), pos.getZ());
         e.id = BuiltInRegistries.BLOCK.getKey(block).toString();
         e.a = a;

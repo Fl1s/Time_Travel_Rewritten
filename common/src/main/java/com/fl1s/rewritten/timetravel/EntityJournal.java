@@ -58,7 +58,7 @@ public final class EntityJournal {
     public static boolean suppress = false;
 
     private static boolean isTracked(Entity e) {
-        if (e instanceof PrimedTnt || e instanceof FallingBlockEntity) return true;
+        if (e instanceof PrimedTnt) return true;
         if (e instanceof ItemEntity item) return !(item.getOwner() instanceof Player);
         if (e instanceof Projectile) {
             return !(e instanceof ThrownEnderpearl || e instanceof FishingHook || e instanceof FireworkRocketEntity);
@@ -70,6 +70,7 @@ public final class EntityJournal {
         if (replaying) return false;
         if (suppress) return isTracked(e);
         if (BlockJournal.isApplying()) return e instanceof PrimedTnt || e instanceof FallingBlockEntity || e instanceof ItemEntity;
+        if (BlockJournal.isReplayingLive()) return e instanceof ItemEntity;
         return false;
     }
 
@@ -113,6 +114,13 @@ public final class EntityJournal {
         if (level == null) return;
         replaying = true;
         try {
+            if (e.fuse > 0) {
+                CompoundTag t = TagParser.parseTag(e.nbt);
+                net.minecraft.nbt.ListTag p = t.getList("Pos", 6);
+                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(p.getDouble(0) - 0.6, p.getDouble(1) - 0.6, p.getDouble(2) - 0.6,
+                        p.getDouble(0) + 0.6, p.getDouble(1) + 0.6, p.getDouble(2) + 0.6);
+                if (!level.getEntitiesOfClass(PrimedTnt.class, box).isEmpty()) return;
+            }
             CompoundTag tag = TagParser.parseTag(e.nbt);
             if (fuse > 0) tag.putShort("fuse", (short) fuse);
             tag.putBoolean("DropItem", false);

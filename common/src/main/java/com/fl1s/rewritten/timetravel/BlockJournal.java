@@ -5,24 +5,32 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
-import net.minecraft.tags.BlockTags;
-import net.minecraft.world.Container;
-import net.minecraft.world.ContainerHelper;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.*;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.core.Direction;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.Container;
+import net.minecraft.world.ContainerHelper;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.AbstractFurnaceBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BrewingStandBlock;
+import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.FireBlock;
+import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.RedStoneWireBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonHeadBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
@@ -36,9 +44,9 @@ import java.util.*;
 public final class BlockJournal {
     private BlockJournal() {}
 
-    private static final int REPLAY_DELAY_TICKS = 0;
-
     private static final int SET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
+    private static final double TRACK_RANGE_SQ = 64.0 * 64.0;
+    private static final long DEDUP_TICKS = 40;
     private static final Gson GSON = new GsonBuilder().create();
     private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {}.getType();
 
@@ -50,31 +58,45 @@ public final class BlockJournal {
         long tick;
         long seq;
         int visit = -1;
+        boolean root;
         String oldItems;
         String newItems;
         transient BlockState oldParsed;
         transient BlockState newParsed;
     }
 
-    private record Watch(ServerLevel level, Map<BlockPos, BlockState> before, int visit) {}
+    private record Watch(ServerLevel level, List<BlockPos> positions) {}
 
     private record ContainerWatch(ServerPlayer player, ServerLevel level, int visit, Map<BlockPos, List<ItemStack>> last) {}
 
     private static final List<ContainerWatch> containerWatches = new ArrayList<>();
-
     private static final List<Entry> entries = new ArrayList<>();
     private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
     private static final List<Watch> watches = new ArrayList<>();
     private static final Map<ServerLevel, Set<BlockPos>> touched = new HashMap<>();
+    private static final Map<Long, List<Entry>> byPos = new HashMap<>();
     private static long nextSeq = 0;
     private static boolean dirty = false;
-
-    private static final double TRACK_RANGE_SQ = 64.0 * 64.0;
-    private static final long DEDUP_TICKS = 40;
-    private static final Map<Long, List<Entry>> byPos = new HashMap<>();
     private static boolean applying = false;
+    private static boolean replayingLive = false;
+    private static int actionDepth = 0;
 
-    //hooks (called from loader events)
+    public static boolean isApplying() {
+        return applying;
+    }
+
+    public static boolean isReplayingLive() {
+        return replayingLive;
+    }
+
+    public static void enterAction() {
+        actionDepth++;
+    }
+
+    public static void exitAction() {
+        if (actionDepth > 0) actionDepth--;
+    }
+
     public static void watch(ServerPlayer player, BlockPos center) {
         if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
         if (player.getClass().getName().contains("FakePlayer")) return;
@@ -82,18 +104,15 @@ public final class BlockJournal {
         if (pd == null || !pd.getActive()) return;
 
         ServerLevel level = player.serverLevel();
-        Map<BlockPos, BlockState> before = new HashMap<>();
         BlockPos c = center.immutable();
+        List<BlockPos> positions = new ArrayList<>();
         for (int dx = -2; dx <= 2; dx++) {
             for (int dy = -2; dy <= 2; dy++) {
-                for (int dz = -2; dz <= 2; dz++) {
-                    BlockPos n = c.offset(dx, dy, dz);
-                    before.put(n, level.getBlockState(n));
-                }
+                for (int dz = -2; dz <= 2; dz++) positions.add(c.offset(dx, dy, dz));
             }
         }
+        watches.add(new Watch(level, positions));
         int visitId = pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
-        watches.add(new Watch(level, before, visitId));
         watchContainers(player, level, c, visitId);
     }
 
@@ -104,12 +123,22 @@ public final class BlockJournal {
         }
     }
 
+    public static void flushWatches() {
+        actionDepth = 0;
+        pollContainers();
+        if (watches.isEmpty()) return;
+        List<Watch> copy = new ArrayList<>(watches);
+        watches.clear();
+        for (Watch w : copy) {
+            for (BlockPos p : w.positions()) ProcessJournal.trackIfProcess(w.level(), p);
+        }
+    }
+
     public static void onBlockChanged(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
         if (applying || !TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
-        if (!shouldTrack(old, now)) return;
         if (old.is(Blocks.MOVING_PISTON)) old = Blocks.AIR.defaultBlockState();
         if (now.is(Blocks.MOVING_PISTON)) now = Blocks.AIR.defaultBlockState();
-        if (old.equals(now)) return;
+        if (old.equals(now) || !shouldTrack(old, now)) return;
         PlayerData pd = nearestRecorder(level, pos);
         if (pd == null) return;
 
@@ -138,6 +167,7 @@ public final class BlockJournal {
         entry.tick = TimeTravel.timelineTick;
         entry.seq = nextSeq++;
         entry.visit = visit;
+        entry.root = actionDepth > 0 && !(old.getBlock() instanceof RedStoneWireBlock && now.getBlock() instanceof RedStoneWireBlock);
         entries.add(entry);
         index(entry);
         dirty = true;
@@ -166,10 +196,6 @@ public final class BlockJournal {
         return null;
     }
 
-    public static boolean isApplying() {
-        return applying;
-    }
-
     private static void index(Entry e) {
         byPos.computeIfAbsent(BlockPos.asLong(e.x, e.y, e.z), k -> new ArrayList<>()).add(e);
     }
@@ -179,25 +205,41 @@ public final class BlockJournal {
         for (Entry e : entries) index(e);
     }
 
-    public static void flushWatches() {
-        pollContainers();
-        if (watches.isEmpty()) return;
-        List<Watch> copy = new ArrayList<>(watches);
-        watches.clear();
+    private static ServerLevel levelOf(String dim) {
+        return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dim)));
+    }
 
-        for (Watch w : copy) {
-            for (BlockPos p : w.before().keySet()) ProcessJournal.trackIfProcess(w.level(), p);
+    public static void tick() {
+        while (!upcoming.isEmpty() && upcoming.peek().tick <= TimeTravel.timelineTick) {
+            Entry e = upcoming.poll();
+            if (e.root) applyLive(e);
         }
     }
 
-    //time flow
-    public static void tick() {
-        boolean any = false;
-        while (!upcoming.isEmpty() && upcoming.peek().tick + REPLAY_DELAY_TICKS <= TimeTravel.timelineTick) {
-            apply(upcoming.poll(), true, true);
-            any = true;
+    private static void applyLive(Entry e) {
+        if (e.oldItems != null) {
+            applyContainer(e, true);
+            return;
         }
-        if (any) finishBatch();
+        try {
+            ServerLevel level = levelOf(e.dim);
+            BlockState state = newState(e);
+            if (level == null || state == null) return;
+            BlockPos pos = new BlockPos(e.x, e.y, e.z);
+            if (level.getBlockState(pos).equals(state)) return;
+
+            replayingLive = true;
+            try {
+                level.setBlock(pos, state, Block.UPDATE_ALL);
+            } finally {
+                replayingLive = false;
+            }
+            if (state.getBlock() instanceof ButtonBlock && state.getValue(ButtonBlock.POWERED)) {
+                level.scheduleTick(pos, state.getBlock(), state.is(BlockTags.WOODEN_BUTTONS) ? 30 : 20);
+            }
+        } catch (Exception ex) {
+            TimeTravel.LOOP_LOGGER.error("Failed to replay block journal entry at {} {} {}", e.x, e.y, e.z, ex);
+        }
     }
 
     public static void onJump(long from, long to) {
@@ -205,11 +247,11 @@ public final class BlockJournal {
         if (to < from) {
             for (Entry e : entries) if (e.tick > to && e.tick <= from) affected.add(e);
             affected.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
-            for (Entry e : affected) apply(e, false, false);
+            for (Entry e : affected) apply(e, false);
         } else {
-            for (Entry e : entries) if (e.tick > from - REPLAY_DELAY_TICKS && e.tick <= to) affected.add(e);
+            for (Entry e : entries) if (e.tick > from && e.tick <= to) affected.add(e);
             affected.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
-            for (Entry e : affected) apply(e, true, false);
+            for (Entry e : affected) apply(e, true);
         }
         finishBatch();
         rebuildUpcoming();
@@ -222,18 +264,18 @@ public final class BlockJournal {
         }
     }
 
-    private static void apply(Entry e, boolean toNew, boolean effects) {
+    private static void apply(Entry e, boolean toNew) {
         if (e.oldItems != null) {
             applyContainer(e, toNew);
             return;
         }
+        applying = true;
         try {
-            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            ServerLevel level = levelOf(e.dim);
             if (level == null) return;
 
             BlockState state = toNew ? newState(e) : oldState(e);
             if (state == null) return;
-            if (state.is(Blocks.MOVING_PISTON)) state = Blocks.AIR.defaultBlockState();
 
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
             BlockState current = level.getBlockState(pos);
@@ -242,28 +284,18 @@ public final class BlockJournal {
             if (!current.is(state.getBlock()) && level.getBlockEntity(pos) != null) {
                 level.removeBlockEntity(pos);
             }
-
-            applying = true;
-            try {
-                level.setBlock(pos, state, SET_FLAGS);
-            } finally {
-                applying = false;
-            }
-            if (toNew) scheduleRelease(level, pos, state);
+            level.setBlock(pos, state, SET_FLAGS);
             touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
+        } finally {
+            applying = false;
         }
     }
 
-    private static void scheduleRelease(ServerLevel level, BlockPos pos, BlockState state) {
-        Block block = state.getBlock();
-        if (!state.hasProperty(BlockStateProperties.POWERED) || !state.getValue(BlockStateProperties.POWERED)) return;
-        if (block instanceof ButtonBlock) {
-            level.scheduleTick(pos, block, state.is(BlockTags.WOODEN_BUTTONS) ? 30 : 20);
-        } else if (block instanceof BasePressurePlateBlock) {
-            level.scheduleTick(pos, block, 20);
-        }
+    private static boolean isPistonPart(BlockState st) {
+        Block b = st.getBlock();
+        return b instanceof PistonBaseBlock || b instanceof PistonHeadBlock || st.is(Blocks.MOVING_PISTON);
     }
 
     private static void finishBatch() {
@@ -279,11 +311,7 @@ public final class BlockJournal {
                 }
                 for (BlockPos p : positions) {
                     BlockState st = level.getBlockState(p);
-                    if (st.is(Blocks.MOVING_PISTON)) {
-                        level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
-                        continue;
-                    }
-                    if (st.isAir()) continue;
+                    if (st.isAir() || isPistonPart(st)) continue;
                     BlockState fixed = Block.updateFromNeighbourShapes(st, level, p);
                     if (fixed.equals(st)) continue;
                     if (!fixed.is(st.getBlock()) && level.getBlockEntity(p) != null) level.removeBlockEntity(p);
@@ -317,8 +345,6 @@ public final class BlockJournal {
         }
     }
 
-
-    //containers
     private static void watchContainers(ServerPlayer player, ServerLevel level, BlockPos center, int visitId) {
         Map<BlockPos, List<ItemStack>> snapshot = new HashMap<>();
         List<BlockPos> candidates = new ArrayList<>();
@@ -368,6 +394,7 @@ public final class BlockJournal {
                 entry.tick = TimeTravel.timelineTick;
                 entry.seq = nextSeq++;
                 entry.visit = w.visit();
+                entry.root = true;
                 entries.add(entry);
                 dirty = true;
 
@@ -406,7 +433,7 @@ public final class BlockJournal {
 
     private static void applyContainer(Entry e, boolean toNew) {
         try {
-            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            ServerLevel level = levelOf(e.dim);
             if (level == null) return;
 
             BlockEntity be = level.getBlockEntity(new BlockPos(e.x, e.y, e.z));
@@ -428,15 +455,15 @@ public final class BlockJournal {
         mine.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
 
         for (Entry e : mine) {
-            if (e.tick <= TimeTravel.timelineTick) apply(e, false, false);
+            if (e.tick <= TimeTravel.timelineTick) apply(e, false);
         }
         finishBatch();
         entries.removeAll(mine);
         upcoming.removeAll(mine);
+        rebuildIndex();
         dirty = true;
     }
 
-    //misc
     private static Path file() {
         return TimeTravel.worldFolder.resolve("timetravel_rewritten_blocks.json");
     }
@@ -460,6 +487,7 @@ public final class BlockJournal {
             }
         }
         dirty = false;
+        rebuildIndex();
         rebuildUpcoming();
     }
 
@@ -482,6 +510,7 @@ public final class BlockJournal {
         upcoming.clear();
         watches.clear();
         containerWatches.clear();
+        byPos.clear();
         nextSeq = 0;
         dirty = true;
         save();
