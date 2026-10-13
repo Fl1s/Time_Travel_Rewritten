@@ -34,6 +34,14 @@ public final class VoicechatImpl {
     public static VoicechatServerApi serverApi;
     public static VolumeCategory LOOP_CATEGORY;
 
+    /**
+     * SVC requires volume-category IDs to match [a-z_]{1,16}. "tt_voice" is
+     * short enough; "timetravel_rewritten_voice" (26 chars) is rejected by SVC
+     * and, if left unguarded, produced an NPE on every speech region.
+     */
+    private static final String CATEGORY_ID = "tt_voice";
+    private static volatile boolean categoryWarned = false;
+
     /** Active AudioPlayers keyed by "playerName|iter|seg|regionIndex". */
     private static final Map<String, AudioPlayer> players = new ConcurrentHashMap<>();
 
@@ -70,11 +78,35 @@ public final class VoicechatImpl {
     /* ------------- INIT ------------- */
 
     public static void initCategory() {
-        LOOP_CATEGORY = serverApi.volumeCategoryBuilder()
-                .setId(TimeTravel.MOD_ID + "_voice")
-                .setName("Time Travel Voices")
-                .build();
-        serverApi.registerVolumeCategory(LOOP_CATEGORY);
+        try {
+            LOOP_CATEGORY = serverApi.volumeCategoryBuilder()
+                    .setId(CATEGORY_ID)
+                    .setName("Time Travel Voices")
+                    .build();
+            serverApi.registerVolumeCategory(LOOP_CATEGORY);
+        } catch (Exception e) {
+            TimeTravel.LOOP_LOGGER.error("[Voice] Failed to register volume category '{}' - "
+                    + "ghost voices will be silent", CATEGORY_ID, e);
+            LOOP_CATEGORY = null;
+        }
+    }
+
+    /**
+     * Returns the category id, or {@code null} if the category failed to
+     * register. Callers must bail out when this returns {@code null}; otherwise
+     * SVC would throw an NPE on {@code LOOP_CATEGORY.getId()}.
+     */
+    private static String safeCategoryId() {
+        VolumeCategory cat = LOOP_CATEGORY;
+        if (cat == null) {
+            if (!categoryWarned) {
+                categoryWarned = true;
+                TimeTravel.LOOP_LOGGER.warn(
+                        "[Voice] Volume category unavailable - skipping ghost voice playback");
+            }
+            return null;
+        }
+        return cat.getId();
     }
 
     /* ------------- PLAYBACK ------------- */
@@ -130,24 +162,8 @@ public final class VoicechatImpl {
 
     /* ------------- DECODING ------------- */
 
-    /**
-     * A contiguous burst of decoded PCM plus the tick at which the burst
-     * begins and the position of its first frame.
-     */
     private record DecodedRegion(int startTick, short[] pcm, Vec3 position) {}
 
-    /**
-     * Decodes a list of timed Opus frames into per-burst PCM buffers.
-     * <p>
-     * A "burst" is a maximal run of frames with no tick gap (each next frame's
-     * tick is at most previousTick + 1). Within a burst, frames are placed
-     * back-to-back; between bursts there is a silence gap of one or more ticks.
-     * Bursts with no non-zero samples are discarded.
-     * <p>
-     * This replaces a previous implementation that allocated a PCM buffer for
-     * the entire visit duration, which could reach hundreds of MB for long
-     * recordings.
-     */
     private static List<DecodedRegion> decodeSpeechRegions(List<TimedAudioFrame> frames) {
         List<DecodedRegion> result = new ArrayList<>();
         if (frames.isEmpty()) return result;
@@ -212,15 +228,16 @@ public final class VoicechatImpl {
 
     /* ------------- CONSTANTS ------------- */
 
-    // 48 kHz · 50 ms/tick = 2400 samples per tick (nominal, used for catch-up).
     private static final int SAMPLES_PER_TICK = 2400;
-    // Each Opus frame = 20 ms = 960 samples.
     private static final int FRAME_SIZE = 960;
 
     /* ------------- CHANNEL START ------------- */
 
     private static void startRegionEntityChannel(String key, short[] regionPcm,
                                                  net.minecraft.world.entity.Entity mcEntity) {
+        String catId = safeCategoryId();
+        if (catId == null) return;
+
         de.maxhenkel.voicechat.api.Entity svcEntity = serverApi.fromEntity(mcEntity);
         EntityAudioChannel channel = serverApi.createEntityAudioChannel(
                 UUID.randomUUID(), svcEntity
@@ -229,7 +246,7 @@ public final class VoicechatImpl {
             TimeTravel.LOOP_LOGGER.warn("[Voice] Failed to create EntityAudioChannel for key={}", key);
             return;
         }
-        channel.setCategory(LOOP_CATEGORY.getId());
+        channel.setCategory(catId);
         channel.setDistance(getVoiceDistance());
 
         AudioPlayer player = createSimpleAudioPlayer(channel, regionPcm, mcEntity);
@@ -242,6 +259,9 @@ public final class VoicechatImpl {
                                                      int regionStartTick,
                                                      net.minecraft.world.entity.Entity boundEntity,
                                                      Vec3 position) {
+        String catId = safeCategoryId();
+        if (catId == null) return;
+
         ServerLevel mcLevel = (boundEntity != null && boundEntity.level() instanceof ServerLevel sl)
                 ? sl : TimeTravel.serverLevel;
         de.maxhenkel.voicechat.api.ServerLevel level =
@@ -265,7 +285,7 @@ public final class VoicechatImpl {
         LocationalAudioChannel channel = serverApi.createLocationalAudioChannel(
                 UUID.randomUUID(), level, serverApi.createPosition(px, py, pz)
         );
-        channel.setCategory(LOOP_CATEGORY.getId());
+        channel.setCategory(catId);
         channel.setDistance(getVoiceDistance());
 
         AudioPlayer player = createSimpleAudioPlayer(channel, regionPcm, boundEntity);

@@ -49,7 +49,6 @@ public class TimeTravel {
 	public static boolean trackChat;
 	public static boolean hurtLoopedPlayers;
 
-
 	public static boolean voiceChatLoaded;
 	public static boolean voiceInteractionLoaded;
 	public static boolean voiceInteractionEnabled;
@@ -63,10 +62,26 @@ public class TimeTravel {
 	public static LoopSceneManager loopSceneManager;
 	public static Path worldFolder;
 
+	public static final int GHOST_SKIP_PER_TICK = 40;
 	private static TimelineSession session;
 	record PendingPiece(long startTick, String recording, String playerName, int skipTicks, int visitId,
 						int segment, long visitStartTick) {}
-	record Ghost(GhostPlayback root, String playerName, int visitId, GhostFx fx) {}
+
+	static final class Ghost {
+		final GhostPlayback root;
+		final String playerName;
+		final int visitId;
+		final GhostFx fx;
+		int pendingSkip;
+
+		Ghost(GhostPlayback root, String playerName, int visitId, GhostFx fx, int pendingSkip) {
+			this.root = root;
+			this.playerName = playerName;
+			this.visitId = visitId;
+			this.fx = fx;
+			this.pendingSkip = pendingSkip;
+		}
+	}
 
 	record PendingSound(long tick, String dim, double x, double y, double z, int dir, String playerName, int visitId) {}
 
@@ -100,7 +115,6 @@ public class TimeTravel {
 		LOOP_LOGGER.info("Initializing TimeTravel mod (Common)");
 	}
 
-	//timeline contol
 	public static void startLoop() {
 		if (isLooping) {
 			LOOP_LOGGER.info("Timeline already running");
@@ -291,14 +305,20 @@ public class TimeTravel {
 			serverLevel.setDayTime(dayTimeOrigin + timelineTick);
 		}
 		for (Ghost ghost : s.ghostRoots) {
-			if (!ghost.root().isFinished()) ghost.fx().tick();
+			if (ghost.pendingSkip > 0) {
+				int step = Math.min(ghost.pendingSkip, GHOST_SKIP_PER_TICK);
+				ghost.root.tick(step);
+				ghost.pendingSkip -= step;
+				continue;
+			}
+			if (!ghost.root.isFinished()) ghost.fx.tick();
 		}
 		if (trackVoice) VoicechatCompat.onTick();
 		pollDeaths();
 		pollGhostKills();
 
 		if (timelineTick % 20 == 0) broadcastSync();
-		if (timelineTick % 100 == 0) s.ghostRoots.removeIf(g -> g.root().isFinished());
+		if (timelineTick % 100 == 0) s.ghostRoots.removeIf(g -> g.root.isFinished());
 		if (timelineTick % 1200 == 0) config.save();
 		if (timelineTick % 1200 == 0) MobBinding.prune();
 		if (timelineTick % 6000 == 0) {
@@ -329,7 +349,6 @@ public class TimeTravel {
 				player.getName().getString(), timelineTick, pd.getPieceStarts().size());
 	}
 
-	//player lifecycle
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
 			beginVisit(player, pd);
@@ -366,7 +385,6 @@ public class TimeTravel {
 		VoicechatInteractionCompat.clearCooldowns();
 	}
 
-	//visits and recording
 	private static void beginVisit(ServerPlayer player, PlayerData pd) {
 		beginVisit(player, pd, 0);
 	}
@@ -462,7 +480,6 @@ public class TimeTravel {
 		return starts.get(Math.min(index, starts.size() - 1));
 	}
 
-	//past selves replay
 	private static void rebuildPending() {
 		TimelineSession s = session();
 		s.pending.clear();
@@ -523,7 +540,7 @@ public class TimeTravel {
 		if (s.ghostRoots.isEmpty()) return;
 
 		for (Ghost ghost : new ArrayList<>(s.ghostRoots)) {
-			GhostFx fx = ghost.fx();
+			GhostFx fx = ghost.fx;
 			if (!fx.isDead()) {
 				fx.killHandled = false;
 				continue;
@@ -532,10 +549,10 @@ public class TimeTravel {
 			fx.killHandled = true;
 
 			if (!chainDeath || timelineTick <= fx.graceUntil) continue;
-			if (isRecordedDeath(ghost.playerName(), ghost.visitId())) continue;
+			if (isRecordedDeath(ghost.playerName, ghost.visitId)) continue;
 
-			LOOP_LOGGER.info("Clone of {} (visit {}) was killed during playback!!! Collapsing the chain", ghost.playerName(), ghost.visitId());
-			collapseChain(ghost.playerName(), ghost.visitId());
+			LOOP_LOGGER.info("Clone of {} (visit {}) was killed during playback!!! Collapsing the chain", ghost.playerName, ghost.visitId);
+			collapseChain(ghost.playerName, ghost.visitId);
 		}
 	}
 
@@ -574,9 +591,9 @@ public class TimeTravel {
 		if (ids.isEmpty()) return;
 
 		s.ghostRoots.removeIf(g -> {
-			if (!g.playerName().equals(playerName) || g.visitId() < fromVisitId) return false;
+			if (!g.playerName.equals(playerName) || g.visitId < fromVisitId) return false;
 			try {
-				if (!g.root().isFinished()) g.root().stop();
+				if (!g.root.isFinished()) g.root.stop();
 			} catch (Exception e) {
 				LOOP_LOGGER.error("Failed to stop ghost of a collapsed chain", e);
 			}
@@ -644,13 +661,13 @@ public class TimeTravel {
 		if (pd == null) return;
 
 		GhostPlayback playback = MocapAdapter.startPlayback(
-				piece.recording(), pd.getNickname(), pd.getSkin(), delayTicks, piece.skipTicks());
+				piece.recording(), pd.getNickname(), pd.getSkin(), delayTicks);
 		if (playback == null) return;
 
 		net.minecraft.world.entity.Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
 		GhostFx fx = new GhostFx(ghostEntity);
 		if (piece.skipTicks() > 0) fx.graceUntil = timelineTick + 10;
-		session().ghostRoots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx));
+		session().ghostRoots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx, piece.skipTicks()));
 		if (trackVoice && voiceChatLoaded) {
 			VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(), piece.visitStartTick(), ghostEntity);
 		}
@@ -661,7 +678,7 @@ public class TimeTravel {
 		if (s == null) return;
 		for (Ghost ghost : s.ghostRoots) {
 			try {
-				if (!ghost.root().isFinished()) ghost.root().stop();
+				if (!ghost.root.isFinished()) ghost.root.stop();
 			} catch (Exception e) {
 				LOOP_LOGGER.error("Failed to stop ghost playback", e);
 			}
@@ -678,7 +695,7 @@ public class TimeTravel {
 		if (!(entity instanceof ServerPlayer player)) return -1;
 		if (isGhost(player)) {
 			for (Ghost ghost : session().ghostRoots) {
-				if (ghost.fx().entity() == entity) return ghost.visitId();
+				if (ghost.fx.entity() == entity) return ghost.visitId;
 			}
 			return -1;
 		}
@@ -688,14 +705,14 @@ public class TimeTravel {
 	}
 
 	public static GhostFx fxOf(Entity e) {
-		for (Ghost g : session().ghostRoots) if (g.fx().entity() == e) return g.fx();
+		for (Ghost g : session().ghostRoots) if (g.fx.entity() == e) return g.fx;
 		return null;
 	}
 
 	public static Entity entityOfVisit(int visitId) {
 		for (Ghost ghost : session().ghostRoots) {
-			if (ghost.visitId() != visitId || ghost.root().isFinished()) continue;
-			Entity entity = ghost.fx().entity();
+			if (ghost.visitId != visitId || ghost.root.isFinished()) continue;
+			Entity entity = ghost.fx.entity();
 			if (entity != null && !entity.isRemoved()) return entity;
 		}
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -771,12 +788,10 @@ public class TimeTravel {
 		LOOP_LOGGER.info("Modified attributes for player '{}' -> '{}' with skin '{}'", targetPlayerName, newPlayerNickname, newSkin.value);
 	}
 
-	/** Updates the entities to be tracked for recording and playback settings. */
 	public static void updateEntitiesToTrack(boolean items) {
 		MocapAdapter.updateEntitiesToTrack(items, entityTrackingDistance);
 	}
 
-	/** Deletes all mocap recording files created by this mod (new {@code <name>_v*} and legacy {@code <name>_loop*}). */
 	public static void removeAllRecordings() {
 		Path recordingsDir = worldFolder.resolve("mocap_files").resolve("recordings");
 		if (!Files.isDirectory(recordingsDir)) return;

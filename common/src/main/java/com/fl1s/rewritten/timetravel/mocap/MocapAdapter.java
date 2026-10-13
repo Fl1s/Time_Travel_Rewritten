@@ -19,8 +19,8 @@ import net.mt1006.mocap.api.v1.modifiers.MocapTimeModifiers;
 import net.mt1006.mocap.mocap.actions.BreakBlock;
 import net.mt1006.mocap.mocap.actions.PlaceBlock;
 import net.mt1006.mocap.mocap.actions.RightClickBlock;
-import net.mt1006.mocap.mocap.playing.playable.ActiveRecording;
 import net.mt1006.mocap.mocap.playing.playback.PlaybackRoot;
+import net.mt1006.mocap.mocap.playing.playable.ActiveRecording;
 import net.mt1006.mocap.mocap.recording.RecordingContext;
 import net.mt1006.mocap.mocap.recording.RecordingManager;
 
@@ -39,18 +39,13 @@ import java.util.function.Predicate;
  * scattered across {@code TimeTravel} and {@code LifecycleEvent}.
  */
 public final class MocapAdapter {
-    private MocapAdapter() {
-    }
+    private MocapAdapter() {}
 
     private static MocapController controller;
     private static final Map<String, MocapActiveRecording> activeRecordings = new ConcurrentHashMap<>();
 
-    /**
-     * Initializes the underlying Mocap controller and applies the default
-     * settings this mod relies on. Must be scheduled after MocapMod has
-     * initialized (uses {@link MocapAPI#executeAfterInit}).
-     */
-    public static void init(MinecraftServer server, boolean hurtLoopedPlayers, boolean trackItems, int entityTrackingDistance) {
+    public static void init(MinecraftServer server, boolean hurtLoopedPlayers,
+                            boolean trackItems, int entityTrackingDistance) {
         MocapAPI.executeAfterInit(() -> {
             controller = new MocapControllerImpl(server, TimeTravel.MOD_ID);
 
@@ -79,9 +74,6 @@ public final class MocapAdapter {
         return controller != null;
     }
 
-    /**
-     * Clears any in-flight recording state. Called from {@code TimeTravel.resetSession()}.
-     */
     public static void reset() {
         activeRecordings.clear();
     }
@@ -115,23 +107,11 @@ public final class MocapAdapter {
         }
     }
 
-    /**
-     * Opaque handle to a stopped recording that is ready to be saved or discarded.
-     */
     public static final class RecordingHandle {
         private final MocapActiveRecording rec;
-
-        private RecordingHandle(MocapActiveRecording rec) {
-            this.rec = rec;
-        }
+        private RecordingHandle(MocapActiveRecording rec) { this.rec = rec; }
     }
 
-    /**
-     * Stops all active recordings for the given player (primary + any split
-     * recordings created by Mocap on dimension change) and returns handles to
-     * those that reached {@code WAITING_FOR_DECISION} state, in creation order.
-     * Recordings that did not reach that state are logged and skipped.
-     */
     public static List<RecordingHandle> stopAllRecordings(String playerName) {
         List<RecordingHandle> result = new ArrayList<>();
         CommandOutput out = CommandOutput.LOGS;
@@ -143,7 +123,8 @@ public final class MocapAdapter {
             if (ctx.state == RecordingContext.State.WAITING_FOR_DECISION) {
                 result.add(new RecordingHandle(primaryRec));
             } else {
-                TimeTravel.LOOP_LOGGER.warn("Primary recording for '{}' failed to stop properly (state: {}). Skipping save.", playerName, ctx.state);
+                TimeTravel.LOOP_LOGGER.warn("Primary recording for '{}' failed to stop properly (state: {}). Skipping save.",
+                        playerName, ctx.state);
             }
         } else {
             TimeTravel.LOOP_LOGGER.warn("No primary mocap recording found for player: {}", playerName);
@@ -169,9 +150,6 @@ public final class MocapAdapter {
         return result;
     }
 
-    /**
-     * Saves a stopped recording under the given name. Returns false if the save failed.
-     */
     public static boolean save(RecordingHandle handle, String name) {
         if (handle == null) return false;
         try {
@@ -184,9 +162,6 @@ public final class MocapAdapter {
         }
     }
 
-    /**
-     * Discards a stopped recording without saving.
-     */
     public static void discard(RecordingHandle handle) {
         if (handle == null) return;
         try {
@@ -195,31 +170,19 @@ public final class MocapAdapter {
         }
     }
 
-    /**
-     * Stops and discards all active recordings for the given player, best-effort.
-     */
     public static void discardAllRecordings(String playerName) {
         MocapActiveRecording primary = activeRecordings.remove(playerName);
         if (primary != null) {
-            try {
-                primary.discard(CommandOutput.LOGS);
-            } catch (Exception ignored) {
-            }
+            try { primary.discard(CommandOutput.LOGS); } catch (Exception ignored) {}
         }
         for (RecordingContext ctx : new ArrayList<>(RecordingManager.allContexts())) {
             if (!ctx.source.name.equals("+" + TimeTravel.MOD_ID)) continue;
             if (!ctx.recordedPlayer.getName().getString().equals(playerName)) continue;
             if (ctx.isRemoved()) continue;
-            try {
-                ctx.stop(CommandOutput.LOGS);
-            } catch (Exception ignored) {
-            }
+            try { ctx.stop(CommandOutput.LOGS); } catch (Exception ignored) {}
         }
     }
 
-    /**
-     * Deletes a saved recording file by name.
-     */
     public static void deleteRecording(String name) {
         try {
             MocapRecordingFile file = MocapRecordingFile.get(CommandOutput.LOGS, name);
@@ -232,7 +195,8 @@ public final class MocapAdapter {
     private static void stripBlockActions(MocapActiveRecording rec) {
         try {
             if (!(rec instanceof ActiveRecording active) || active.ctx == null) return;
-            Predicate<Object> isWorldAction = a -> a instanceof PlaceBlock || a instanceof BreakBlock || a instanceof RightClickBlock;
+            Predicate<Object> isWorldAction = a -> a instanceof PlaceBlock
+                    || a instanceof BreakBlock || a instanceof RightClickBlock;
             active.ctx.data.actions.removeIf(isWorldAction);
             active.ctx.data.blockActions.removeIf(isWorldAction);
         } catch (Exception e) {
@@ -240,7 +204,8 @@ public final class MocapAdapter {
         }
     }
 
-    public static GhostPlayback startPlayback(String recordingName, String nickname, Skin skin, int delayTicks, int skipTicks) {
+    public static GhostPlayback startPlayback(String recordingName, String nickname, Skin skin,
+                                              int delayTicks) {
         if (controller == null) return null;
 
         MocapRecordingFile file = MocapRecordingFile.get(CommandOutput.LOGS, recordingName);
@@ -264,12 +229,6 @@ public final class MocapAdapter {
         try {
             MocapPlaybackRoot root = file.startPlayback(controller.getCommandInfo(), modifiers);
             if (root == null) return null;
-
-            if (skipTicks > 0 && root instanceof PlaybackRoot playbackRoot) {
-                for (int i = 0; i < skipTicks && !root.isFinished(); i++) {
-                    playbackRoot.tick();
-                }
-            }
             return new GhostPlaybackImpl(root);
         } catch (Exception e) {
             TimeTravel.LOOP_LOGGER.error("Failed to start ghost '{}': {}", recordingName, e.getMessage(), e);
@@ -279,19 +238,16 @@ public final class MocapAdapter {
 
     private static final class GhostPlaybackImpl implements GhostPlayback {
         private final MocapPlaybackRoot root;
-
-        GhostPlaybackImpl(MocapPlaybackRoot root) {
-            this.root = root;
-        }
-
-        @Override
-        public boolean isFinished() {
-            return root.isFinished();
-        }
+        GhostPlaybackImpl(MocapPlaybackRoot root) { this.root = root; }
+        @Override public boolean isFinished() { return root.isFinished(); }
+        @Override public void stop() { root.stop(); }
 
         @Override
-        public void stop() {
-            root.stop();
+        public void tick(int count) {
+            if (!(root instanceof PlaybackRoot playbackRoot)) return;
+            for (int i = 0; i < count && !root.isFinished(); i++) {
+                playbackRoot.tick();
+            }
         }
     }
 }
