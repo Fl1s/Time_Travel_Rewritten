@@ -5,6 +5,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.fl1s.rewritten.timetravel.TimeFormat;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
@@ -88,7 +89,7 @@ public class BaseCommands {
             source.sendFailure(Component.literal("Timeline already running!"));
             return 0;
         }
-        if (TimeTravel.serverLevel == null || TimeTravel.mocapController == null) {
+        if (TimeTravel.serverLevel == null || !MocapAdapter.isReady()) {
             source.sendFailure(Component.literal("Error: server world or Motion Capture is not ready yet."));
             return 0;
         }

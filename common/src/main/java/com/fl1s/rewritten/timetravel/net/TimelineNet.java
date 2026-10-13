@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.net;
 import com.fl1s.rewritten.timetravel.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeFormat;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
@@ -40,7 +41,7 @@ public final class TimelineNet {
             TimeTravel.stopLoop();
             player.displayClientMessage(Component.translatable("hud.timetravel_rewritten.panel_off"), true);
         } else {
-            if (TimeTravel.mocapController == null || TimeTravel.serverLevel == null) {
+            if (!MocapAdapter.isReady() || TimeTravel.serverLevel == null) {
                 player.displayClientMessage(Component.literal("Motion Capture is not ready yet"), true);
                 return;
             }

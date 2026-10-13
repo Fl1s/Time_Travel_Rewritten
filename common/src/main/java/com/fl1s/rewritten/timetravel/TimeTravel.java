@@ -2,6 +2,8 @@ package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
+import com.fl1s.rewritten.timetravel.mocap.GhostPlayback;
+import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
@@ -15,24 +17,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
-import net.mt1006.mocap.api.v1.controller.MocapController;
-import net.mt1006.mocap.api.v1.controller.MocapPlaybackRoot;
-import net.mt1006.mocap.api.v1.controller.config.MocapRecordingConfig;
-import net.mt1006.mocap.api.v1.controller.playable.MocapActiveRecording;
-import net.mt1006.mocap.api.v1.controller.playable.MocapRecordingFile;
-import net.mt1006.mocap.api.v1.io.CommandInfo;
-import net.mt1006.mocap.api.v1.io.CommandOutput;
-import net.mt1006.mocap.api.v1.modifiers.MocapModifiers;
-import net.mt1006.mocap.api.v1.modifiers.MocapPlayerSkin;
-import net.mt1006.mocap.api.v1.modifiers.MocapTime;
-import net.mt1006.mocap.api.v1.modifiers.MocapTimeModifiers;
-import net.mt1006.mocap.mocap.playing.playback.PlaybackRoot;
-import net.mt1006.mocap.mocap.actions.BreakBlock;
-import net.mt1006.mocap.mocap.actions.PlaceBlock;
-import net.mt1006.mocap.mocap.actions.RightClickBlock;
-import net.mt1006.mocap.mocap.playing.playable.ActiveRecording;
-import net.mt1006.mocap.mocap.recording.RecordingContext;
-import net.mt1006.mocap.mocap.recording.RecordingManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +31,6 @@ public class TimeTravel {
 	public static final Logger LOOP_LOGGER = LoggerFactory.getLogger("TimeTravel");
 	public static MinecraftServer server;
 	public static ServerLevel serverLevel;
-	public static MocapController mocapController;
 
 	public static boolean isLooping;
 	public static long timelineTick;
@@ -81,13 +64,15 @@ public class TimeTravel {
 	public static Path worldFolder;
 
 	private static TimelineSession session;
-	record PendingPiece(long startTick, String recording, String playerName, int skipTicks, int visitId, int segment, long visitStartTick) {}
-	record Ghost(MocapPlaybackRoot root, String playerName, int visitId, GhostFx fx) {}
+	record PendingPiece(long startTick, String recording, String playerName, int skipTicks, int visitId,
+						int segment, long visitStartTick) {}
+	record Ghost(GhostPlayback root, String playerName, int visitId, GhostFx fx) {}
 
 	record PendingSound(long tick, String dim, double x, double y, double z, int dir, String playerName, int visitId) {}
 
 	public static void resetSession() {
 		session = new TimelineSession();
+		MocapAdapter.reset();
 	}
 
 	static TimelineSession session() {
@@ -115,17 +100,13 @@ public class TimeTravel {
 		LOOP_LOGGER.info("Initializing TimeTravel mod (Common)");
 	}
 
-	public static CommandInfo getMocapCommandInfo() {
-		return mocapController.getCommandInfo();
-	}
-
 	//timeline contol
 	public static void startLoop() {
 		if (isLooping) {
 			LOOP_LOGGER.info("Timeline already running");
 			return;
 		}
-		if (mocapController == null) {
+		if (!MocapAdapter.isReady()) {
 			LOOP_LOGGER.error("Mocap controller is not ready yet - cannot start timeline");
 			return;
 		}
@@ -206,7 +187,7 @@ public class TimeTravel {
 
 	public static String jumpTo(long target, String initiatorName) {
 		if (!isLooping) return "Timeline is not running (use /timetravel start)";
-		if (mocapController == null) return "Mocap is not ready yet";
+		if (!MocapAdapter.isReady()) return "Mocap is not ready yet";
 
 		target = Math.max(0, target);
 		if (maxJumpTicks > 0) {
@@ -281,7 +262,7 @@ public class TimeTravel {
 
 		BlockJournal.flushWatches();
 
-		if (!isLooping || mocapController == null) return;
+		if (!isLooping || !MocapAdapter.isReady()) return;
 
 		if (countOnlineRecorded() == 0) {
 			if (!s.idle) {
@@ -350,7 +331,7 @@ public class TimeTravel {
 
 	//player lifecycle
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
-		if (isLooping && mocapController != null && pd.getCurrentVisit() == null) {
+		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
 			beginVisit(player, pd);
 			if (session().idle) { session().idle = false; session().needsRebuild = true; }
 		}
@@ -453,90 +434,32 @@ public class TimeTravel {
 		pd.clearPieceStarts();
 		pd.addPieceStart(timelineTick);
 		pd.setChunkStartTick(timelineTick);
-
-		MocapRecordingConfig recConfig = MocapRecordingConfig.createFromSettings();
-		MocapActiveRecording recording = mocapController.startRecording(player, recConfig, true);
-		if (recording != null) {
-			session().activeRecordings.put(pd.getName(), recording);
-		} else {
-			LOOP_LOGGER.error("Failed to start mocap recording for player: {}", pd.getName());
-		}
+		MocapAdapter.startRecording(player, pd.getName());
 	}
 
 	private static void finishChunk(PlayerData pd) {
-		CommandOutput out = CommandOutput.LOGS;
-		String playerName = pd.getName();
 		Visit visit = pd.getCurrentVisit();
+		if (visit == null) {
+			MocapAdapter.discardAllRecordings(pd.getName());
+			return;
+		}
 		ArrayList<Long> starts = pd.getPieceStarts();
-		int ctxIndex = 0;
-
-		//main record
-		MocapActiveRecording primaryRec = session().activeRecordings.remove(playerName);
-		if (primaryRec != null && primaryRec.isValid()) {
-			RecordingContext primaryCtx = ((ActiveRecording) primaryRec).ctx;
-			primaryCtx.stop(out);
-			if (primaryCtx.state == RecordingContext.State.WAITING_FOR_DECISION) {
-				savePiece(primaryRec, pd, visit, startFor(starts, ctxIndex), out);
+		int i = 0;
+		for (var handle : MocapAdapter.stopAllRecordings(pd.getName())) {
+			long startTick = startFor(starts, i);
+			String name = String.format("%s_v%d_p%d", pd.getName().toLowerCase(), visit.id, pd.nextPieceNumber());
+			if (MocapAdapter.save(handle, name)) {
+				visit.pieces.add(new Visit.Piece(name, startTick));
 			} else {
-				LOOP_LOGGER.warn("Primary recording for '{}' failed to stop properly (state: {}). Skipping save.",
-						playerName, primaryCtx.state);
+				LOOP_LOGGER.error("Failed to save recording '{}' for player: {}", name, pd.getName());
 			}
-		} else {
-			LOOP_LOGGER.warn("No primary mocap recording found for player: {}", playerName);
-		}
-		ctxIndex++;
-
-		//splits
-		List<RecordingContext> splitContexts = new ArrayList<>();
-		for (RecordingContext ctx : new ArrayList<>(RecordingManager.allContexts())) {
-			if (!ctx.source.name.equals("+" + TimeTravel.MOD_ID)) continue;
-			if (!ctx.recordedPlayer.getName().getString().equals(playerName)) continue;
-			if (ctx.isRemoved()) continue;
-			splitContexts.add(ctx);
-		}
-
-		for (RecordingContext ctx : splitContexts) {
-			ctx.stop(out);
-			if (ctx.state == RecordingContext.State.WAITING_FOR_DECISION) {
-				MocapActiveRecording splitRec = ActiveRecording.get(ctx);
-				savePiece(splitRec, pd, visit, startFor(starts, ctxIndex), out);
-			} else {
-				LOOP_LOGGER.warn("Split context for {} in unexpected state: {}, skipping", playerName, ctx.state);
-			}
-			ctxIndex++;
+			i++;
 		}
 	}
 
 	private static long startFor(List<Long> starts, int index) {
 		if (starts.isEmpty()) return timelineTick;
 		return starts.get(Math.min(index, starts.size() - 1));
-	}
-
-	private static void stripBlockActions(MocapActiveRecording rec) {
-		try {
-			if (!(rec instanceof ActiveRecording active) || active.ctx == null) return;
-			java.util.function.Predicate<Object> isWorldAction = a -> a instanceof PlaceBlock
-					|| a instanceof BreakBlock || a instanceof RightClickBlock;
-			active.ctx.data.actions.removeIf(isWorldAction);
-			active.ctx.data.blockActions.removeIf(isWorldAction);
-		} catch (Exception e) {
-			LOOP_LOGGER.error("Failed to strip block actions from a recording", e);
-		}
-	}
-
-	private static void savePiece(MocapActiveRecording rec, PlayerData pd, Visit visit, long startTick, CommandOutput out) {
-		if (visit == null) {
-			rec.discard(out);
-			return;
-		}
-		stripBlockActions(rec);
-		String name = String.format("%s_v%d_p%d", pd.getName().toLowerCase(), visit.id, pd.nextPieceNumber());
-		MocapRecordingFile file = rec.save(out, name);
-		if (file != null) {
-			visit.pieces.add(new Visit.Piece(name, startTick));
-		} else {
-			LOOP_LOGGER.error("Failed to save recording '{}' for player: {}", name, pd.getName());
-		}
 	}
 
 	//past selves replay
@@ -690,12 +613,7 @@ public class TimeTravel {
 	}
 
 	private static void deleteRecording(String name) {
-		try {
-			MocapRecordingFile file = MocapRecordingFile.get(CommandOutput.LOGS, name);
-			if (file != null && file.exists()) file.remove(CommandOutput.LOGS);
-		} catch (Exception e) {
-			LOOP_LOGGER.error("Failed to delete recording {}", name, e);
-		}
+		MocapAdapter.deleteRecording(name);
 	}
 
 	private static void flushSounds() {
@@ -725,43 +643,16 @@ public class TimeTravel {
 		PlayerData pd = loopSceneManager.getRecordingPlayer(piece.playerName());
 		if (pd == null) return;
 
-		MocapRecordingFile file = MocapRecordingFile.get(CommandOutput.LOGS, piece.recording());
-		if (file == null || !file.exists()) {
-			LOOP_LOGGER.warn("Recording '{}' not found - skipping ghost", piece.recording());
-			return;
-		}
+		GhostPlayback playback = MocapAdapter.startPlayback(
+				piece.recording(), pd.getNickname(), pd.getSkin(), delayTicks, piece.skipTicks());
+		if (playback == null) return;
 
-		Skin skin = pd.getSkin();
-		MocapPlayerSkin mocapSkin = switch (skin.skinType) {
-			case MINESKIN -> MocapPlayerSkin.fromMineSkin(skin.value);
-			case FILE -> MocapPlayerSkin.fromFile(skin.value);
-			default -> MocapPlayerSkin.fromPlayer(skin.value);
-		};
-		MocapModifiers modifiers = MocapModifiers.playerName(pd.getNickname()).withPlayerSkin(mocapSkin);
-		MocapTimeModifiers timeMods = modifiers.getTimeModifiers();
-		if (delayTicks > 0) {
-			timeMods = timeMods.withStartDelay(MocapTime.fromTicks(delayTicks));
-		}
-		modifiers = modifiers.withTimeModifiers(timeMods);
-
-		try {
-			MocapPlaybackRoot root = file.startPlayback(getMocapCommandInfo(), modifiers);
-			if (root != null) {
-				net.minecraft.world.entity.Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
-				GhostFx fx = new GhostFx(ghostEntity);
-				if (piece.skipTicks() > 0) fx.graceUntil = timelineTick + 10;
-				session().ghostRoots.add(new Ghost(root, piece.playerName(), piece.visitId(), fx));
-				if (trackVoice && voiceChatLoaded) {
-					VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(), piece.visitStartTick(), ghostEntity);
-				}
-				if (piece.skipTicks() > 0 && root instanceof PlaybackRoot playbackRoot) {
-					for (int i = 0; i < piece.skipTicks() && !root.isFinished(); i++) {
-						playbackRoot.tick();
-					}
-				}
-			}
-		} catch (Exception e) {
-			LOOP_LOGGER.error("Failed to start ghost '{}': {}", piece.recording(), e.getMessage(), e);
+		net.minecraft.world.entity.Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
+		GhostFx fx = new GhostFx(ghostEntity);
+		if (piece.skipTicks() > 0) fx.graceUntil = timelineTick + 10;
+		session().ghostRoots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx));
+		if (trackVoice && voiceChatLoaded) {
+			VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(), piece.visitStartTick(), ghostEntity);
 		}
 	}
 
@@ -882,12 +773,7 @@ public class TimeTravel {
 
 	/** Updates the entities to be tracked for recording and playback settings. */
 	public static void updateEntitiesToTrack(boolean items) {
-		if (mocapController == null) return;
-		String entitiesToTrack = "@vehicles" + (items ? ";@items" : "");
-		int distance = items ? entityTrackingDistance : 1;
-		mocapController.setSetting("track_entities", entitiesToTrack);
-		mocapController.setSetting("play_entities", entitiesToTrack);
-		mocapController.setSetting("entity_tracking_distance", String.valueOf(distance));
+		MocapAdapter.updateEntitiesToTrack(items, entityTrackingDistance);
 	}
 
 	/** Deletes all mocap recording files created by this mod (new {@code <name>_v*} and legacy {@code <name>_loop*}). */

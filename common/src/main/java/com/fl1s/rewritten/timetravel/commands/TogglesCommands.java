@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.commands;
 
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -44,10 +45,7 @@ public class TogglesCommands {
         togglesNode.then(toggle("hurtClones", () -> TimeTravel.hurtLoopedPlayers, v -> {
             TimeTravel.hurtLoopedPlayers = v;
             TimeTravel.config.hurtLoopedPlayers = v;
-            if (TimeTravel.mocapController != null) {
-                TimeTravel.mocapController.setSetting("invulnerable_playback", String.valueOf(!v));
-                TimeTravel.mocapController.setSetting("use_creative_game_mode", String.valueOf(!v));
-            }
+            MocapAdapter.setInvulnerablePlayback(!v, !v);
         }));
 
         voiceNode.then(toggle("trackVoice", () -> TimeTravel.trackVoice, v -> {
