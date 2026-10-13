@@ -509,4 +509,45 @@ public final class MobJournal {
         dirty = true;
         save();
     }
+
+    public static void fastForward(long from, long to) {
+        if (to <= from) return;
+        PriorityQueue<Due> q = new PriorityQueue<>(Comparator.comparingLong(Due::tick));
+        Set<UUID> seen = new HashSet<>();
+        collect(from, to, q, seen);
+        int guard = 0;
+        try {
+            while (!q.isEmpty() && guard++ < 512) {
+                Due d = q.poll();
+                if (d.tnt().isRemoved()) continue;
+                TimeTravel.timelineTick = d.tick();
+                d.tnt().setFuse(1);
+                d.tnt().tick();
+                collect(d.tick(), to, q, seen);
+            }
+        } finally {
+            TimeTravel.timelineTick = from;
+        }
+    }
+
+    private static void collect(long base, long to, PriorityQueue<Due> q, Set<UUID> seen) {
+        for (Map.Entry<UUID, String> en : new ArrayList<>(live.entrySet())) {
+            if (seen.contains(en.getKey())) continue;
+            ServerLevel level = levelOf(en.getValue());
+            if (level == null) continue;
+            if (level.getEntity(en.getKey()) instanceof PrimedTnt t) {
+                seen.add(t.getUUID());
+                long due = base + t.getFuse();
+                if (due <= to) q.add(new Due(due, t));
+            }
+        }
+    }
+
+    private record Due(long tick, PrimedTnt tnt) {}
+
+    private static ServerLevel levelOf(String dim) {
+        return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dim)));
+    }
+
+    private static final Map<UUID, String> live = new HashMap<>();
 }

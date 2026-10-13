@@ -17,8 +17,6 @@ import net.minecraft.network.chat.Component;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Arrays;
-import java.util.Objects;
 
 public class SettingsCommands {
     public static void register(LiteralArgumentBuilder<CommandSourceStack> parentBuilder) {
@@ -199,7 +197,8 @@ public class SettingsCommands {
         Skin finalSkin = new Skin();
         String rawSkinValue;
         try {
-            rawSkinValue = StringArgumentType.getString(context, "newSkin").replace(" ", "").toLowerCase();
+            // Do NOT lowercase - MineSkin URLs and file names are case-sensitive.
+            rawSkinValue = StringArgumentType.getString(context, "newSkin").replace(" ", "");
         } catch (Exception e) {
             rawSkinValue = newName;
         }
@@ -212,7 +211,7 @@ public class SettingsCommands {
             URI uri = new URI(testUrl);
             String host = uri.getHost();
 
-            if (host.equals("mineskin.org") || host.equals("minesk.in")) {
+            if (host != null && (host.equalsIgnoreCase("mineskin.org") || host.equalsIgnoreCase("minesk.in"))) {
                 finalSkin.value = testUrl.replaceFirst("^[a-zA-Z]+://", "");
                 finalSkin.skinType = SkinTypes.MINESKIN;
                 LoopCommands.LOOP_COMMANDS_LOGGER.info("Detected MineSkin URL {}", finalSkin.value);
@@ -221,13 +220,9 @@ public class SettingsCommands {
                 boolean foundFile = false;
 
                 for (String filetype : filetypes) {
-                    String filename;
-                    String finalRawSkinValue = rawSkinValue;
-                    if (!Arrays.stream(filetypes).anyMatch(f -> Objects.equals(f, finalRawSkinValue))) {
-                        filename = rawSkinValue + filetype;
-                    } else {
-                        filename = rawSkinValue;
-                    }
+                    String filename = rawSkinValue.toLowerCase().endsWith(filetype)
+                            ? rawSkinValue
+                            : rawSkinValue + filetype;
                     File skinFile = new File(TimeTravel.worldFolder.resolve("mocap_files").resolve("skins").resolve(filename).toString());
 
                     if (skinFile.isFile()) {

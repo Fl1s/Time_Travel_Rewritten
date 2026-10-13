@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.fl1s.rewritten.timetravel.net.ClearChatPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -40,7 +41,7 @@ public final class ChatTimeline {
 
     public static void onPlayerChat(ServerPlayer player, String text) {
         if (!TimeTravel.isLooping || !TimeTravel.trackChat || TimeTravel.loopSceneManager == null) return;
-        if (player.getClass().getName().contains("FakePlayer")) return;
+        if (Ghosts.is(player)) return;
         PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
         Entry e = new Entry();
@@ -88,7 +89,7 @@ public final class ChatTimeline {
         if (history.size() > RESEND_LIMIT) history = history.subList(history.size() - RESEND_LIMIT, history.size());
 
         for (ServerPlayer player : new ArrayList<>(TimeTravel.server.getPlayerList().getPlayers())) {
-            if (player.getClass().getName().contains("FakePlayer")) continue;
+            if (Ghosts.is(player)) continue;
             TimelineNet.sendToPlayer(player, ClearChatPayload.INSTANCE);
             for (Line l : history) player.sendSystemMessage(l.text());
         }

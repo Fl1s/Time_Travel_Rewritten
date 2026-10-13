@@ -3,10 +3,11 @@ package com.fl1s.rewritten.timetravel;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.util.Levels;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -118,7 +119,7 @@ public final class EffectJournal {
     }
 
     private static boolean isGhost(Player p) {
-        return p.getClass().getName().contains("FakePlayer");
+        return Ghosts.is(p);
     }
 
     private static boolean isPlayerHurt(String id) {
@@ -179,7 +180,7 @@ public final class EffectJournal {
 
     private static void play(Entry e) {
         if (e.kind == SOUND && isPlayerHurt(e.id)) return;
-        ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+        ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
         if (level == null) return;
         replaying = true;
         try {

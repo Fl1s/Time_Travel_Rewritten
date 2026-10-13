@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.advancements.DisplayInfo;
 import net.minecraft.advancements.Advancement;
@@ -39,7 +40,7 @@ public final class AdvancementTimeline {
     private static boolean dirty = false;
 
     public static boolean isGhost(ServerPlayer p) {
-        return p.getClass().getName().contains("FakePlayer");
+        return Ghosts.is(p);
     }
 
     public static void onAwarded(ServerPlayer player, AdvancementHolder holder) {

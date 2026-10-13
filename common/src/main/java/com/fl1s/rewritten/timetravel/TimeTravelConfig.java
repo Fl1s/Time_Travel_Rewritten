@@ -77,11 +77,12 @@ public class TimeTravelConfig {
 
         config.recordingPlayers.values().forEach(PlayerData::initTransients);
 
+        if (config.configVersion < 1) {
+            config.configVersion = 1;
+        }
         if (config.configVersion < 2) {
             config.chainDeath = true;
             config.hurtLoopedPlayers = true;
-            config.syncDayTime = true;
-            config.trackChat = true;
             config.configVersion = 2;
         }
         if (config.maxJumpTicks < 0) config.maxJumpTicks = 0;

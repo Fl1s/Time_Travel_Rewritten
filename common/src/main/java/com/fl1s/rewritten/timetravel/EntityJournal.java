@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.fl1s.rewritten.timetravel.util.Levels;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
@@ -122,7 +123,7 @@ public final class EntityJournal {
     }
 
     private static ServerLevel levelOf(String dim) {
-        return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dim)));
+        return TimeTravel.server.getLevel(Levels.key(dim));
     }
 
     private static boolean ownerPresent(ServerLevel level, Entry e) {
@@ -143,7 +144,6 @@ public final class EntityJournal {
     }
 
     private static void spawn(Entry e, int fuse) {
-        if (e.item && TimeTravel.trackItems) return;
         ServerLevel level = levelOf(e.dim);
         if (level == null) return;
         if (e.owner != null && !ownerPresent(level, e)) return;
@@ -233,15 +233,18 @@ public final class EntityJournal {
         Set<UUID> seen = new HashSet<>();
         collect(from, to, q, seen);
         int guard = 0;
-        while (!q.isEmpty() && guard++ < 512) {
-            Due d = q.poll();
-            if (d.tnt().isRemoved()) continue;
-            TimeTravel.timelineTick = d.tick();
-            d.tnt().setFuse(1);
-            d.tnt().tick();
-            collect(d.tick(), to, q, seen);
+        try {
+            while (!q.isEmpty() && guard++ < 512) {
+                Due d = q.poll();
+                if (d.tnt().isRemoved()) continue;
+                TimeTravel.timelineTick = d.tick();
+                d.tnt().setFuse(1);
+                d.tnt().tick();
+                collect(d.tick(), to, q, seen);
+            }
+        } finally {
+            TimeTravel.timelineTick = from;
         }
-        TimeTravel.timelineTick = from;
     }
 
     private static void collect(long base, long to, PriorityQueue<Due> q, Set<UUID> seen) {

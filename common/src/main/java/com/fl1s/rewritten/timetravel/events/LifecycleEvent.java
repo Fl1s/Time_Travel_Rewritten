@@ -9,6 +9,8 @@ import net.mt1006.mocap.api.impl.controller.MocapControllerImpl;
 import net.mt1006.mocap.api.v1.MocapAPI;
 import net.mt1006.mocap.api.v1.controller.MocapController;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 public class LifecycleEvent {
     public static void onServerStart(MinecraftServer server) {
         TimeTravel.worldFolder = server.getWorldPath(LevelResource.ROOT);
@@ -86,6 +88,16 @@ public class LifecycleEvent {
 
     public static void onServerStopping() {
         TimeTravel.onServerStopping();
+        if (TimeTravel.voiceChatLoaded) {
+            try {
+                VoicechatCompat.saveAudio().get(10, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                TimeTravel.LOOP_LOGGER.warn("Timed out saving voice audio on shutdown");
+            } catch (Exception e) {
+                TimeTravel.LOOP_LOGGER.error("Failed to save voice audio on shutdown", e);
+            }
+        }
+
         VoicechatCompat.shutdown();
     }
 }
