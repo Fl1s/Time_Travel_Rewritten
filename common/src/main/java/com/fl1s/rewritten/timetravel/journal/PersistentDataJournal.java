@@ -72,6 +72,19 @@ public abstract class PersistentDataJournal {
         }
     }
 
+    public void snapshotOne(String objectId, int visitId) {
+        CompoundTag tag = capture(objectId);
+        if (tag == null) return;
+        Entry e = new Entry();
+        e.tick = TimeTravel.timelineTick;
+        e.seq = nextSeq++;
+        e.visit = visitId;
+        e.id = objectId;
+        e.nbt = tag.toString();
+        entries.add(e);
+        dirty = true;
+    }
+
     public void restore(long targetTick) {
         Map<String, Entry> best = new HashMap<>();
         for (Entry e : entries) {
@@ -138,5 +151,8 @@ public abstract class PersistentDataJournal {
         entries.removeIf(e -> visitIds.contains(e.visit));
         upcoming.removeIf(e -> visitIds.contains(e.visit));
         dirty = true;
+    }
+
+    public void tick() {
     }
 }

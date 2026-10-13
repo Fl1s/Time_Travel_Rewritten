@@ -1,13 +1,11 @@
 package com.fl1s.rewritten.timetravel;
 
-import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.journal.EnderDragonFightJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -47,6 +45,7 @@ public class TimeTravel {
 	public static int entityTrackingDistance;
 	public static boolean trackChat;
 	public static boolean hurtLoopedPlayers;
+	public static boolean trackComplexBlockEntities;
 
 	public static boolean voiceChatLoaded;
 	public static boolean voiceInteractionLoaded;

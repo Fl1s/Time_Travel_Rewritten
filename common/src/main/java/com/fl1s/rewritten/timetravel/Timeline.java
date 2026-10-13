@@ -5,7 +5,6 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.journal.EnderDragonFightJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 
 public final class Timeline {
 
@@ -218,6 +217,7 @@ public final class Timeline {
         ChatTimeline.tick();
         AdvancementTimeline.tick();
         EffectJournal.tick();
+        EnderDragonFightJournal.get().tick();
         if (TimeTravel.syncDayTime) {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.timelineTick);
         }

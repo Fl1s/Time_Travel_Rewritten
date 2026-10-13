@@ -36,6 +36,7 @@ public class LifecycleEvent {
         TimeTravel.entityTrackingDistance = c.entityTrackingDistance;
         TimeTravel.trackChat = c.trackChat;
         TimeTravel.hurtLoopedPlayers = c.hurtLoopedPlayers;
+        TimeTravel.trackComplexBlockEntities = c.trackComplexBlockEntities;
 
         TimeTravel.voiceInteractionEnabled = c.voiceInteractionEnabled;
         TimeTravel.voiceInteractionThresholdDb = c.voiceInteractionThresholdDb;

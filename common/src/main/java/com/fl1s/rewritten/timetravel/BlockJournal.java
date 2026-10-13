@@ -11,6 +11,8 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
@@ -26,7 +28,20 @@ import net.minecraft.world.level.block.FireBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.RedStoneWireBlock;
-import net.minecraft.world.level.block.entity.*;
+import net.minecraft.world.level.block.entity.BannerBlockEntity;
+import net.minecraft.world.level.block.entity.BeaconBlockEntity;
+import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.CampfireBlockEntity;
+import net.minecraft.world.level.block.entity.CommandBlockEntity;
+import net.minecraft.world.level.block.entity.ConduitBlockEntity;
+import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
+import net.minecraft.world.level.block.entity.LecternBlockEntity;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SkullBlockEntity;
+import net.minecraft.world.level.block.entity.SpawnerBlockEntity;
+import net.minecraft.world.level.block.entity.StructureBlockEntity;
+import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonHeadBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -71,7 +86,8 @@ public final class BlockJournal {
     }
 
     private record ContainerWatch(ServerPlayer player, ServerLevel level, int visit,
-                                  Map<BlockPos, List<ItemStack>> last, Map<BlockPos, String> data) {
+                                  Map<BlockPos, List<ItemStack>> last, Map<BlockPos, String> data,
+                                  long createdAt) {
     }
 
     private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_blocks.json", new TypeToken<ArrayList<Entry>>() {
@@ -370,7 +386,8 @@ public final class BlockJournal {
             }
         }
         if (!snapshot.isEmpty() || !data.isEmpty()) {
-            containerWatches.add(new ContainerWatch(player, level, visitId, snapshot, data));
+            containerWatches.add(new ContainerWatch(player, level, visitId, snapshot, data,
+                    level.getGameTime()));
         }
     }
 
@@ -434,29 +451,33 @@ public final class BlockJournal {
 
                 e.setValue(now);
             }
-            if (w.player().isRemoved() || w.player().containerMenu == w.player().inventoryMenu) {
+            long now = w.level().getGameTime();
+            if (w.player().isRemoved() || now - w.createdAt() > 1200) {
                 it.remove();
             }
         }
     }
 
     private static boolean isDataEntity(BlockEntity be) {
-        return be instanceof SpawnerBlockEntity
+        if (be == null) return false;
+        if (be instanceof SpawnerBlockEntity
                 || be instanceof CampfireBlockEntity
                 || be instanceof LecternBlockEntity
                 || be instanceof SignBlockEntity
-                || be instanceof HangingSignBlockEntity
+                || be instanceof TheEndGatewayBlockEntity
                 || be instanceof BeaconBlockEntity
                 || be instanceof ConduitBlockEntity
                 || be instanceof BeehiveBlockEntity
                 || be instanceof JukeboxBlockEntity
                 || be instanceof SkullBlockEntity
-                || be instanceof BannerBlockEntity
-                || be instanceof TheEndGatewayBlockEntity
-                || be instanceof CommandBlockEntity
-                || be instanceof StructureBlockEntity
-                || be instanceof ComparatorBlockEntity
-                || be instanceof DaylightDetectorBlockEntity;
+                || be instanceof BannerBlockEntity) {
+            return true;
+        }
+        if (TimeTravel.trackComplexBlockEntities
+                && (be instanceof CommandBlockEntity || be instanceof StructureBlockEntity)) {
+            return true;
+        }
+        return false;
     }
 
     private static String dataOf(BlockEntity be) {
@@ -475,8 +496,13 @@ public final class BlockJournal {
             CompoundTag tag = TagParser.parseTag(toNew ? e.newData : e.oldData);
             be.loadWithComponents(tag, TimeTravel.server.registryAccess());
             be.setChanged();
-            BlockState state = level.getBlockState(pos);
-            level.sendBlockUpdated(pos, state, state, Block.UPDATE_CLIENTS);
+
+            Packet<ClientGamePacketListener> packet = be.getUpdatePacket();
+            if (packet != null) {
+                for (ServerPlayer sp : level.players()) {
+                    if (sp.connection != null) sp.connection.send(packet);
+                }
+            }
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply block entity journal entry at {} {} {}", e.x, e.y, e.z, ex);
         }

@@ -42,6 +42,11 @@ public class TogglesCommands {
             TimeTravel.config.trackChat = v;
         }));
 
+        togglesNode.then(toggle("trackComplexBlockEntities", () -> TimeTravel.trackComplexBlockEntities, v -> {
+            TimeTravel.trackComplexBlockEntities = v;
+            TimeTravel.config.trackComplexBlockEntities = v;
+        }));
+
         togglesNode.then(toggle("hurtClones", () -> TimeTravel.hurtLoopedPlayers, v -> {
             TimeTravel.hurtLoopedPlayers = v;
             TimeTravel.config.hurtLoopedPlayers = v;

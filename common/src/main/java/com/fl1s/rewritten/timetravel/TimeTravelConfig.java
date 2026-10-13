@@ -32,11 +32,10 @@ public class TimeTravelConfig {
     public boolean showLoopInfo = true;
     public boolean displayTimeInTicks = false;
     public boolean trackItems = true;
-    public int entityTrackingDistance = 32; // Distance in blocks for mocap entity tracking (items, vehicles)
+    public int entityTrackingDistance = 32;
     public boolean trackChat = true;
     public boolean hurtLoopedPlayers = true;
-
-    /* ------------- Voice (Simple Voice Chat) ------------- */
+    public boolean trackComplexBlockEntities = false;
 
     public boolean voiceInteractionEnabled = true;
     public int voiceInteractionThresholdDb = -50;
@@ -45,11 +44,7 @@ public class TimeTravelConfig {
     public boolean showPlayerVoiceIcon = true;
     public boolean trackVoice = true;
 
-    /* ------------- Player data ------------- */
-
     public Map<String, PlayerData> recordingPlayers = new HashMap<>();
-
-    /* ------------- Serialization (not persisted) ------------- */
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static Path configPath;
