@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
+import com.fl1s.rewritten.timetravel.journal.EnderDragonFightJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
@@ -167,6 +168,8 @@ public class TimeTravel {
 		EntityJournal.save();
 		EffectJournal.save();
 		MobBinding.save();
+		WorldEntityJournal.save();
+		EnderDragonFightJournal.get().save();
 		if (worldFolder != null && config != null) config.save();
 		VoicechatInteractionCompat.clearCooldowns();
 	}

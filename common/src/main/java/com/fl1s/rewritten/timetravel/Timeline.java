@@ -2,16 +2,11 @@ package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
+import com.fl1s.rewritten.timetravel.journal.EnderDragonFightJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
-/**
- * Core timeline: shared clock, jump orchestration, and per-server-tick work.
- * <p>
- * Owned by {@link TimelineSession}. All entry points are called on the server
- * thread through thin static facades on {@link TimeTravel}.
- */
 public final class Timeline {
 
     public void start() {
@@ -42,6 +37,8 @@ public final class Timeline {
         ProcessJournal.rebuildUpcoming();
         ChatTimeline.rebuildUpcoming();
         AdvancementTimeline.rebuildUpcoming();
+        EnderDragonFightJournal.get().rebuildUpcoming();
+        WorldEntityJournal.rebuildUpcoming();
         ProcessJournal.snapshotOrigins(TimeTravel.server.getPlayerList().getPlayers());
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
@@ -64,6 +61,8 @@ public final class Timeline {
         EntityJournal.save();
         EffectJournal.save();
         MobBinding.save();
+        EnderDragonFightJournal.get().save();
+        WorldEntityJournal.save();
 
         TimeTravel.isLooping = false;
         TimeTravel.config.isLooping = false;
@@ -89,6 +88,8 @@ public final class Timeline {
         EntityJournal.clear();
         EffectJournal.clear();
         MobBinding.clear();
+        EnderDragonFightJournal.get().clear();
+        WorldEntityJournal.clear();
         VoicechatCompat.deleteAllAudio();
         TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
@@ -128,7 +129,11 @@ public final class Timeline {
         long from = TimeTravel.timelineTick;
         s.lastJumpOrigin = from;
         int dir = target > from ? 1 : -1;
+        int visitId = initiatorPd != null && initiatorPd.getCurrentVisit() != null
+                ? initiatorPd.getCurrentVisit().id : -1;
         TimeTravel.LOOP_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
+
+        EnderDragonFightJournal.get().snapshotAll(visitId);
 
         BlockJournal.flushWatches();
         EntityJournal.fastForward(from, target);
@@ -145,13 +150,18 @@ public final class Timeline {
         }
         ghosts.setIdle(false);
 
+        EnderDragonFightJournal.get().restore(target);
+
         BlockJournal.onJump(from, target);
         MobJournal.onJump(from, target);
+        WorldEntityJournal.onJump(from, target);
         EntityJournal.onJump();
         EffectJournal.rebuildUpcoming();
         ProcessJournal.afterJump(from, target);
         ChatTimeline.onJump(target);
         AdvancementTimeline.onJump();
+        EnderDragonFightJournal.get().rebuildUpcoming();
+        WorldEntityJournal.rebuildUpcoming();
 
         TimeTravel.forEachOnlineRecorded((p, pd) -> s.visits.beginVisit(p, pd, dir));
         ghosts.rebuild();
@@ -226,6 +236,8 @@ public final class Timeline {
             EntityJournal.saveIfDirty();
             EffectJournal.saveIfDirty();
             MobBinding.saveIfDirty();
+            EnderDragonFightJournal.get().saveIfDirty();
+            WorldEntityJournal.saveIfDirty();
         }
     }
 }

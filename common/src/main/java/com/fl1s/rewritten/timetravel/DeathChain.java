@@ -129,6 +129,7 @@ public final class DeathChain {
         EntityJournal.eraseVisits(ids);
         EffectJournal.eraseVisits(ids);
         MobBinding.eraseVisits(ids);
+        WorldEntityJournal.eraseVisits(ids);
         ChatTimeline.resend(TimeTravel.timelineTick);
 
         scene.saveRecordingPlayers();

@@ -3,12 +3,14 @@ package com.fl1s.rewritten.timetravel.events;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
+import com.fl1s.rewritten.timetravel.journal.EnderDragonFightJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
 public class LifecycleEvent {
     public static void onServerStart(MinecraftServer server) {
         TimeTravel.resetSession();
@@ -50,6 +52,8 @@ public class LifecycleEvent {
         MobBinding.load();
         ChatTimeline.load();
         AdvancementTimeline.load();
+        WorldEntityJournal.load();
+        EnderDragonFightJournal.get().load();
 
         TimeTravel.server = server;
         TimeTravel.serverLevel = server.overworld();

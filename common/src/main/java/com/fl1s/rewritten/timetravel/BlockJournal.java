@@ -26,10 +26,7 @@ import net.minecraft.world.level.block.FireBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.RedStoneWireBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.CampfireBlockEntity;
-import net.minecraft.world.level.block.entity.LecternBlockEntity;
-import net.minecraft.world.level.block.entity.SpawnerBlockEntity;
+import net.minecraft.world.level.block.entity.*;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonHeadBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -444,7 +441,22 @@ public final class BlockJournal {
     }
 
     private static boolean isDataEntity(BlockEntity be) {
-        return be instanceof SpawnerBlockEntity || be instanceof CampfireBlockEntity || be instanceof LecternBlockEntity;
+        return be instanceof SpawnerBlockEntity
+                || be instanceof CampfireBlockEntity
+                || be instanceof LecternBlockEntity
+                || be instanceof SignBlockEntity
+                || be instanceof HangingSignBlockEntity
+                || be instanceof BeaconBlockEntity
+                || be instanceof ConduitBlockEntity
+                || be instanceof BeehiveBlockEntity
+                || be instanceof JukeboxBlockEntity
+                || be instanceof SkullBlockEntity
+                || be instanceof BannerBlockEntity
+                || be instanceof TheEndGatewayBlockEntity
+                || be instanceof CommandBlockEntity
+                || be instanceof StructureBlockEntity
+                || be instanceof ComparatorBlockEntity
+                || be instanceof DaylightDetectorBlockEntity;
     }
 
     private static String dataOf(BlockEntity be) {
