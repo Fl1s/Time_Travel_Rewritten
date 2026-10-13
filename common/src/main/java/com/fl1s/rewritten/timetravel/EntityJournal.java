@@ -14,6 +14,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.AreaEffectCloud;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
@@ -45,6 +46,7 @@ public final class EntityJournal {
         long seq;
         int visit;
         int fuse;
+        String owner;
     }
 
     private record Due(long tick, PrimedTnt tnt) {}
@@ -100,6 +102,10 @@ public final class EntityJournal {
         e.seq = nextSeq++;
         e.visit = pd.getCurrentVisit().id;
         if (entity instanceof PrimedTnt tnt) e.fuse = tnt.getFuse();
+        if (entity instanceof Projectile projectile) {
+            Entity owner = projectile.getOwner();
+            if (owner != null && !(owner instanceof Player)) e.owner = owner.getUUID().toString();
+        }
         entries.add(e);
         live.put(entity.getUUID(), e.dim);
         dirty = true;
@@ -116,10 +122,24 @@ public final class EntityJournal {
         return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dim)));
     }
 
+    private static boolean ownerPresent(ServerLevel level, Entry e) {
+        try {
+            Entity owner = level.getEntity(UUID.fromString(e.owner));
+            if (owner == null) {
+                net.minecraft.nbt.ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
+                return !level.isLoaded(net.minecraft.core.BlockPos.containing(p.getDouble(0), p.getDouble(1), p.getDouble(2)));
+            }
+            return !owner.isRemoved() && !(owner instanceof LivingEntity living && living.isDeadOrDying());
+        } catch (Exception ex) {
+            return true;
+        }
+    }
+
     private static void spawn(Entry e, int fuse) {
         if (e.item && TimeTravel.trackItems) return;
         ServerLevel level = levelOf(e.dim);
         if (level == null) return;
+        if (e.owner != null && !ownerPresent(level, e)) return;
         replaying = true;
         try {
             if (e.fuse > 0) {
