@@ -58,7 +58,6 @@ public class TimeTravel {
 	public static long maxJumpTicks;
 	public static int jumpCooldownTicks = 20;
 	public static long lastJumpOrigin = -1;
-	private static long lastJumpServerTick = -1;
 
 	public static boolean chainDeath;
 
@@ -181,7 +180,7 @@ public class TimeTravel {
 		timelineTick = 0;
 		config.timelineTick = 0;
 		config.nextVisitId = 1;
-		lastJumpServerTick = -1;
+		loopSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
 		lastJumpOrigin = -1;
 		needsRebuild = true;
 		config.save();
@@ -200,11 +199,14 @@ public class TimeTravel {
 		}
 		if (target == timelineTick) return "Already at " + TimeFormat.clock(target);
 
+		PlayerData initiatorPd = loopSceneManager.getRecordingPlayer(initiatorName);
 		long nowServerTick = server.getTickCount();
-		if (jumpCooldownTicks > 0 && lastJumpServerTick >= 0 && nowServerTick - lastJumpServerTick < jumpCooldownTicks) {
-			return "Time jump cooldown - wait a moment";
+		if (initiatorPd != null) {
+			if (jumpCooldownTicks > 0 && initiatorPd.getLastJumpServerTick() >= 0 && nowServerTick - initiatorPd.getLastJumpServerTick() < jumpCooldownTicks) {
+				return "Time jump cooldown - wait a moment";
+			}
+			initiatorPd.setLastJumpServerTick(nowServerTick);
 		}
-		lastJumpServerTick = nowServerTick;
 
 		long from = timelineTick;
 		lastJumpOrigin = from;
