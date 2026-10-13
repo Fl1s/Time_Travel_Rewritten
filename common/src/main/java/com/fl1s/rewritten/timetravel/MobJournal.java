@@ -6,12 +6,15 @@ import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -39,8 +42,21 @@ public final class MobJournal {
     private static final long GLIDE_TICKS = 10;
     private static final double MAX_SPEED_MOD = 4.0;
     private static final double NEAR_PLAYER = 48.0;
+    private static final int TRAIL_STEP = 5;
+    private static final int TRAIL_MAX = 400;
+    private static final int TRAIL_TRACKED_MAX = 256;
     private static final Gson GSON = new GsonBuilder().create();
     private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {}.getType();
+
+    static final class Sample {
+        long tick;
+        double x, y, z;
+    }
+
+    private static final class Trail {
+        String dim;
+        final List<Sample> samples = new ArrayList<>();
+    }
 
     public static final class Entry {
         long tick;
@@ -50,15 +66,22 @@ public final class MobJournal {
         String uuid;
         String nbt;
         boolean explode;
+        List<Sample> trail;
         transient Vec3 deathPos;
     }
 
     private static final List<Entry> entries = new ArrayList<>();
     private static final Map<String, Entry> canon = new HashMap<>();
+    private static final Map<UUID, Trail> trails = new HashMap<>();
     private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
     private static long nextSeq = 0;
     private static boolean dirty = false;
+    private static boolean killing = false;
+
+    public static boolean isKilling() {
+        return killing;
+    }
 
     public static void onEntityDeath(LivingEntity entity) {
         onEntityDeath(entity, false);
@@ -80,6 +103,7 @@ public final class MobJournal {
     }
 
     public static void onEntityDeath(LivingEntity entity, boolean explode) {
+        if (killing) return;
         if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.loopSceneManager == null) return;
         if (!(entity.level() instanceof ServerLevel level) || entity instanceof Player) return;
         if (!entity.getType().canSerialize()) return;
@@ -116,9 +140,69 @@ public final class MobJournal {
         entry.uuid = uuid;
         entry.nbt = tag.toString();
         entry.explode = explode;
+        Trail trail = trails.remove(entity.getUUID());
+        if (trail != null) {
+            addSample(trail, entity);
+            entry.trail = new ArrayList<>(trail.samples);
+        }
         entries.add(entry);
         canon.put(uuid, entry);
         dirty = true;
+    }
+
+    public static void track(Mob mob, Entity who) {
+        if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!(who instanceof ServerPlayer sp) || sp.getClass().getName().contains("FakePlayer")) return;
+        if (!(mob.level() instanceof ServerLevel level)) return;
+        if (trails.containsKey(mob.getUUID()) || trails.size() >= TRAIL_TRACKED_MAX) return;
+        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(sp.getGameProfile().getName());
+        if (pd == null || !pd.getActive()) return;
+        Trail t = new Trail();
+        t.dim = level.dimension().location().toString();
+        trails.put(mob.getUUID(), t);
+        addSample(t, mob);
+    }
+
+    private static void addSample(Trail t, Entity m) {
+        if (t.samples.size() >= TRAIL_MAX) t.samples.remove(0);
+        Sample s = new Sample();
+        s.tick = TimeTravel.timelineTick;
+        s.x = m.getX();
+        s.y = m.getY();
+        s.z = m.getZ();
+        t.samples.add(s);
+    }
+
+    private static void sampleTrails() {
+        Iterator<Map.Entry<UUID, Trail>> it = trails.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, Trail> en = it.next();
+            Trail t = en.getValue();
+            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim)));
+            Entity m = level == null ? null : level.getEntity(en.getKey());
+            if (m == null || m.isRemoved()) {
+                it.remove();
+                continue;
+            }
+            addSample(t, m);
+        }
+    }
+
+    private static Vec3 positionAt(Entry e, long tick) {
+        List<Sample> s = e.trail;
+        if (s == null || s.isEmpty()) return null;
+        Sample first = s.get(0);
+        if (tick <= first.tick) return new Vec3(first.x, first.y, first.z);
+        for (int i = 1; i < s.size(); i++) {
+            Sample b = s.get(i);
+            if (b.tick >= tick) {
+                Sample a = s.get(i - 1);
+                double f = b.tick == a.tick ? 1.0 : (double) (tick - a.tick) / (b.tick - a.tick);
+                return new Vec3(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f);
+            }
+        }
+        Sample last = s.get(s.size() - 1);
+        return new Vec3(last.x, last.y, last.z);
     }
 
     public static void tick() {
@@ -126,6 +210,7 @@ public final class MobJournal {
             apply(upcoming.poll(), true, true);
         }
         steer(TimeTravel.timelineTick % 5 == 0);
+        if (TimeTravel.timelineTick % TRAIL_STEP == 0) sampleTrails();
     }
 
     private static Vec3 deathPos(Entry e) {
@@ -182,6 +267,9 @@ public final class MobJournal {
     }
 
     public static void onJump(long from, long to) {
+        if (to < from) {
+            for (Trail t : trails.values()) t.samples.removeIf(s -> s.tick > to);
+        }
         for (Entry e : canon.values()) {
             apply(e, e.tick <= to, false);
         }
@@ -207,6 +295,17 @@ public final class MobJournal {
         return (e != null && e.tick > TimeTravel.timelineTick) ? e.visit : -1;
     }
 
+    private static void slay(LivingEntity mob, ServerLevel level) {
+        level.playSound(null, mob.getX(), mob.getY(), mob.getZ(), SoundEvents.PLAYER_ATTACK_STRONG, SoundSource.PLAYERS, 1.0f, 1.0f);
+        killing = true;
+        try {
+            mob.hurt(level.damageSources().genericKill(), Float.MAX_VALUE);
+        } finally {
+            killing = false;
+        }
+        if (mob.isAlive()) mob.discard();
+    }
+
     private static void apply(Entry e, boolean die, boolean effects) {
         try {
             ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
@@ -220,17 +319,34 @@ public final class MobJournal {
                         int radius = saved.contains("ExplosionRadius") ? saved.getByte("ExplosionRadius") : 3;
                         float power = radius * (saved.getBoolean("powered") ? 2.0f : 1.0f);
                         level.explode(existing, existing.getX(), existing.getY(), existing.getZ(), power, Level.ExplosionInteraction.MOB);
-                    } else if (effects) {
-                        level.broadcastEntityEvent(existing, (byte) 60);
+                    } else if (effects && existing instanceof LivingEntity living) {
+                        slay(living, level);
+                        return;
                     }
                     existing.discard();
                 }
                 return;
             }
 
-            if (existing != null) return;
+            if (existing != null) {
+                if (existing instanceof LivingEntity living && living.isDeadOrDying()) existing.discard();
+                else return;
+            }
 
             CompoundTag tag = TagParser.parseTag(e.nbt);
+            Vec3 at = positionAt(e, TimeTravel.timelineTick);
+            if (at != null) {
+                ListTag moved = new ListTag();
+                moved.add(DoubleTag.valueOf(at.x));
+                moved.add(DoubleTag.valueOf(at.y));
+                moved.add(DoubleTag.valueOf(at.z));
+                tag.put("Pos", moved);
+                ListTag still = new ListTag();
+                still.add(DoubleTag.valueOf(0));
+                still.add(DoubleTag.valueOf(0));
+                still.add(DoubleTag.valueOf(0));
+                tag.put("Motion", still);
+            }
             ListTag pos = tag.getList("Pos", 6);
             if (pos.size() < 3 || !level.isLoaded(BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2)))) return;
 
@@ -273,6 +389,7 @@ public final class MobJournal {
         entries.clear();
         upcoming.clear();
         canon.clear();
+        trails.clear();
         nextSeq = 0;
         Path f = file();
         if (Files.exists(f)) {
@@ -308,6 +425,7 @@ public final class MobJournal {
         entries.clear();
         upcoming.clear();
         canon.clear();
+        trails.clear();
         nextSeq = 0;
         dirty = true;
         save();

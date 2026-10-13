@@ -19,5 +19,12 @@ public abstract class CreeperMixin {
             this.swell = 0;
         }
     }
-}
 
+    @Inject(method = "tick", at = @At("RETURN"))
+    private void tt$postTickCreeper(CallbackInfo ci) {
+        Creeper creeper = (Creeper) (Object) this;
+        if (creeper.isRemoved() && this.swell >= 29 && !MobJournal.isDoomed(creeper)) {
+            MobJournal.onEntityDeath(creeper, true);
+        }
+    }
+}

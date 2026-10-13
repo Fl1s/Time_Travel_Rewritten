@@ -23,6 +23,7 @@ public abstract class MobHurtMixin {
         }
         if (self instanceof Mob mob) {
             MobBinding.onHurt(mob, source.getEntity());
+            MobJournal.track(mob, source.getEntity());
         }
     }
 }
