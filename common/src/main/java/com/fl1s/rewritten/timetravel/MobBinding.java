@@ -31,6 +31,9 @@ public final class MobBinding {
         int visit = TimeTravel.visitIdOf(target);
         if (visit < 0) return true;
 
+        int owner = MobJournal.ownerVisit(mob.getUUID());
+        if (owner >= 0) return visit == owner;
+
         Integer current = bound.get(mob.getUUID());
         if (current == null || current == visit || !ownerHolds(mob, current)) {
             bind(mob, visit);

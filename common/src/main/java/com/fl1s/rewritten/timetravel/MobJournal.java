@@ -15,6 +15,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -42,8 +44,8 @@ public final class MobJournal {
     private static final long GLIDE_TICKS = 10;
     private static final double MAX_SPEED_MOD = 4.0;
     private static final double NEAR_PLAYER = 48.0;
-    private static final int TRAIL_STEP = 5;
-    private static final int TRAIL_MAX = 400;
+    private static final int TRAIL_STEP = 2;
+    private static final int TRAIL_MAX = 600;
     private static final int TRAIL_TRACKED_MAX = 256;
     private static final Gson GSON = new GsonBuilder().create();
     private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {}.getType();
@@ -51,6 +53,9 @@ public final class MobJournal {
     static final class Sample {
         long tick;
         double x, y, z;
+        float yaw, pitch;
+        boolean rot;
+        boolean swing;
     }
 
     private static final class Trail {
@@ -170,6 +175,10 @@ public final class MobJournal {
         s.x = m.getX();
         s.y = m.getY();
         s.z = m.getZ();
+        s.yaw = m.getYRot();
+        s.pitch = m.getXRot();
+        s.rot = true;
+        s.swing = m instanceof LivingEntity l && l.swinging && l.swingTime <= 1;
         t.samples.add(s);
     }
 
@@ -188,29 +197,67 @@ public final class MobJournal {
         }
     }
 
-    private static Vec3 positionAt(Entry e, long tick) {
-        List<Sample> s = e.trail;
+    private static Sample sampleAt(List<Sample> s, long tick) {
         if (s == null || s.isEmpty()) return null;
-        Sample first = s.get(0);
-        if (tick <= first.tick) return new Vec3(first.x, first.y, first.z);
-        for (int i = 1; i < s.size(); i++) {
-            Sample b = s.get(i);
-            if (b.tick >= tick) {
-                Sample a = s.get(i - 1);
-                double f = b.tick == a.tick ? 1.0 : (double) (tick - a.tick) / (b.tick - a.tick);
-                return new Vec3(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f);
-            }
+        int hi = s.size() - 1;
+        if (tick <= s.get(0).tick) return s.get(0);
+        if (tick >= s.get(hi).tick) return s.get(hi);
+        int lo = 0;
+        while (hi - lo > 1) {
+            int mid = (lo + hi) >>> 1;
+            if (s.get(mid).tick <= tick) lo = mid;
+            else hi = mid;
         }
-        Sample last = s.get(s.size() - 1);
-        return new Vec3(last.x, last.y, last.z);
+        Sample a = s.get(lo);
+        Sample b = s.get(hi);
+        double f = b.tick == a.tick ? 1.0 : (double) (tick - a.tick) / (b.tick - a.tick);
+        Sample r = new Sample();
+        r.tick = tick;
+        r.x = a.x + (b.x - a.x) * f;
+        r.y = a.y + (b.y - a.y) * f;
+        r.z = a.z + (b.z - a.z) * f;
+        r.rot = a.rot && b.rot;
+        r.yaw = Mth.rotLerp((float) f, a.yaw, b.yaw);
+        r.pitch = Mth.lerp((float) f, a.pitch, b.pitch);
+        r.swing = a.swing && tick - a.tick <= 1;
+        return r;
+    }
+
+    private static Vec3 positionAt(Entry e, long tick) {
+        Sample s = sampleAt(e.trail, tick);
+        return s == null ? null : new Vec3(s.x, s.y, s.z);
     }
 
     public static void tick() {
         while (!upcoming.isEmpty() && upcoming.peek().tick <= TimeTravel.timelineTick) {
             apply(upcoming.poll(), true, true);
         }
+        drive();
         steer(TimeTravel.timelineTick % 5 == 0);
         if (TimeTravel.timelineTick % TRAIL_STEP == 0) sampleTrails();
+    }
+
+    private static void drive() {
+        long now = TimeTravel.timelineTick;
+        for (Entry e : upcoming) {
+            if (e.trail == null || e.trail.isEmpty() || now < e.trail.get(0).tick || now >= e.tick) continue;
+            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            if (level == null) continue;
+            if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || !mob.isAlive()) continue;
+
+            Sample s = sampleAt(e.trail, now);
+            mob.getNavigation().stop();
+            mob.setPos(s.x, s.y, s.z);
+            mob.setDeltaMovement(Vec3.ZERO);
+            mob.fallDistance = 0;
+            if (s.rot) {
+                mob.setYRot(s.yaw);
+                mob.setXRot(s.pitch);
+                mob.setYHeadRot(s.yaw);
+                mob.setYBodyRot(s.yaw);
+            }
+            if (s.swing && !mob.swinging) mob.swing(InteractionHand.MAIN_HAND);
+        }
     }
 
     private static Vec3 deathPos(Entry e) {
@@ -228,11 +275,13 @@ public final class MobJournal {
     private static void steer(boolean nav) {
         long now = TimeTravel.timelineTick;
         for (Entry e : upcoming) {
-            long remaining = e.tick - now;
+            boolean trailed = e.trail != null && !e.trail.isEmpty();
+            long due = trailed ? e.trail.get(0).tick : e.tick;
+            long remaining = due - now;
             if (remaining <= 0 || remaining > STEER_WINDOW) continue;
             if (remaining > GLIDE_TICKS && !nav) continue;
 
-            Vec3 target = deathPos(e);
+            Vec3 target = trailed ? positionAt(e, due) : deathPos(e);
             if (target == null) continue;
 
             ServerLevel level = TimeTravel.server.getLevel(

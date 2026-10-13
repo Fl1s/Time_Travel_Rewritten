@@ -14,6 +14,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.AreaEffectCloud;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -74,6 +75,7 @@ public final class EntityJournal {
 
     public static boolean shouldBlock(Entity e) {
         if (replaying) return false;
+        if (MobJournal.isKilling()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (suppress) return isTracked(e);
         if (BlockJournal.isApplying()) return e instanceof PrimedTnt || e instanceof FallingBlockEntity || e instanceof ItemEntity;
         if (BlockJournal.isReplayingLive()) return e instanceof ItemEntity;
