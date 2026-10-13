@@ -85,16 +85,16 @@ public final class GhostFx {
             lastUseAnim = anim;
 
             if (anim == UseAnim.EAT && useTicks > 7 && useTicks % 4 == 0) {
-                level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
+/*                level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
                         stack.getEatingSound(), SoundSource.PLAYERS,
                         0.5f + 0.5f * level.random.nextInt(2),
-                        (level.random.nextFloat() - level.random.nextFloat()) * 0.2f + 1.0f);
+                        (level.random.nextFloat() - level.random.nextFloat()) * 0.2f + 1.0f);*/
                 level.sendParticles(new ItemParticleOption(ParticleTypes.ITEM, stack),
                         entity.getX(), entity.getEyeY() - 0.1, entity.getZ(), 5, 0.1, 0.1, 0.1, 0.0);
             } else if (anim == UseAnim.DRINK && useTicks % 4 == 0) {
-                level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
+/*                level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
                         stack.getDrinkingSound(), SoundSource.PLAYERS, 0.5f,
-                        level.random.nextFloat() * 0.1f + 0.9f);
+                        level.random.nextFloat() * 0.1f + 0.9f);*/
             }
         } else {
             //yeah that was the game changing feature
