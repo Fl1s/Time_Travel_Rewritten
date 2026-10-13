@@ -1,16 +1,13 @@
 package com.fl1s.rewritten.timetravel;
 
-import com.google.gson.Gson;
+import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 
-import java.io.Reader;
-import java.io.Writer;
 import java.lang.reflect.Type;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,7 +18,6 @@ public final class MobBinding {
     private MobBinding() {}
 
     private static final double RANGE_SQ = 32.0 * 32.0;
-    private static final Gson GSON = new Gson();
     private static final Type MAP_TYPE = new TypeToken<HashMap<String, Integer>>() {}.getType();
     private static final Map<UUID, Integer> bound = new HashMap<>();
     private static boolean dirty = false;
@@ -74,15 +70,8 @@ public final class MobBinding {
 
     public static void load() {
         bound.clear();
-        Path f = file();
-        if (Files.exists(f)) {
-            try (Reader r = Files.newBufferedReader(f)) {
-                Map<String, Integer> loaded = GSON.fromJson(r, MAP_TYPE);
-                if (loaded != null) loaded.forEach((k, v) -> bound.put(UUID.fromString(k), v));
-            } catch (Exception ex) {
-                TimeTravel.LOOP_LOGGER.error("Failed to load mob bindings", ex);
-            }
-        }
+        Map<String, Integer> loaded = JsonStore.load(file(), MAP_TYPE);
+        if (loaded != null) loaded.forEach((k, v) -> bound.put(UUID.fromString(k), v));
         dirty = false;
     }
 
@@ -94,12 +83,7 @@ public final class MobBinding {
         if (TimeTravel.worldFolder == null) return;
         Map<String, Integer> out = new HashMap<>();
         bound.forEach((k, v) -> out.put(k.toString(), v));
-        try (Writer w = Files.newBufferedWriter(file())) {
-            GSON.toJson(out, MAP_TYPE, w);
-            dirty = false;
-        } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to save mob bindings", ex);
-        }
+        if (JsonStore.save(file(), out, MAP_TYPE)) dirty = false;
     }
 
     public static void clear() {
