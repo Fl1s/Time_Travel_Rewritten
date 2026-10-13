@@ -121,11 +121,11 @@ public class BaseCommands {
     }
 
     private static int jumpReturn(CommandContext<CommandSourceStack> context) {
-        if (TimeTravel.lastJumpOrigin < 0) {
+        if (TimeTravel.lastJumpOrigin() < 0) {
             context.getSource().sendFailure(Component.literal("No previous jump to return to"));
             return 0;
         }
-        return runJump(context.getSource(), TimeTravel.lastJumpOrigin);
+        return runJump(context.getSource(), TimeTravel.lastJumpOrigin());
     }
 
     private static int jumpMark(CommandContext<CommandSourceStack> context) {

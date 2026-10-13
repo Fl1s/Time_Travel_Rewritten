@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 public class LifecycleEvent {
     public static void onServerStart(MinecraftServer server) {
+        TimeTravel.resetSession();
+        ProcessJournal.clear();
         TimeTravel.worldFolder = server.getWorldPath(LevelResource.ROOT);
         TimeTravel.config = TimeTravelConfig.load(TimeTravel.worldFolder);
         TimeTravel.loopSceneManager = new LoopSceneManager(TimeTravel.config);

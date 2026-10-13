@@ -40,7 +40,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 public class TimeTravel {
@@ -49,7 +48,6 @@ public class TimeTravel {
 	public static MinecraftServer server;
 	public static ServerLevel serverLevel;
 	public static MocapController mocapController;
-	public static final Map<String, MocapActiveRecording> activeRecordings = new ConcurrentHashMap<>();
 
 	public static boolean isLooping;
 	public static long timelineTick;
@@ -58,7 +56,6 @@ public class TimeTravel {
 	public static boolean jumpRequiresOp;
 	public static long maxJumpTicks;
 	public static int jumpCooldownTicks = 20;
-	public static long lastJumpOrigin = -1;
 
 	public static boolean chainDeath;
 
@@ -83,30 +80,35 @@ public class TimeTravel {
 	public static LoopSceneManager loopSceneManager;
 	public static Path worldFolder;
 
-	public static final Queue<Runnable> delayedTasks = new java.util.concurrent.ConcurrentLinkedQueue<>();
+	private static TimelineSession session;
+	record PendingPiece(long startTick, String recording, String playerName, int skipTicks, int visitId, int segment, long visitStartTick) {}
+	record Ghost(MocapPlaybackRoot root, String playerName, int visitId, GhostFx fx) {}
 
-	private record PendingPiece(long startTick, String recording, String playerName, int skipTicks, int visitId,
-								int segment, long visitStartTick) {}
+	record PendingSound(long tick, String dim, double x, double y, double z, int dir, String playerName, int visitId) {}
 
-	private record Ghost(MocapPlaybackRoot root, String playerName, int visitId, GhostFx fx) {}
+	public static void resetSession() {
+		session = new TimelineSession();
+	}
 
+	static TimelineSession session() {
+		TimelineSession s = session;
+		if (s == null) {
+			throw new IllegalStateException("TimelineSession not initialized (onServerStart not called?)");
+		}
+		return s;
+	}
 
-	private record PendingSound(long tick, String dim, double x, double y, double z, int dir, String playerName, int visitId) {}
+	public static long lastJumpOrigin() {
+		TimelineSession s = session;
+		return s == null ? -1 : s.lastJumpOrigin;
+	}
 
-	private static final PriorityQueue<PendingSound> pendingSounds =
-			new PriorityQueue<>(Comparator.comparingLong(PendingSound::tick));
-
-
-	private static final PriorityQueue<PendingPiece> pending =
-			new PriorityQueue<>(Comparator.comparingLong(PendingPiece::startTick));
-	private static final List<Ghost> ghostRoots = new ArrayList<>();
 	public static int ghostLookaheadTicks = 0;
 	public static final long PENDING_VISIT_WINDOW = 1200;
-	private static boolean needsRebuild = true;
-	private static boolean idle = false;
 
 	public static void queueTask(Runnable task) {
-		delayedTasks.add(task);
+		TimelineSession s = session;
+		if (s != null) s.delayedTasks.add(task);
 	}
 
 	public static void init() {
@@ -132,10 +134,10 @@ public class TimeTravel {
 		config.isLooping = true;
 		dayTimeOrigin = serverLevel.getDayTime() - timelineTick;
 		config.dayTimeOrigin = dayTimeOrigin;
-		idle = false;
+		session().idle = false;
 
 		forEachOnlineRecorded(TimeTravel::beginVisit);
-		needsRebuild = true;
+		session().needsRebuild = true;
 		BlockJournal.rebuildUpcoming();
 		MobJournal.rebuildUpcoming();
 		EntityJournal.rebuildUpcoming();
@@ -155,7 +157,8 @@ public class TimeTravel {
 		BlockJournal.flushWatches();
 		endAllVisits();
 		stopGhosts();
-		pending.clear();
+		session().pending.clear();
+		session().pendingSounds.clear();
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
@@ -176,7 +179,8 @@ public class TimeTravel {
 	public static void resetTimeline() {
 		stopLoop();
 		stopGhosts();
-		pending.clear();
+		session().pending.clear();
+		session().pendingSounds.clear();
 
 		removeAllRecordings();
 		BlockJournal.clear();
@@ -194,8 +198,8 @@ public class TimeTravel {
 		config.timelineTick = 0;
 		config.nextVisitId = 1;
 		loopSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
-		lastJumpOrigin = -1;
-		needsRebuild = true;
+		session().lastJumpOrigin = -1;
+		session().needsRebuild = true;
 		config.save();
 		broadcastSync();
 	}
@@ -222,7 +226,7 @@ public class TimeTravel {
 		}
 
 		long from = timelineTick;
-		lastJumpOrigin = from;
+		session().lastJumpOrigin = from;
 		int dir = target > from ? 1 : -1;
 		LOOP_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
@@ -238,7 +242,7 @@ public class TimeTravel {
 		if (syncDayTime) {
 			serverLevel.setDayTime(dayTimeOrigin + target);
 		}
-		idle = false;
+		session().idle = false;
 
 		BlockJournal.onJump(from, target);
 		MobJournal.onJump(from, target);
@@ -266,7 +270,8 @@ public class TimeTravel {
 
 	public static void onServerTick() {
 		Runnable task;
-		while ((task = delayedTasks.poll()) != null) {
+		TimelineSession s = session();
+		while ((task = s.delayedTasks.poll()) != null) {
 			try {
 				task.run();
 			} catch (Exception e) {
@@ -279,16 +284,16 @@ public class TimeTravel {
 		if (!isLooping || mocapController == null) return;
 
 		if (countOnlineRecorded() == 0) {
-			if (!idle) {
-				idle = true;
+			if (!s.idle) {
+				s.idle = true;
 				stopGhosts();
-				needsRebuild = true;
+				s.needsRebuild = true;
 			}
 			return;
 		}
-		idle = false;
+		s.idle = false;
 
-		if (needsRebuild) rebuildPending();
+		if (s.needsRebuild) rebuildPending();
 		flushPending();
 		flushSounds();
 
@@ -304,7 +309,7 @@ public class TimeTravel {
 		if (syncDayTime) {
 			serverLevel.setDayTime(dayTimeOrigin + timelineTick);
 		}
-		for (Ghost ghost : ghostRoots) {
+		for (Ghost ghost : s.ghostRoots) {
 			if (!ghost.root().isFinished()) ghost.fx().tick();
 		}
 		if (trackVoice) VoicechatCompat.onTick();
@@ -312,7 +317,7 @@ public class TimeTravel {
 		pollGhostKills();
 
 		if (timelineTick % 20 == 0) broadcastSync();
-		if (timelineTick % 100 == 0) ghostRoots.removeIf(g -> g.root().isFinished());
+		if (timelineTick % 100 == 0) s.ghostRoots.removeIf(g -> g.root().isFinished());
 		if (timelineTick % 1200 == 0) config.save();
 		if (timelineTick % 1200 == 0) MobBinding.prune();
 		if (timelineTick % 6000 == 0) {
@@ -347,7 +352,7 @@ public class TimeTravel {
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
 		if (isLooping && mocapController != null && pd.getCurrentVisit() == null) {
 			beginVisit(player, pd);
-			if (idle) { idle = false; needsRebuild = true; }
+			if (session().idle) { session().idle = false; session().needsRebuild = true; }
 		}
 		sendSync(player);
 	}
@@ -452,7 +457,7 @@ public class TimeTravel {
 		MocapRecordingConfig recConfig = MocapRecordingConfig.createFromSettings();
 		MocapActiveRecording recording = mocapController.startRecording(player, recConfig, true);
 		if (recording != null) {
-			activeRecordings.put(pd.getName(), recording);
+			session().activeRecordings.put(pd.getName(), recording);
 		} else {
 			LOOP_LOGGER.error("Failed to start mocap recording for player: {}", pd.getName());
 		}
@@ -466,7 +471,7 @@ public class TimeTravel {
 		int ctxIndex = 0;
 
 		//main record
-		MocapActiveRecording primaryRec = activeRecordings.remove(playerName);
+		MocapActiveRecording primaryRec = session().activeRecordings.remove(playerName);
 		if (primaryRec != null && primaryRec.isValid()) {
 			RecordingContext primaryCtx = ((ActiveRecording) primaryRec).ctx;
 			primaryCtx.stop(out);
@@ -536,37 +541,39 @@ public class TimeTravel {
 
 	//past selves replay
 	private static void rebuildPending() {
-		pending.clear();
-		pendingSounds.clear();
+		TimelineSession s = session();
+		s.pending.clear();
+		s.pendingSounds.clear();
 		loopSceneManager.forEachRecordingPlayer(pd -> {
 			for (Visit visit : pd.getVisits()) {
 				if (visit.pieces.isEmpty()) continue;
 
 				if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= timelineTick) {
-					pendingSounds.add(new PendingSound(visit.startTick, visit.startDim, visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id));
+					s.pendingSounds.add(new PendingSound(visit.startTick, visit.startDim, visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id));
 				}
 				if (visit.departDir != 0 && visit.endDim != null && visit.endTick > timelineTick) {
-					pendingSounds.add(new PendingSound(visit.endTick, visit.endDim, visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id));
+					s.pendingSounds.add(new PendingSound(visit.endTick, visit.endDim, visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id));
 				}
 
 				for (int i = 0; i < visit.pieces.size(); i++) {
 					Visit.Piece piece = visit.pieces.get(i);
 					long end = (i + 1 < visit.pieces.size()) ? visit.pieces.get(i + 1).startTick : visit.endTick;
 					if (piece.startTick >= timelineTick) {
-						pending.add(new PendingPiece(piece.startTick, piece.recording, pd.getName(), 0, visit.id, i, visit.startTick));
+						s.pending.add(new PendingPiece(piece.startTick, piece.recording, pd.getName(), 0, visit.id, i, visit.startTick));
 					} else if (end > timelineTick) {
-						pending.add(new PendingPiece(timelineTick, piece.recording, pd.getName(), (int) (timelineTick - piece.startTick), visit.id, i, visit.startTick));
+						s.pending.add(new PendingPiece(timelineTick, piece.recording, pd.getName(), (int) (timelineTick - piece.startTick), visit.id, i, visit.startTick));
 					}
 				}
 			}
 		});
-		needsRebuild = false;
-		LOOP_LOGGER.info("Ghost queue rebuilt at tick {}: {} piece(s) pending", timelineTick, pending.size());
+		s.needsRebuild = false;
+		LOOP_LOGGER.info("Ghost queue rebuilt at tick {}: {} piece(s) pending", timelineTick, s.pending.size());
 	}
 
 	private static void flushPending() {
-		while (!pending.isEmpty() && pending.peek().startTick() <= timelineTick + ghostLookaheadTicks) {
-			PendingPiece piece = pending.poll();
+		TimelineSession s = session();
+		while (!s.pending.isEmpty() && s.pending.peek().startTick() <= timelineTick + ghostLookaheadTicks) {
+			PendingPiece piece = s.pending.poll();
 			startGhost(piece, (int) Math.max(0, piece.startTick() - timelineTick));
 		}
 	}
@@ -589,9 +596,10 @@ public class TimeTravel {
 	}
 
 	private static void pollGhostKills() {
-		if (ghostRoots.isEmpty()) return;
+		TimelineSession s = session();
+		if (s.ghostRoots.isEmpty()) return;
 
-		for (Ghost ghost : new ArrayList<>(ghostRoots)) {
+		for (Ghost ghost : new ArrayList<>(s.ghostRoots)) {
 			GhostFx fx = ghost.fx();
 			if (!fx.isDead()) {
 				fx.killHandled = false;
@@ -625,6 +633,7 @@ public class TimeTravel {
 		PlayerData pd = loopSceneManager.getRecordingPlayer(playerName);
 		if (pd == null) return;
 
+		TimelineSession s = session();
 		Set<Integer> ids = new HashSet<>();
 		List<Visit> doomedVisits = new ArrayList<>();
 		for (Visit v : pd.getVisits()) {
@@ -641,7 +650,7 @@ public class TimeTravel {
 		}
 		if (ids.isEmpty()) return;
 
-		ghostRoots.removeIf(g -> {
+		s.ghostRoots.removeIf(g -> {
 			if (!g.playerName().equals(playerName) || g.visitId() < fromVisitId) return false;
 			try {
 				if (!g.root().isFinished()) g.root().stop();
@@ -651,8 +660,8 @@ public class TimeTravel {
 			return true;
 		});
 		VoicechatCompat.stopPlaybackFrom(playerName, fromVisitId);
-		pending.removeIf(pp -> pp.playerName().equals(playerName) && pp.visitId() >= fromVisitId);
-		pendingSounds.removeIf(ps -> ps.playerName().equals(playerName) && ps.visitId() >= fromVisitId);
+		s.pending.removeIf(pp -> pp.playerName().equals(playerName) && pp.visitId() >= fromVisitId);
+		s.pendingSounds.removeIf(ps -> ps.playerName().equals(playerName) && ps.visitId() >= fromVisitId);
 
 		for (Visit v : doomedVisits) {
 			for (Visit.Piece piece : v.pieces) deleteRecording(piece.recording);
@@ -690,8 +699,9 @@ public class TimeTravel {
 	}
 
 	private static void flushSounds() {
-		while (!pendingSounds.isEmpty() && pendingSounds.peek().tick() <= timelineTick) {
-			playTimeSound(pendingSounds.poll());
+		TimelineSession s = session();
+		while (!s.pendingSounds.isEmpty() && s.pendingSounds.peek().tick() <= timelineTick) {
+			playTimeSound(s.pendingSounds.poll());
 		}
 	}
 
@@ -740,7 +750,7 @@ public class TimeTravel {
 				net.minecraft.world.entity.Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
 				GhostFx fx = new GhostFx(ghostEntity);
 				if (piece.skipTicks() > 0) fx.graceUntil = timelineTick + 10;
-				ghostRoots.add(new Ghost(root, piece.playerName(), piece.visitId(), fx));
+				session().ghostRoots.add(new Ghost(root, piece.playerName(), piece.visitId(), fx));
 				if (trackVoice && voiceChatLoaded) {
 					VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(), piece.visitStartTick(), ghostEntity);
 				}
@@ -756,14 +766,16 @@ public class TimeTravel {
 	}
 
 	private static void stopGhosts() {
-		for (Ghost ghost : ghostRoots) {
+		TimelineSession s = session;
+		if (s == null) return;
+		for (Ghost ghost : s.ghostRoots) {
 			try {
 				if (!ghost.root().isFinished()) ghost.root().stop();
 			} catch (Exception e) {
 				LOOP_LOGGER.error("Failed to stop ghost playback", e);
 			}
 		}
-		ghostRoots.clear();
+		s.ghostRoots.clear();
 		VoicechatCompat.stopPlayback(null);
 	}
 
@@ -774,7 +786,7 @@ public class TimeTravel {
 	public static int visitIdOf(Entity entity) {
 		if (!(entity instanceof ServerPlayer player)) return -1;
 		if (isGhost(player)) {
-			for (Ghost ghost : ghostRoots) {
+			for (Ghost ghost : session().ghostRoots) {
 				if (ghost.fx().entity() == entity) return ghost.visitId();
 			}
 			return -1;
@@ -785,12 +797,12 @@ public class TimeTravel {
 	}
 
 	public static GhostFx fxOf(Entity e) {
-		for (Ghost g : ghostRoots) if (g.fx().entity() == e) return g.fx();
+		for (Ghost g : session().ghostRoots) if (g.fx().entity() == e) return g.fx();
 		return null;
 	}
 
 	public static Entity entityOfVisit(int visitId) {
-		for (Ghost ghost : ghostRoots) {
+		for (Ghost ghost : session().ghostRoots) {
 			if (ghost.visitId() != visitId || ghost.root().isFinished()) continue;
 			Entity entity = ghost.fx().entity();
 			if (entity != null && !entity.isRemoved()) return entity;
@@ -840,7 +852,7 @@ public class TimeTravel {
 	}
 
 	public static int countPendingGhosts() {
-		return pending.size();
+		return session().pending.size();
 	}
 
 	public static void sendSync(ServerPlayer player) {
@@ -907,11 +919,5 @@ public class TimeTravel {
 		} catch (IOException e) {
 			LOOP_LOGGER.error("Failed to scan recordings directory for cleanup", e);
 		}
-	}
-
-	/** Converts time in ticks to HH:MM:SS */
-	public static String convertTicksToTime(int ticks) {
-		int time = ticks / 20;
-		return String.format("%02d:%02d:%02d", time / 3600, (time % 3600) / 60, time % 60);
 	}
 }
