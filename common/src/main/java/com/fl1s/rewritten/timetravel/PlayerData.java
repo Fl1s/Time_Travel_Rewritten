@@ -41,6 +41,7 @@ public class PlayerData {
     private transient ArrayList<Long> pieceStarts;
     private transient long chunkStartTick;
     private transient int pieceCounter;
+    private transient long lastJumpServerTick = -1;
 
     public PlayerData(String name, String nickname, String skin, Vec3 joinPosition, CompoundTag inventoryTag) {
         this.name = name;
@@ -70,9 +71,18 @@ public class PlayerData {
         this.pieceStarts = new ArrayList<>();
         this.chunkStartTick = 0;
         this.pieceCounter = 0;
+        this.lastJumpServerTick = -1;
         // Audio maps are transient (saved separately by AudioPersistence)
         this.audio = new ConcurrentHashMap<>();
         this.positions = new ConcurrentHashMap<>();
+    }
+
+    public long getLastJumpServerTick() {
+        return lastJumpServerTick;
+    }
+
+    public void setLastJumpServerTick(long tick) {
+        this.lastJumpServerTick = tick;
     }
 
     public String getName() {

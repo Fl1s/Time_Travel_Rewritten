@@ -58,7 +58,6 @@ public class TimeTravel {
 	public static long maxJumpTicks;
 	public static int jumpCooldownTicks = 20;
 	public static long lastJumpOrigin = -1;
-	private static long lastJumpServerTick = -1;
 
 	public static boolean chainDeath;
 
@@ -137,6 +136,8 @@ public class TimeTravel {
 		needsRebuild = true;
 		BlockJournal.rebuildUpcoming();
 		MobJournal.rebuildUpcoming();
+		EntityJournal.rebuildUpcoming();
+		EffectJournal.rebuildUpcoming();
 		ProcessJournal.rebuildUpcoming();
 		ChatTimeline.rebuildUpcoming();
 		config.save();
@@ -155,6 +156,8 @@ public class TimeTravel {
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
+		EntityJournal.save();
+		EffectJournal.save();
 
 		isLooping = false;
 		config.isLooping = false;
@@ -175,13 +178,15 @@ public class TimeTravel {
 		MobJournal.clear();
 		ProcessJournal.clear();
 		ChatTimeline.clear();
+		EntityJournal.clear();
+		EffectJournal.clear();
 		VoicechatCompat.deleteAllAudio();
 		loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
 		timelineTick = 0;
 		config.timelineTick = 0;
 		config.nextVisitId = 1;
-		lastJumpServerTick = -1;
+		loopSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
 		lastJumpOrigin = -1;
 		needsRebuild = true;
 		config.save();
@@ -200,11 +205,14 @@ public class TimeTravel {
 		}
 		if (target == timelineTick) return "Already at " + TimeFormat.clock(target);
 
+		PlayerData initiatorPd = loopSceneManager.getRecordingPlayer(initiatorName);
 		long nowServerTick = server.getTickCount();
-		if (jumpCooldownTicks > 0 && lastJumpServerTick >= 0 && nowServerTick - lastJumpServerTick < jumpCooldownTicks) {
-			return "Time jump cooldown - wait a moment";
+		if (initiatorPd != null) {
+			if (jumpCooldownTicks > 0 && initiatorPd.getLastJumpServerTick() >= 0 && nowServerTick - initiatorPd.getLastJumpServerTick() < jumpCooldownTicks) {
+				return "Time jump cooldown - wait a moment";
+			}
+			initiatorPd.setLastJumpServerTick(nowServerTick);
 		}
-		lastJumpServerTick = nowServerTick;
 
 		long from = timelineTick;
 		lastJumpOrigin = from;
@@ -212,6 +220,7 @@ public class TimeTravel {
 		LOOP_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
 		BlockJournal.flushWatches();
+		EntityJournal.fastForward(from, target);
 		ProcessJournal.beforeJump();
 		endAllVisits(dir);
 
@@ -226,6 +235,8 @@ public class TimeTravel {
 
 		BlockJournal.onJump(from, target);
 		MobJournal.onJump(from, target);
+		EntityJournal.onJump();
+		EffectJournal.rebuildUpcoming();
 		ProcessJournal.afterJump(from, target);
 		ChatTimeline.onJump(target);
 
@@ -276,9 +287,11 @@ public class TimeTravel {
 		timelineTick++;
 		config.timelineTick = timelineTick;
 		BlockJournal.tick();
+		EntityJournal.tick();
 		MobJournal.tick();
 		ProcessJournal.tick();
 		ChatTimeline.tick();
+		EffectJournal.tick();
 		if (syncDayTime) {
 			serverLevel.setDayTime(dayTimeOrigin + timelineTick);
 		}
@@ -296,6 +309,8 @@ public class TimeTravel {
 			BlockJournal.saveIfDirty();
 			MobJournal.saveIfDirty();
 			ChatTimeline.saveIfDirty();
+			EntityJournal.saveIfDirty();
+			EffectJournal.saveIfDirty();
 		}
 	}
 
@@ -345,6 +360,8 @@ public class TimeTravel {
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
+		EntityJournal.save();
+		EffectJournal.save();
 		if (worldFolder != null && config != null) config.save();
 		VoicechatInteractionCompat.clearCooldowns();
 	}
@@ -632,6 +649,8 @@ public class TimeTravel {
 		BlockJournal.eraseVisits(ids);
 		MobJournal.eraseVisits(ids);
 		ChatTimeline.eraseVisits(ids);
+		EntityJournal.eraseVisits(ids);
+		EffectJournal.eraseVisits(ids);
 		ChatTimeline.resend(timelineTick);
 
 		loopSceneManager.saveRecordingPlayers();

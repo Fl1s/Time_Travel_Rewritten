@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "package": "com.fl1s.rewritten.timetravel.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "com.llamalad7.mixinextras.MixinExtrasPlugin",
+  "mixins": ["ServerLevelMixin", "LevelMixin", "PrimedTntMixin", "LevelTicksMixin", "ServerPlayerGameModeMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

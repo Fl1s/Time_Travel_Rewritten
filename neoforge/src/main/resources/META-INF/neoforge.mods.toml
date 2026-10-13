@@ -46,3 +46,6 @@ type="optional"
 versionRange="[${voicechat_interaction_version},)"
 ordering="AFTER"
 side="BOTH"
+
+[[mixins]]
+config="timetravel_rewritten.mixins.json"
