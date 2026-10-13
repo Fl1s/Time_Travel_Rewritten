@@ -181,6 +181,8 @@ public class TimeTravel {
 		timelineTick = 0;
 		config.timelineTick = 0;
 		config.nextVisitId = 1;
+		lastJumpServerTick = -1;
+		lastJumpOrigin = -1;
 		needsRebuild = true;
 		config.save();
 		broadcastSync();
