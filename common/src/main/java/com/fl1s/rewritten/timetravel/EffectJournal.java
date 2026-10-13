@@ -35,7 +35,6 @@ public final class EffectJournal {
     private static final int SOUND = 0;
     private static final int LEVEL_EVENT = 1;
     private static final int BLOCK_EVENT = 2;
-    private static final int BLOCK_BREAK_EVENT = 2001;
     private static final double NEAR_SQ = 8.0 * 8.0;
     private static final Gson GSON = new GsonBuilder().create();
     private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {
@@ -68,8 +67,10 @@ public final class EffectJournal {
         Optional<ResourceKey<SoundEvent>> key = sound.unwrapKey();
         if (key.isEmpty()) return;
 
+        String id = key.get().location().toString();
+        if (isPlayerHurt(id)) return;
         Entry e = create(SOUND, level, pd, x, y, z);
-        e.id = key.get().location().toString();
+        e.id = id;
         e.source = source.name();
         e.volume = volume;
         e.pitch = pitch;
@@ -118,6 +119,10 @@ public final class EffectJournal {
 
     private static boolean isGhost(Player p) {
         return p.getClass().getName().contains("FakePlayer");
+    }
+
+    private static boolean isPlayerHurt(String id) {
+        return id != null && id.startsWith("minecraft:entity.player.hurt");
     }
 
     private static PlayerData recorder(ServerLevel level, Player except, double x, double y, double z) {
@@ -173,6 +178,7 @@ public final class EffectJournal {
     }
 
     private static void play(Entry e) {
+        if (e.kind == SOUND && isPlayerHurt(e.id)) return;
         ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
         if (level == null) return;
         replaying = true;

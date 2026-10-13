@@ -11,8 +11,11 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.AreaEffectCloud;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
@@ -33,6 +36,7 @@ public final class EntityJournal {
     private EntityJournal() {}
 
     public static final String TAG = "tt_replay";
+    private static final double OWNER_MAX_DIST_SQ = 5.0 * 5.0;
     private static final Gson GSON = new GsonBuilder().create();
     private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {}.getType();
 
@@ -44,11 +48,15 @@ public final class EntityJournal {
         long seq;
         int visit;
         int fuse;
+        String owner;
     }
 
     private record Due(long tick, PrimedTnt tnt) {}
 
+    private record CloudRef(String dim, long tick) {}
+
     private static final List<Entry> entries = new ArrayList<>();
+    private static final Map<UUID, CloudRef> clouds = new HashMap<>();
     private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
     private static final Map<UUID, String> live = new HashMap<>();
@@ -68,6 +76,7 @@ public final class EntityJournal {
 
     public static boolean shouldBlock(Entity e) {
         if (replaying) return false;
+        if (MobJournal.isKilling()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (suppress) return isTracked(e);
         if (BlockJournal.isApplying()) return e instanceof PrimedTnt || e instanceof FallingBlockEntity || e instanceof ItemEntity;
         if (BlockJournal.isReplayingLive()) return e instanceof ItemEntity;
@@ -76,6 +85,10 @@ public final class EntityJournal {
 
     public static void onSpawn(ServerLevel level, Entity entity) {
         if (!TimeTravel.isLooping || replaying || TimeTravel.loopSceneManager == null) return;
+        if (entity instanceof AreaEffectCloud) {
+            clouds.put(entity.getUUID(), new CloudRef(level.dimension().location().toString(), TimeTravel.timelineTick));
+            return;
+        }
         if (!isTracked(entity)) return;
         PlayerData pd = BlockJournal.nearestRecorder(level, entity.blockPosition());
         if (pd == null) return;
@@ -92,6 +105,10 @@ public final class EntityJournal {
         e.seq = nextSeq++;
         e.visit = pd.getCurrentVisit().id;
         if (entity instanceof PrimedTnt tnt) e.fuse = tnt.getFuse();
+        if (entity instanceof Projectile projectile) {
+            Entity owner = projectile.getOwner();
+            if (owner != null && !(owner instanceof Player)) e.owner = owner.getUUID().toString();
+        }
         entries.add(e);
         live.put(entity.getUUID(), e.dim);
         dirty = true;
@@ -108,10 +125,28 @@ public final class EntityJournal {
         return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dim)));
     }
 
+    private static boolean ownerPresent(ServerLevel level, Entry e) {
+        try {
+            net.minecraft.nbt.ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
+            double x = p.getDouble(0), y = p.getDouble(1), z = p.getDouble(2);
+
+            Entity owner = level.getEntity(UUID.fromString(e.owner));
+            if (owner == null) {
+                return !level.isLoaded(net.minecraft.core.BlockPos.containing(x, y, z));
+            }
+            if (!MobJournal.isDoomed(owner)) return false;
+            if (owner.isRemoved() || (owner instanceof LivingEntity living && living.isDeadOrDying())) return false;
+            return owner.level() == level && owner.distanceToSqr(x, y, z) <= OWNER_MAX_DIST_SQ;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
     private static void spawn(Entry e, int fuse) {
         if (e.item && TimeTravel.trackItems) return;
         ServerLevel level = levelOf(e.dim);
         if (level == null) return;
+        if (e.owner != null && !ownerPresent(level, e)) return;
         replaying = true;
         try {
             if (e.fuse > 0) {
@@ -143,6 +178,7 @@ public final class EntityJournal {
 
     public static void onJump() {
         discardLive();
+        discardClouds();
         rebuildUpcoming();
         long now = TimeTravel.timelineTick;
         for (Entry e : new ArrayList<>(entries)) {
@@ -160,6 +196,22 @@ public final class EntityJournal {
             if (entity != null) entity.discard();
         }
         live.clear();
+    }
+
+    private static void discardClouds() {
+        long now = TimeTravel.timelineTick;
+        Iterator<Map.Entry<UUID, CloudRef>> it = clouds.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, CloudRef> en = it.next();
+            ServerLevel level = levelOf(en.getValue().dim());
+            Entity cloud = level == null ? null : level.getEntity(en.getKey());
+            if (cloud == null || cloud.isRemoved()) {
+                it.remove();
+            } else if (en.getValue().tick() > now) {
+                cloud.discard();
+                it.remove();
+            }
+        }
     }
 
     public static void rebuildUpcoming() {
@@ -213,6 +265,7 @@ public final class EntityJournal {
         entries.clear();
         upcoming.clear();
         live.clear();
+        clouds.clear();
         nextSeq = 0;
         Path f = file();
         if (Files.exists(f)) {
@@ -246,6 +299,7 @@ public final class EntityJournal {
 
     public static void clear() {
         discardLive();
+        clouds.clear();
         entries.clear();
         upcoming.clear();
         nextSeq = 0;

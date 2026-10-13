@@ -28,6 +28,9 @@ import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.CampfireBlockEntity;
+import net.minecraft.world.level.block.entity.LecternBlockEntity;
+import net.minecraft.world.level.block.entity.SpawnerBlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonHeadBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -61,13 +64,15 @@ public final class BlockJournal {
         boolean root;
         String oldItems;
         String newItems;
+        String oldData;
+        String newData;
         transient BlockState oldParsed;
         transient BlockState newParsed;
     }
 
     private record Watch(ServerLevel level, List<BlockPos> positions) {}
 
-    private record ContainerWatch(ServerPlayer player, ServerLevel level, int visit, Map<BlockPos, List<ItemStack>> last) {}
+    private record ContainerWatch(ServerPlayer player, ServerLevel level, int visit, Map<BlockPos, List<ItemStack>> last, Map<BlockPos, String> data) {}
 
     private static final List<ContainerWatch> containerWatches = new ArrayList<>();
     private static final List<Entry> entries = new ArrayList<>();
@@ -221,6 +226,10 @@ public final class BlockJournal {
             applyContainer(e, true);
             return;
         }
+        if (e.oldData != null) {
+            applyData(e, true);
+            return;
+        }
         try {
             ServerLevel level = levelOf(e.dim);
             BlockState state = newState(e);
@@ -267,6 +276,10 @@ public final class BlockJournal {
     private static void apply(Entry e, boolean toNew) {
         if (e.oldItems != null) {
             applyContainer(e, toNew);
+            return;
+        }
+        if (e.oldData != null) {
+            applyData(e, toNew);
             return;
         }
         applying = true;
@@ -347,6 +360,7 @@ public final class BlockJournal {
 
     private static void watchContainers(ServerPlayer player, ServerLevel level, BlockPos center, int visitId) {
         Map<BlockPos, List<ItemStack>> snapshot = new HashMap<>();
+        Map<BlockPos, String> data = new HashMap<>();
         List<BlockPos> candidates = new ArrayList<>();
         candidates.add(center.immutable());
         for (Direction d : Direction.Plane.HORIZONTAL) {
@@ -356,10 +370,12 @@ public final class BlockJournal {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof Container container) {
                 snapshot.put(pos.immutable(), copyOf(container));
+            } else if (isDataEntity(be)) {
+                data.put(pos.immutable(), dataOf(be));
             }
         }
-        if (!snapshot.isEmpty()) {
-            containerWatches.add(new ContainerWatch(player, level, visitId, snapshot));
+        if (!snapshot.isEmpty() || !data.isEmpty()) {
+            containerWatches.add(new ContainerWatch(player, level, visitId, snapshot, data));
         }
     }
 
@@ -400,10 +416,59 @@ public final class BlockJournal {
 
                 e.setValue(now);
             }
+            for (Map.Entry<BlockPos, String> e : w.data().entrySet()) {
+                BlockEntity be = w.level().getBlockEntity(e.getKey());
+                if (!isDataEntity(be)) continue;
 
+                String now = dataOf(be);
+                if (now.equals(e.getValue())) continue;
+
+                Entry entry = new Entry();
+                entry.dim = dim;
+                entry.x = e.getKey().getX();
+                entry.y = e.getKey().getY();
+                entry.z = e.getKey().getZ();
+                entry.oldData = e.getValue();
+                entry.newData = now;
+                entry.tick = TimeTravel.timelineTick;
+                entry.seq = nextSeq++;
+                entry.visit = w.visit();
+                entry.root = true;
+                entries.add(entry);
+                dirty = true;
+
+                e.setValue(now);
+            }
             if (w.player().isRemoved() || w.player().containerMenu == w.player().inventoryMenu) {
                 it.remove();
             }
+        }
+    }
+
+    private static boolean isDataEntity(BlockEntity be) {
+        return be instanceof SpawnerBlockEntity || be instanceof CampfireBlockEntity || be instanceof LecternBlockEntity;
+    }
+
+    private static String dataOf(BlockEntity be) {
+        return be.saveWithFullMetadata(TimeTravel.server.registryAccess()).toString();
+    }
+
+    private static void applyData(Entry e, boolean toNew) {
+        try {
+            ServerLevel level = levelOf(e.dim);
+            if (level == null) return;
+
+            BlockPos pos = new BlockPos(e.x, e.y, e.z);
+            BlockEntity be = level.getBlockEntity(pos);
+            if (!isDataEntity(be)) return;
+
+            CompoundTag tag = TagParser.parseTag(toNew ? e.newData : e.oldData);
+            be.loadWithComponents(tag, TimeTravel.server.registryAccess());
+            be.setChanged();
+            BlockState state = level.getBlockState(pos);
+            level.sendBlockUpdated(pos, state, state, Block.UPDATE_CLIENTS);
+        } catch (Exception ex) {
+            TimeTravel.LOOP_LOGGER.error("Failed to apply block entity journal entry at {} {} {}", e.x, e.y, e.z, ex);
         }
     }
 

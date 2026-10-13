@@ -45,7 +45,9 @@ public class LifecycleEvent {
         EntityJournal.load();
         EffectJournal.load();
         MobJournal.load();
+        MobBinding.load();
         ChatTimeline.load();
+        AdvancementTimeline.load();
 
         TimeTravel.server = server;
         TimeTravel.serverLevel = server.overworld();

@@ -76,7 +76,7 @@ public class TimeTravelFabric implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(ToggleTimelinePayload.TYPE,
                 (payload, context) -> TimelineNet.handleToggleRequest(context.player()));
 
-        ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> MobJournal.onEntityDeath(entity));
+        ServerLivingEntityEvents.AFTER_DEATH.register(MobJournal::onEntityDeath);
 
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) ->
                 ChatTimeline.onPlayerChat(sender, message.signedContent()));

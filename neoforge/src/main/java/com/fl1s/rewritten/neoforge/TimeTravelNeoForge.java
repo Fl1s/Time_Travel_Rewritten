@@ -96,7 +96,7 @@ public class TimeTravelNeoForge {
 
     @SubscribeEvent
     public void onLivingDeath(LivingDeathEvent event) {
-        MobJournal.onEntityDeath(event.getEntity());
+        MobJournal.onEntityDeath(event.getEntity(), event.getSource());
     }
 
     @SubscribeEvent

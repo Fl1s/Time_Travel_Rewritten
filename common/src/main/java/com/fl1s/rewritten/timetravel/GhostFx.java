@@ -24,6 +24,8 @@ public final class GhostFx {
     public long graceUntil = -1;
     private boolean hasLast;
     private double lastX, lastZ;
+    private double lastY;
+    private int fallTicks;
     private float moveDist;
     private float nextStep = 1.0f;
     private int useTicks;
@@ -37,12 +39,29 @@ public final class GhostFx {
         return entity instanceof LivingEntity living && !entity.isRemoved() && living.isDeadOrDying();
     }
 
+    public Entity entity() {
+        return entity;
+    }
+
+    public boolean falling() {
+        return fallTicks >= 2;
+    }
+
     public void tick() {
         if (entity == null || entity.isRemoved() || !(entity.level() instanceof ServerLevel level)) return;
         if (entity.getY() > 100000) {
             hasLast = false;
+            fallTicks = 0;
             return;
         }
+        if (hasLast) {
+            double dy = entity.getY() - lastY;
+            fallTicks = (dy < -0.03 && !entity.isInWater()) ? fallTicks + 1 : 0;
+        } else {
+            fallTicks = 0;
+        }
+        lastY = entity.getY();
+
         footsteps(level);
         eating(level);
     }
