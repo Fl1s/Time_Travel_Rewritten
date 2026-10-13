@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
  - Better past selves advancement tracking
+ - Optimized simple voice chat
+ - Timeline spawn queue
 
 ### Fixed
 
@@ -21,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - TNT and its cascading changes (affected blocks)
  - Redstone and mechanisms animation & state update
  - Record blocks data
+ - Time travel data leak across the worlds
+ - Container dupe
+ - Timeline mob spawning
+
 
 ### [Contributors]
  - Fl1s

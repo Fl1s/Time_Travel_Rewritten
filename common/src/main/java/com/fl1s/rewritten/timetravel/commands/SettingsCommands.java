@@ -197,7 +197,6 @@ public class SettingsCommands {
         Skin finalSkin = new Skin();
         String rawSkinValue;
         try {
-            // Do NOT lowercase - MineSkin URLs and file names are case-sensitive.
             rawSkinValue = StringArgumentType.getString(context, "newSkin").replace(" ", "");
         } catch (Exception e) {
             rawSkinValue = newName;
