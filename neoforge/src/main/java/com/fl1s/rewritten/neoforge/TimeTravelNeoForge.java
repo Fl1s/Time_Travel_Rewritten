@@ -2,6 +2,7 @@ package com.fl1s.rewritten.neoforge;
 
 import com.fl1s.rewritten.timetravel.commands.LoopCommands;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
 import com.fl1s.rewritten.neoforge.events.*;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.server.MinecraftServer;
@@ -193,7 +194,7 @@ public class TimeTravelNeoForge {
     @SubscribeEvent
     public void onEntityJoinLevel(EntityJoinLevelEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            if (player.getClass().getName().contains("FakePlayer")) {
+            if (Ghosts.is(player)) {
                 try {
                     Connection conn = player.connection.getConnection();
                     if (conn.channel() == null) {

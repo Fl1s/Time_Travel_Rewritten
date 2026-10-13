@@ -3,14 +3,13 @@ package com.fl1s.rewritten.timetravel;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.util.Levels;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.TagParser;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -104,7 +103,7 @@ public final class MobJournal {
 
     private static boolean isReplayEntity(Entity e) {
         if (e == null) return false;
-        if (e.getClass().getName().contains("FakePlayer")) return true;
+        if (Ghosts.is(e)) return true;
         return e instanceof PrimedTnt && e.getTags().contains(EntityJournal.TAG);
     }
 
@@ -124,7 +123,7 @@ public final class MobJournal {
         ServerPlayer nearest = null;
         double best = RANGE * RANGE;
         for (ServerPlayer p : level.players()) {
-            if (p.getClass().getName().contains("FakePlayer")) continue;
+            if (Ghosts.is(p)) continue;
             double d = p.distanceToSqr(entity);
             if (d < best) {
                 best = d;
@@ -165,7 +164,7 @@ public final class MobJournal {
 
     public static void track(Mob mob, Entity who) {
         if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
-        if (!(who instanceof ServerPlayer sp) || sp.getClass().getName().contains("FakePlayer")) return;
+        if (!(who instanceof ServerPlayer sp) || Ghosts.is(sp)) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
         if (trails.containsKey(mob.getUUID()) || trails.size() >= TRAIL_TRACKED_MAX) return;
         PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(sp.getGameProfile().getName());
@@ -195,7 +194,7 @@ public final class MobJournal {
         while (it.hasNext()) {
             Map.Entry<UUID, Trail> en = it.next();
             Trail t = en.getValue();
-            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim)));
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(t.dim));
             Entity m = level == null ? null : level.getEntity(en.getKey());
             if (m == null || m.isRemoved()) {
                 it.remove();
@@ -249,7 +248,7 @@ public final class MobJournal {
         long now = TimeTravel.timelineTick;
         for (Entry e : upcoming) {
             if (e.trail == null || e.trail.isEmpty() || now < e.trail.get(0).tick || now >= e.tick) continue;
-            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
             if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || !mob.isAlive()) continue;
 
@@ -292,7 +291,7 @@ public final class MobJournal {
             Vec3 target = trailed ? positionAt(e, due) : deathPos(e);
             if (target == null) continue;
 
-            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
             if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || mob.isRemoved()) continue;
 
@@ -321,7 +320,7 @@ public final class MobJournal {
 
     private static boolean seenByRealPlayer(ServerLevel level, Vec3 p) {
         for (ServerPlayer sp : level.players()) {
-            if (sp.getClass().getName().contains("FakePlayer") || sp.isSpectator()) continue;
+            if (Ghosts.is(sp) || sp.isSpectator()) continue;
             if (sp.distanceToSqr(p) <= NEAR_PLAYER * NEAR_PLAYER) return true;
         }
         return false;
@@ -369,7 +368,7 @@ public final class MobJournal {
 
     private static void apply(Entry e, boolean die, boolean effects) {
         try {
-            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) return;
 
             Entity existing = level.getEntity(UUID.fromString(e.uuid));
@@ -421,7 +420,7 @@ public final class MobJournal {
 
     public static boolean shouldShield(LivingEntity victim, DamageSource source) {
         if (!TimeTravel.isLooping) return false;
-        if (!(victim instanceof ServerPlayer) || !victim.getClass().getName().contains("FakePlayer")) return false;
+        if (!(victim instanceof ServerPlayer) || !Ghosts.is(victim)) return false;
         return isDoomed(source.getEntity()) || isDoomed(source.getDirectEntity());
     }
 
@@ -448,7 +447,7 @@ public final class MobJournal {
 
     private static void release(Entry e) {
         try {
-            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) return;
             if (level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob && !mob.isRemoved()) {
                 mob.getNavigation().stop();
@@ -509,45 +508,4 @@ public final class MobJournal {
         dirty = true;
         save();
     }
-
-    public static void fastForward(long from, long to) {
-        if (to <= from) return;
-        PriorityQueue<Due> q = new PriorityQueue<>(Comparator.comparingLong(Due::tick));
-        Set<UUID> seen = new HashSet<>();
-        collect(from, to, q, seen);
-        int guard = 0;
-        try {
-            while (!q.isEmpty() && guard++ < 512) {
-                Due d = q.poll();
-                if (d.tnt().isRemoved()) continue;
-                TimeTravel.timelineTick = d.tick();
-                d.tnt().setFuse(1);
-                d.tnt().tick();
-                collect(d.tick(), to, q, seen);
-            }
-        } finally {
-            TimeTravel.timelineTick = from;
-        }
-    }
-
-    private static void collect(long base, long to, PriorityQueue<Due> q, Set<UUID> seen) {
-        for (Map.Entry<UUID, String> en : new ArrayList<>(live.entrySet())) {
-            if (seen.contains(en.getKey())) continue;
-            ServerLevel level = levelOf(en.getValue());
-            if (level == null) continue;
-            if (level.getEntity(en.getKey()) instanceof PrimedTnt t) {
-                seen.add(t.getUUID());
-                long due = base + t.getFuse();
-                if (due <= to) q.add(new Due(due, t));
-            }
-        }
-    }
-
-    private record Due(long tick, PrimedTnt tnt) {}
-
-    private static ServerLevel levelOf(String dim) {
-        return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dim)));
-    }
-
-    private static final Map<UUID, String> live = new HashMap<>();
 }

@@ -1,11 +1,9 @@
 package com.fl1s.rewritten.timetravel;
 
+import com.fl1s.rewritten.timetravel.util.Levels;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -45,7 +43,7 @@ public final class ProcessJournal {
     }
 
     private static ServerLevel levelOf(Key k) {
-        return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(k.dim())));
+        return TimeTravel.server.getLevel(Levels.key(k.dim()));
     }
 
     private static BlockEntity beAt(ServerLevel level, Key k) {

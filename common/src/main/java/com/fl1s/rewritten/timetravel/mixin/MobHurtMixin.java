@@ -4,6 +4,7 @@ import com.fl1s.rewritten.timetravel.GhostFx;
 import com.fl1s.rewritten.timetravel.MobBinding;
 import com.fl1s.rewritten.timetravel.MobJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -58,7 +59,7 @@ public abstract class MobHurtMixin {
     private static float tt$crit(LivingEntity victim, DamageSource src, float amount) {
         Entity a = src.getEntity();
         if (a == null || src.getDirectEntity() != a || a == victim) return amount;
-        if (!(a instanceof ServerPlayer sp) || !a.getClass().getName().contains("FakePlayer")) return amount;
+        if (!(a instanceof ServerPlayer sp) || !Ghosts.is(a)) return amount;
         if (!src.is(DamageTypes.PLAYER_ATTACK) || sp.isSprinting()) return amount;
         if (a.fallDistance > 0.0f && !a.onGround()) return amount;
         GhostFx fx = TimeTravel.fxOf(a);
@@ -74,7 +75,7 @@ public abstract class MobHurtMixin {
 
     @Unique
     private static boolean tt$cloneBlocks(LivingEntity self, DamageSource source) {
-        if (!(self instanceof ServerPlayer) || !self.getClass().getName().contains("FakePlayer")) return false;
+        if (!(self instanceof ServerPlayer) || !Ghosts.is(self)) return false;
         if (!self.isUsingItem()) return false;
         ItemStack use = self.getUseItem();
         boolean shield = use.is(Items.SHIELD)

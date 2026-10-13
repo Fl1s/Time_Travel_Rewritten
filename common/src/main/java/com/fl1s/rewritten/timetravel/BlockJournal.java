@@ -3,6 +3,8 @@ package com.fl1s.rewritten.timetravel;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.util.Levels;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -10,8 +12,6 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
@@ -104,7 +104,7 @@ public final class BlockJournal {
 
     public static void watch(ServerPlayer player, BlockPos center) {
         if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
-        if (player.getClass().getName().contains("FakePlayer")) return;
+        if (Ghosts.is(player)) return;
         PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
 
@@ -193,7 +193,7 @@ public final class BlockJournal {
     static PlayerData nearestRecorder(ServerLevel level, BlockPos pos) {
         double cx = pos.getX() + 0.5, cy = pos.getY() + 0.5, cz = pos.getZ() + 0.5;
         for (ServerPlayer p : level.players()) {
-            if (p.getClass().getName().contains("FakePlayer")) continue;
+            if (Ghosts.is(p)) continue;
             if (p.distanceToSqr(cx, cy, cz) > TRACK_RANGE_SQ) continue;
             PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(p.getName().getString());
             if (pd != null && pd.getActive() && pd.getCurrentVisit() != null) return pd;
@@ -211,7 +211,7 @@ public final class BlockJournal {
     }
 
     private static ServerLevel levelOf(String dim) {
-        return TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dim)));
+        return TimeTravel.server.getLevel(Levels.key(dim));
     }
 
     public static void tick() {

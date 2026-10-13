@@ -4,10 +4,10 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.util.Levels;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.server.MinecraftServer;
@@ -697,7 +697,7 @@ public class TimeTravel {
 
 	private static void playTimeSound(PendingSound s) {
 		try {
-			ServerLevel level = server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(s.dim())));
+			ServerLevel level = server.getLevel(Levels.key(s.dim()));
 			if (level == null) return;
 			if (s.dir() > 0) {
 				level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.6f, 1.7f);
@@ -768,7 +768,7 @@ public class TimeTravel {
 	}
 
 	private static boolean isGhost(ServerPlayer player) {
-		return player.getClass().getName().contains("FakePlayer");
+		return Ghosts.is(player);
 	}
 
 	public static int visitIdOf(Entity entity) {
