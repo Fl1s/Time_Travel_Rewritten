@@ -35,6 +35,10 @@ public final class MobJournal {
     private MobJournal() {}
 
     private static final double RANGE = 96.0;
+    private static final long STEER_WINDOW = 1200;
+    private static final long GLIDE_TICKS = 10;
+    private static final double MAX_SPEED_MOD = 4.0;
+    private static final double NEAR_PLAYER = 48.0;
     private static final Gson GSON = new GsonBuilder().create();
     private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {}.getType();
 
@@ -50,6 +54,7 @@ public final class MobJournal {
     }
 
     private static final List<Entry> entries = new ArrayList<>();
+    private static final Map<String, Entry> canon = new HashMap<>();
     private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
     private static long nextSeq = 0;
@@ -57,6 +62,21 @@ public final class MobJournal {
 
     public static void onEntityDeath(LivingEntity entity) {
         onEntityDeath(entity, false);
+    }
+
+    public static void onEntityDeath(LivingEntity entity, DamageSource src) {
+        onEntityDeath(entity, src, false);
+    }
+
+    public static void onEntityDeath(LivingEntity entity, DamageSource src, boolean explode) {
+        if (src != null && (isReplayEntity(src.getEntity()) || isReplayEntity(src.getDirectEntity()))) return;
+        onEntityDeath(entity, explode);
+    }
+
+    private static boolean isReplayEntity(Entity e) {
+        if (e == null) return false;
+        if (e.getClass().getName().contains("FakePlayer")) return true;
+        return e instanceof PrimedTnt && e.getTags().contains(EntityJournal.TAG);
     }
 
     public static void onEntityDeath(LivingEntity entity, boolean explode) {
@@ -97,54 +117,94 @@ public final class MobJournal {
         entry.nbt = tag.toString();
         entry.explode = explode;
         entries.add(entry);
+        canon.put(uuid, entry);
         dirty = true;
-    }
-
-    private static Collection<Entry> canonical() {
-        Map<String, Entry> m = new HashMap<>();
-        for (Entry e : entries) {
-            m.merge(e.uuid, e, (a, b) ->
-                    (a.tick != b.tick ? a.tick < b.tick : a.seq < b.seq) ? a : b);
-        }
-        return m.values();
-    }
-
-    public static void onEntityDeath(LivingEntity entity, DamageSource src) {
-        onEntityDeath(entity, src, false);
-    }
-
-    public static void onEntityDeath(LivingEntity entity, DamageSource src, boolean explode) {
-        if (src != null) {
-            Entity killer = src.getEntity();
-            Entity direct = src.getDirectEntity();
-            if (isReplayEntity(killer) || isReplayEntity(direct)) return;
-        }
-        onEntityDeath(entity, explode);
-    }
-
-    private static boolean isReplayEntity(Entity e) {
-        if (e == null) return false;
-        if (e.getClass().getName().contains("FakePlayer")) return true;
-        return e instanceof PrimedTnt && e.getTags().contains(EntityJournal.TAG);
     }
 
     public static void tick() {
         while (!upcoming.isEmpty() && upcoming.peek().tick <= TimeTravel.timelineTick) {
             apply(upcoming.poll(), true, true);
         }
-        if (TimeTravel.timelineTick % 5 == 0) steer();
+        steer(TimeTravel.timelineTick % 5 == 0);
+    }
+
+    private static Vec3 deathPos(Entry e) {
+        if (e.deathPos == null) {
+            try {
+                ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
+                e.deathPos = new Vec3(p.getDouble(0), p.getDouble(1), p.getDouble(2));
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+        return e.deathPos;
+    }
+
+    private static void steer(boolean nav) {
+        long now = TimeTravel.timelineTick;
+        for (Entry e : upcoming) {
+            long remaining = e.tick - now;
+            if (remaining <= 0 || remaining > STEER_WINDOW) continue;
+            if (remaining > GLIDE_TICKS && !nav) continue;
+
+            Vec3 target = deathPos(e);
+            if (target == null) continue;
+
+            ServerLevel level = TimeTravel.server.getLevel(
+                    ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            if (level == null) continue;
+            if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || mob.isRemoved()) continue;
+
+            Vec3 pos = mob.position();
+            double dist = pos.distanceTo(target);
+            if (dist < 1.5) continue;
+
+            if (remaining <= GLIDE_TICKS) {
+                mob.getNavigation().stop();
+                if (level.getNearestPlayer(pos.x, pos.y, pos.z, NEAR_PLAYER, false) == null) {
+                    mob.teleportTo(target.x, target.y, target.z);
+                } else {
+                    Vec3 next = pos.add(target.subtract(pos).scale(1.0 / remaining));
+                    mob.moveTo(next.x, next.y, next.z, mob.getYRot(), mob.getXRot());
+                    mob.setDeltaMovement(Vec3.ZERO);
+                }
+                continue;
+            }
+
+            double base = Math.max(0.05, mob.getAttributeValue(Attributes.MOVEMENT_SPEED));
+            double needed = dist / (remaining - GLIDE_TICKS);
+            double modifier = needed / base;
+            if (modifier > 0.6) {
+                mob.getNavigation().moveTo(target.x, target.y, target.z,
+                        Math.min(MAX_SPEED_MOD, Math.max(1.0, modifier)));
+            }
+        }
     }
 
     public static void onJump(long from, long to) {
-        for (Entry e : canonical()) {
+        for (Entry e : canon.values()) {
             apply(e, e.tick <= to, false);
         }
         rebuildUpcoming();
     }
 
     public static void rebuildUpcoming() {
+        rebuildCanon();
         upcoming.clear();
-        for (Entry e : canonical()) if (e.tick > TimeTravel.timelineTick) upcoming.add(e);
+        for (Entry e : canon.values()) if (e.tick > TimeTravel.timelineTick) upcoming.add(e);
+    }
+
+    private static void rebuildCanon() {
+        canon.clear();
+        for (Entry e : entries) {
+            canon.merge(e.uuid, e, (a, b) ->
+                    (a.tick != b.tick ? a.tick < b.tick : a.seq < b.seq) ? a : b);
+        }
+    }
+
+    public static int ownerVisit(UUID uuid) {
+        Entry e = canon.get(uuid.toString());
+        return (e != null && e.tick > TimeTravel.timelineTick) ? e.visit : -1;
     }
 
     private static void apply(Entry e, boolean die, boolean effects) {
@@ -173,54 +233,12 @@ public final class MobJournal {
             CompoundTag tag = TagParser.parseTag(e.nbt);
             ListTag pos = tag.getList("Pos", 6);
             if (pos.size() < 3 || !level.isLoaded(BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2)))) return;
+
             TimeTravel.LOOP_LOGGER.info("Revive {} (visit {}) deathTick={} now={}", e.uuid, e.visit, e.tick, TimeTravel.timelineTick);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived != null) level.addFreshEntity(revived);
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply mob journal entry {}", e.uuid, ex);
-        }
-    }
-
-    private static Vec3 deathPos(Entry e) {
-        if (e.deathPos == null) {
-            try {
-                ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
-                e.deathPos = new Vec3(p.getDouble(0), p.getDouble(1), p.getDouble(2));
-            } catch (Exception ex) {
-                return null;
-            }
-        }
-        return e.deathPos;
-    }
-
-    private static void steer() {
-        long now = TimeTravel.timelineTick;
-        for (Entry e : upcoming) {
-            long remaining = e.tick - now;
-            if (remaining <= 0 || remaining > 1200) continue;
-
-            Vec3 target = deathPos(e);
-            if (target == null) continue;
-
-            ServerLevel level = TimeTravel.server.getLevel(
-                    ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
-            if (level == null) continue;
-            if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || mob.isRemoved()) continue;
-
-            double dist = mob.position().distanceTo(target);
-            if (dist < 1.5) continue;
-
-            if (remaining <= 10) {
-                mob.getNavigation().stop();
-                mob.teleportTo(target.x, target.y, target.z);
-                continue;
-            }
-
-            double speed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED);
-            double reach = speed * (remaining - 10);
-            if (dist > reach * 0.6) {
-                mob.getNavigation().moveTo(target.x, target.y, target.z, 1.3);
-            }
         }
     }
 
@@ -231,12 +249,9 @@ public final class MobJournal {
     }
 
     public static boolean isDoomed(Entity attacker) {
-        if (!(attacker instanceof net.minecraft.world.entity.Mob)) return false;
-        String uuid = attacker.getUUID().toString();
-        for (Entry e : entries) {
-            if (e.tick > TimeTravel.timelineTick && e.uuid.equals(uuid)) return true;
-        }
-        return false;
+        if (!(attacker instanceof Mob)) return false;
+        Entry e = canon.get(attacker.getUUID().toString());
+        return e != null && e.tick > TimeTravel.timelineTick;
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
@@ -246,6 +261,7 @@ public final class MobJournal {
         for (Entry e : mine) if (e.tick <= TimeTravel.timelineTick) apply(e, false, false);
         entries.removeAll(mine);
         upcoming.removeAll(mine);
+        rebuildCanon();
         dirty = true;
     }
 
@@ -256,6 +272,7 @@ public final class MobJournal {
     public static void load() {
         entries.clear();
         upcoming.clear();
+        canon.clear();
         nextSeq = 0;
         Path f = file();
         if (Files.exists(f)) {
@@ -290,6 +307,7 @@ public final class MobJournal {
     public static void clear() {
         entries.clear();
         upcoming.clear();
+        canon.clear();
         nextSeq = 0;
         dirty = true;
         save();
