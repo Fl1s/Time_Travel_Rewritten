@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "com.fl1s.rewritten.timetravel.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["ServerLevelMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

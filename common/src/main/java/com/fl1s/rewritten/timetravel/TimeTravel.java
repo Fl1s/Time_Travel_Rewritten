@@ -136,6 +136,7 @@ public class TimeTravel {
 		needsRebuild = true;
 		BlockJournal.rebuildUpcoming();
 		MobJournal.rebuildUpcoming();
+		EffectJournal.rebuildUpcoming();
 		ProcessJournal.rebuildUpcoming();
 		ChatTimeline.rebuildUpcoming();
 		config.save();
@@ -154,6 +155,7 @@ public class TimeTravel {
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
+		EffectJournal.save();
 
 		isLooping = false;
 		config.isLooping = false;
@@ -174,6 +176,7 @@ public class TimeTravel {
 		MobJournal.clear();
 		ProcessJournal.clear();
 		ChatTimeline.clear();
+		EffectJournal.clear();
 		VoicechatCompat.deleteAllAudio();
 		loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
@@ -228,6 +231,7 @@ public class TimeTravel {
 
 		BlockJournal.onJump(from, target);
 		MobJournal.onJump(from, target);
+		EffectJournal.rebuildUpcoming();
 		ProcessJournal.afterJump(from, target);
 		ChatTimeline.onJump(target);
 
@@ -281,6 +285,7 @@ public class TimeTravel {
 		MobJournal.tick();
 		ProcessJournal.tick();
 		ChatTimeline.tick();
+		EffectJournal.tick();
 		if (syncDayTime) {
 			serverLevel.setDayTime(dayTimeOrigin + timelineTick);
 		}
@@ -298,6 +303,7 @@ public class TimeTravel {
 			BlockJournal.saveIfDirty();
 			MobJournal.saveIfDirty();
 			ChatTimeline.saveIfDirty();
+			EffectJournal.saveIfDirty();
 		}
 	}
 
@@ -347,6 +353,7 @@ public class TimeTravel {
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
+		EffectJournal.save();
 		if (worldFolder != null && config != null) config.save();
 		VoicechatInteractionCompat.clearCooldowns();
 	}
@@ -634,6 +641,7 @@ public class TimeTravel {
 		BlockJournal.eraseVisits(ids);
 		MobJournal.eraseVisits(ids);
 		ChatTimeline.eraseVisits(ids);
+		EffectJournal.eraseVisits(ids);
 		ChatTimeline.resend(timelineTick);
 
 		loopSceneManager.saveRecordingPlayers();

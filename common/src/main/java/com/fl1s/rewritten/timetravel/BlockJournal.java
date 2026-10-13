@@ -189,17 +189,8 @@ public final class BlockJournal {
                 level.removeBlockEntity(pos);
             }
 
-            if (effects && !current.isAir() && state.isAir()) {
-                level.destroyBlock(pos, false);
-            } else {
-                level.setBlock(pos, state, SET_FLAGS);
-                if (effects && current.isAir() && !state.isAir()) {
-                    SoundType type = state.getSoundType();
-                    level.playSound(null, pos, type.getPlaceSound(), SoundSource.BLOCKS,
-                            (type.getVolume() + 1.0f) / 2.0f, type.getPitch() * 0.8f);
-                }
-                if (toNew) scheduleRelease(level, pos, state);
-            }
+            level.setBlock(pos, state, SET_FLAGS);
+            if (toNew) scheduleRelease(level, pos, state);
             touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);

@@ -13,6 +13,7 @@
 	"license": "${mod_license}",
 	"icon": "icon.png",
 	"environment": "*",
+	"mixins": ["timetravel_rewritten.mixins.json"],
 	"entrypoints": {
 		"main": [
 			"com.fl1s.rewritten.fabric.TimeTravelFabric"

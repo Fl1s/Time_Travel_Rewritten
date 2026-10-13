@@ -1,11 +1,6 @@
 package com.fl1s.rewritten.timetravel.events;
 
-import com.fl1s.rewritten.timetravel.BlockJournal;
-import com.fl1s.rewritten.timetravel.ChatTimeline;
-import com.fl1s.rewritten.timetravel.MobJournal;
-import com.fl1s.rewritten.timetravel.LoopSceneManager;
-import com.fl1s.rewritten.timetravel.TimeTravel;
-import com.fl1s.rewritten.timetravel.TimeTravelConfig;
+import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import net.minecraft.server.MinecraftServer;
@@ -47,6 +42,7 @@ public class LifecycleEvent {
 
         TimeTravel.loopSceneManager.setRecordingPlayers(c.recordingPlayers);
         BlockJournal.load();
+        EffectJournal.load();
         MobJournal.load();
         ChatTimeline.load();
 

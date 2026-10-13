@@ -1,0 +1,237 @@
+package com.fl1s.rewritten.timetravel;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.LidBlockEntity;
+import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
+
+import java.io.Reader;
+import java.io.Writer;
+import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+
+public final class EffectJournal {
+    private EffectJournal() {
+    }
+
+    private static final int SOUND = 0;
+    private static final int LEVEL_EVENT = 1;
+    private static final int BLOCK_EVENT = 2;
+    private static final int BLOCK_BREAK_EVENT = 2001;
+    private static final double NEAR_SQ = 8.0 * 8.0;
+    private static final Gson GSON = new GsonBuilder().create();
+    private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {
+    }.getType();
+
+    public static final class Entry {
+        int kind;
+        String dim;
+        double x, y, z;
+        String id;
+        String source;
+        float volume, pitch;
+        int a, b;
+        long tick;
+        long seq;
+        int visit;
+    }
+
+    private static final List<Entry> entries = new ArrayList<>();
+    private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
+    private static long nextSeq = 0;
+    private static boolean dirty = false;
+    private static boolean replaying = false;
+
+    public static void recordSound(ServerLevel level, Player except, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch) {
+        if (!TimeTravel.isLooping || replaying) return;
+        if (except == null && !containerAt(level, BlockPos.containing(x, y, z))) return;
+        PlayerData pd = recorder(level, except, x, y, z);
+        if (pd == null) return;
+        Optional<ResourceKey<SoundEvent>> key = sound.unwrapKey();
+        if (key.isEmpty()) return;
+
+        Entry e = create(SOUND, level, pd, x, y, z);
+        e.id = key.get().location().toString();
+        e.source = source.name();
+        e.volume = volume;
+        e.pitch = pitch;
+        add(e);
+    }
+
+    public static void recordLevelEvent(ServerLevel level, Player except, int type, BlockPos pos, int data) {
+        if (!TimeTravel.isLooping || replaying || except == null) return;
+        PlayerData pd = recorder(level, except, pos.getX(), pos.getY(), pos.getZ());
+        if (pd == null) return;
+
+        Entry e = create(LEVEL_EVENT, level, pd, pos.getX(), pos.getY(), pos.getZ());
+        e.a = type;
+        e.b = data;
+        add(e);
+    }
+
+    public static void recordBlockEvent(ServerLevel level, BlockPos pos, Block block, int a, int b) {
+        if (!TimeTravel.isLooping || replaying) return;
+        if (!level.isLoaded(pos)) return;
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof LidBlockEntity) && !(be instanceof ShulkerBoxBlockEntity)) return;
+        PlayerData pd = recorder(level, null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+        if (pd == null) return;
+
+        Entry e = create(BLOCK_EVENT, level, pd, pos.getX(), pos.getY(), pos.getZ());
+        e.id = BuiltInRegistries.BLOCK.getKey(block).toString();
+        e.a = a;
+        e.b = b;
+        add(e);
+    }
+
+    private static boolean containerAt(ServerLevel level, BlockPos pos) {
+        if (!level.isLoaded(pos)) return false;
+        return level.getBlockEntity(pos) instanceof Container;
+    }
+
+    private static boolean isGhost(Player p) {
+        return p.getClass().getName().contains("FakePlayer");
+    }
+
+    private static PlayerData recorder(ServerLevel level, Player except, double x, double y, double z) {
+        if (TimeTravel.loopSceneManager == null) return null;
+        ServerPlayer sp = null;
+        if (except != null) {
+            if (!(except instanceof ServerPlayer p) || isGhost(p)) return null;
+            sp = p;
+        } else {
+            for (ServerPlayer p : level.players()) {
+                if (isGhost(p)) continue;
+                if (p.distanceToSqr(x, y, z) <= NEAR_SQ) {
+                    sp = p;
+                    break;
+                }
+            }
+        }
+        if (sp == null) return null;
+        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(sp.getName().getString());
+        if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return null;
+        return pd;
+    }
+
+    private static Entry create(int kind, ServerLevel level, PlayerData pd, double x, double y, double z) {
+        Entry e = new Entry();
+        e.kind = kind;
+        e.dim = level.dimension().location().toString();
+        e.x = x;
+        e.y = y;
+        e.z = z;
+        e.tick = TimeTravel.timelineTick;
+        e.seq = nextSeq++;
+        e.visit = pd.getCurrentVisit().id;
+        return e;
+    }
+
+    private static void add(Entry e) {
+        entries.add(e);
+        dirty = true;
+    }
+
+    public static void tick() {
+        while (!upcoming.isEmpty() && upcoming.peek().tick <= TimeTravel.timelineTick) {
+            play(upcoming.poll());
+        }
+    }
+
+    public static void rebuildUpcoming() {
+        upcoming.clear();
+        for (Entry e : entries) {
+            if (e.tick > TimeTravel.timelineTick) upcoming.add(e);
+        }
+    }
+
+    private static void play(Entry e) {
+        ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+        if (level == null) return;
+        replaying = true;
+        try {
+            switch (e.kind) {
+                case SOUND ->
+                        BuiltInRegistries.SOUND_EVENT.getOptional(ResourceLocation.parse(e.id)).ifPresent(se -> level.playSound(null, e.x, e.y, e.z, se, SoundSource.valueOf(e.source), e.volume, e.pitch));
+                case LEVEL_EVENT -> level.levelEvent(null, e.a, BlockPos.containing(e.x, e.y, e.z), e.b);
+                case BLOCK_EVENT ->
+                        BuiltInRegistries.BLOCK.getOptional(ResourceLocation.parse(e.id)).ifPresent(block -> level.blockEvent(BlockPos.containing(e.x, e.y, e.z), block, e.a, e.b));
+                default -> {
+                }
+            }
+        } catch (Exception ex) {
+            TimeTravel.LOOP_LOGGER.error("Failed to replay effect at {} {} {}", e.x, e.y, e.z, ex);
+        } finally {
+            replaying = false;
+        }
+    }
+
+    public static void eraseVisits(Set<Integer> visitIds) {
+        entries.removeIf(e -> visitIds.contains(e.visit));
+        upcoming.removeIf(e -> visitIds.contains(e.visit));
+        dirty = true;
+    }
+
+    private static Path file() {
+        return TimeTravel.worldFolder.resolve("timetravel_rewritten_effects.json");
+    }
+
+    public static void load() {
+        entries.clear();
+        upcoming.clear();
+        nextSeq = 0;
+        Path f = file();
+        if (Files.exists(f)) {
+            try (Reader r = Files.newBufferedReader(f)) {
+                List<Entry> loaded = GSON.fromJson(r, LIST_TYPE);
+                if (loaded != null) {
+                    entries.addAll(loaded);
+                    for (Entry e : loaded) nextSeq = Math.max(nextSeq, e.seq + 1);
+                }
+            } catch (Exception ex) {
+                TimeTravel.LOOP_LOGGER.error("Failed to load effect journal", ex);
+            }
+        }
+        dirty = false;
+        rebuildUpcoming();
+    }
+
+    public static void saveIfDirty() {
+        if (dirty) save();
+    }
+
+    public static void save() {
+        if (TimeTravel.worldFolder == null) return;
+        try (Writer w = Files.newBufferedWriter(file())) {
+            GSON.toJson(entries, LIST_TYPE, w);
+            dirty = false;
+        } catch (Exception ex) {
+            TimeTravel.LOOP_LOGGER.error("Failed to save effect journal", ex);
+        }
+    }
+
+    public static void clear() {
+        entries.clear();
+        upcoming.clear();
+        nextSeq = 0;
+        dirty = true;
+        save();
+    }
+}
