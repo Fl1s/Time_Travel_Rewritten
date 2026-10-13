@@ -33,18 +33,16 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
 
 public final class MobJournal {
-    private MobJournal() {
-    }
+    private MobJournal() {}
 
     private static final double RANGE = 96.0;
-    private static final long STEER_WINDOW = 1200;
     private static final long GLIDE_TICKS = 10;
-    private static final long NAV_TICKS = 200;
-
+    private static final long NAV_TICKS = 200;;
     private static final double MAX_SPEED_MOD = 4.0;
     private static final double NEAR_PLAYER = 48.0;
     private static final int TRAIL_STEP = 2;
@@ -73,14 +71,27 @@ public final class MobJournal {
         String nbt;
         boolean explode;
         List<Sample> trail;
+        Long spawnTick;
+        Double spawnX, spawnY, spawnZ;
         transient Vec3 deathPos;
     }
 
-    private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_mobs.json", new TypeToken<ArrayList<Entry>>() {
-    }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
+    private record Spawn(long tick, double x, double y, double z) {}
+
+    private static final Journal<Entry> STORE = new Journal<>(
+            "timetravel_rewritten_mobs.json",
+            new TypeToken<ArrayList<Entry>>() {}.getType(),
+            e -> e.tick,
+            e -> e.seq,
+            e -> e.visit);
 
     private static final Map<UUID, Entry> canon = new HashMap<>();
     private static final Map<UUID, Trail> trails = new HashMap<>();
+    private static final Map<UUID, Spawn> spawns = new HashMap<>();
+
+    private static final PriorityQueue<Entry> pendingSpawns = new PriorityQueue<>(
+            Comparator.comparingLong(e -> e.spawnTick == null ? Long.MAX_VALUE : e.spawnTick));
+
     private static boolean killing = false;
 
     public static boolean isKilling() {
@@ -111,6 +122,16 @@ public final class MobJournal {
         if (!(victim instanceof Mob) || !isDoomed(victim)) return amount;
         if (!isReplayEntity(src.getEntity()) && !isReplayEntity(src.getDirectEntity())) return amount;
         return Math.max(0.0f, Math.min(amount, victim.getHealth() - 1.0f));
+    }
+
+    public static void onEntitySpawn(ServerLevel level, Entity entity) {
+        if (!TimeTravel.isLooping || !(entity instanceof Mob)) return;
+        if (Ghosts.is(entity)) return;
+        UUID uuid = entity.getUUID();
+        if (spawns.containsKey(uuid) || canon.containsKey(uuid)) return;
+        spawns.put(uuid, new Spawn(
+                TimeTravel.timelineTick,
+                entity.getX(), entity.getY(), entity.getZ()));
     }
 
     public static void onEntityDeath(LivingEntity entity, boolean explode) {
@@ -151,7 +172,24 @@ public final class MobJournal {
         entry.uuid = uuid;
         entry.nbt = tag.toString();
         entry.explode = explode;
-        Trail trail = trails.remove(entity.getUUID());
+
+        Spawn newSpawn = spawns.remove(uuid);
+        if (newSpawn != null) {
+            entry.spawnTick = newSpawn.tick();
+            entry.spawnX = newSpawn.x();
+            entry.spawnY = newSpawn.y();
+            entry.spawnZ = newSpawn.z();
+        } else {
+            Entry prev = canon.get(uuid);
+            if (prev != null) {
+                entry.spawnTick = prev.spawnTick;
+                entry.spawnX = prev.spawnX;
+                entry.spawnY = prev.spawnY;
+                entry.spawnZ = prev.spawnZ;
+            }
+        }
+
+        Trail trail = trails.remove(uuid);
         if (trail != null) {
             addSample(trail, entity);
             entry.trail = new ArrayList<>(trail.samples);
@@ -230,11 +268,27 @@ public final class MobJournal {
     }
 
     private static Vec3 positionAt(Entry e, long tick) {
-        Sample s = sampleAt(e.trail, tick);
-        return s == null ? null : new Vec3(s.x, s.y, s.z);
+        boolean haveTrail = e.trail != null && !e.trail.isEmpty();
+        if (haveTrail && tick >= e.trail.get(0).tick) {
+            Sample s = sampleAt(e.trail, tick);
+            if (s != null) return new Vec3(s.x, s.y, s.z);
+        }
+        if (e.spawnX != null && e.spawnY != null && e.spawnZ != null) {
+            return new Vec3(e.spawnX, e.spawnY, e.spawnZ);
+        }
+        return null;
     }
 
     public static void tick() {
+        while (!pendingSpawns.isEmpty()) {
+            Entry e = pendingSpawns.peek();
+            if (e.spawnTick == null || e.spawnTick > TimeTravel.timelineTick) break;
+            pendingSpawns.poll();
+            if (e.tick > TimeTravel.timelineTick) {
+                apply(e, false, false);
+            }
+        }
+
         STORE.tick(e -> apply(e, true, true));
         drive();
         steer(TimeTravel.timelineTick % 5 == 0);
@@ -336,15 +390,24 @@ public final class MobJournal {
     public static void rebuildUpcoming() {
         rebuildCanon();
         STORE.upcoming().clear();
+        pendingSpawns.clear();
         for (Entry e : canon.values()) {
-            if (e.tick > TimeTravel.timelineTick) STORE.upcoming().add(e);
+            if (e.tick > TimeTravel.timelineTick) {
+                STORE.upcoming().add(e);
+                if (e.spawnTick != null
+                        && e.spawnTick > TimeTravel.timelineTick
+                        && e.spawnTick < e.tick) {
+                    pendingSpawns.add(e);
+                }
+            }
         }
     }
 
     private static void rebuildCanon() {
         canon.clear();
         for (Entry e : STORE.entries()) {
-            canon.merge(e.uuid, e, (a, b) -> (a.tick != b.tick ? a.tick < b.tick : a.seq < b.seq) ? a : b);
+            canon.merge(e.uuid, e, (a, b) ->
+                    (a.tick != b.tick ? a.tick < b.tick : a.seq < b.seq) ? a : b);
         }
     }
 
@@ -385,6 +448,10 @@ public final class MobJournal {
                 }
                 return;
             }
+            if (e.spawnTick != null && TimeTravel.timelineTick < e.spawnTick) {
+                if (existing != null && !existing.isRemoved()) existing.discard();
+                return;
+            }
 
             if (existing != null) {
                 if (existing instanceof LivingEntity living && living.isDeadOrDying()) existing.discard();
@@ -406,10 +473,10 @@ public final class MobJournal {
                 tag.put("Motion", still);
             }
             ListTag pos = tag.getList("Pos", 6);
-            if (pos.size() < 3 || !level.isLoaded(BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2))))
-                return;
+            if (pos.size() < 3 || !level.isLoaded(BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2)))) return;
 
-            TimeTravel.LOOP_LOGGER.info("Revive {} (visit {}) deathTick={} now={}", e.uuid, e.visit, e.tick, TimeTravel.timelineTick);
+            TimeTravel.LOOP_LOGGER.info("Revive {} (visit {}) spawnTick={} deathTick={} now={}",
+                    e.uuid, e.visit, e.spawnTick, e.tick, TimeTravel.timelineTick);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived != null) level.addFreshEntity(revived);
         } catch (Exception ex) {
@@ -461,12 +528,9 @@ public final class MobJournal {
     public static void load() {
         canon.clear();
         trails.clear();
+        spawns.clear();
         STORE.load();
-        STORE.upcoming().clear();
-        rebuildCanon();
-        for (Entry e : canon.values()) {
-            if (e.tick > TimeTravel.timelineTick) STORE.upcoming().add(e);
-        }
+        rebuildUpcoming();
     }
 
     public static void saveIfDirty() {
@@ -480,6 +544,8 @@ public final class MobJournal {
     public static void clear() {
         canon.clear();
         trails.clear();
+        spawns.clear();
+        pendingSpawns.clear();
         STORE.clear();
     }
 }

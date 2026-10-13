@@ -140,6 +140,7 @@ public final class EntityJournal {
     }
 
     private static void spawn(Entry e, int fuse) {
+        if (e.item && TimeTravel.trackItems) return;
         ServerLevel level = levelOf(e.dim);
         if (level == null) return;
         if (e.owner != null && !ownerPresent(level, e)) return;

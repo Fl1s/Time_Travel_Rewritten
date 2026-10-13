@@ -494,6 +494,17 @@ public final class BlockJournal {
         return tag.toString();
     }
 
+    private static List<ItemStack> parseItems(String tagStr, int size) {
+        NonNullList<ItemStack> list = NonNullList.withSize(size, ItemStack.EMPTY);
+        try {
+            CompoundTag tag = TagParser.parseTag(tagStr);
+            ContainerHelper.loadAllItems(tag, list, TimeTravel.server.registryAccess());
+        } catch (Exception ex) {
+            TimeTravel.LOOP_LOGGER.error("Failed to parse container items", ex);
+        }
+        return list;
+    }
+
     private static void applyContainer(Entry e, boolean toNew) {
         try {
             ServerLevel level = levelOf(e.dim);
@@ -502,10 +513,17 @@ public final class BlockJournal {
             BlockEntity be = level.getBlockEntity(new BlockPos(e.x, e.y, e.z));
             if (!(be instanceof Container container)) return;
 
-            CompoundTag tag = TagParser.parseTag(toNew ? e.newItems : e.oldItems);
-            NonNullList<ItemStack> list = NonNullList.withSize(container.getContainerSize(), ItemStack.EMPTY);
-            ContainerHelper.loadAllItems(tag, list, TimeTravel.server.registryAccess());
-            for (int i = 0; i < list.size(); i++) container.setItem(i, list.get(i));
+            int size = container.getContainerSize();
+            List<ItemStack> oldList = parseItems(e.oldItems, size);
+            List<ItemStack> newList = parseItems(e.newItems, size);
+
+            for (int i = 0; i < size; i++) {
+                ItemStack from = oldList.get(i);
+                ItemStack to = newList.get(i);
+                if (ItemStack.matches(from, to)) continue;
+                ItemStack target = toNew ? to : from;
+                container.setItem(i, target.copy());
+            }
             container.setChanged();
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply container journal entry at {} {} {}", e.x, e.y, e.z, ex);

@@ -5,6 +5,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.AbstractFurnaceBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.BrewingStandBlock;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BrewingStandBlockEntity;
@@ -154,8 +157,24 @@ public final class ProcessJournal {
             CompoundTag tag = TagParser.parseTag(nbt);
             be.loadWithComponents(tag, TimeTravel.server.registryAccess());
             be.setChanged();
+            syncBlockState(be);
         } catch (Exception e) {
             TimeTravel.LOOP_LOGGER.error("Failed to restore block entity state", e);
+        }
+    }
+
+    private static void syncBlockState(BlockEntity be) {
+        if (!(be.getLevel() instanceof ServerLevel level)) return;
+        if (!(be instanceof AbstractFurnaceBlockEntity)) return;
+
+        BlockPos pos = be.getBlockPos();
+        BlockState state = level.getBlockState(pos);
+        if (!state.hasProperty(AbstractFurnaceBlock.LIT)) return;
+
+        CompoundTag tag = be.saveWithoutMetadata(level.registryAccess());
+        boolean lit = tag.getShort("BurnTime") > 0;
+        if (state.getValue(AbstractFurnaceBlock.LIT) != lit) {
+            level.setBlock(pos, state.setValue(AbstractFurnaceBlock.LIT, lit), Block.UPDATE_ALL);
         }
     }
 
