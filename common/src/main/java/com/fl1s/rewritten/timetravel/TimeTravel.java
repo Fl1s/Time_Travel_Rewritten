@@ -93,215 +93,23 @@ public class TimeTravel {
 
 	//timeline contol
 	public static void startLoop() {
-		if (isLooping) {
-			LOOP_LOGGER.info("Timeline already running");
-			return;
-		}
-		if (!MocapAdapter.isReady()) {
-			LOOP_LOGGER.error("Mocap controller is not ready yet - cannot start timeline");
-			return;
-		}
-
-		isLooping = true;
-		config.isLooping = true;
-		dayTimeOrigin = serverLevel.getDayTime() - timelineTick;
-		config.dayTimeOrigin = dayTimeOrigin;
-
-		GhostManager ghosts = session().ghosts;
-		ghosts.setIdle(false);
-		ghosts.markNeedsRebuild();
-
-		VisitManager visits = session().visits;
-		forEachOnlineRecorded(visits::beginVisit);
-		BlockJournal.rebuildUpcoming();
-		MobJournal.rebuildUpcoming();
-		EntityJournal.rebuildUpcoming();
-		EffectJournal.rebuildUpcoming();
-		ProcessJournal.rebuildUpcoming();
-		ChatTimeline.rebuildUpcoming();
-		AdvancementTimeline.rebuildUpcoming();
-		ProcessJournal.snapshotOrigins(server.getPlayerList().getPlayers());
-		config.save();
-		broadcastSync();
-		LOOP_LOGGER.info("Timeline started at tick {}", timelineTick);
+		session().timeline.start();
 	}
 
 	public static void stopLoop() {
-		if (!isLooping) return;
-		LOOP_LOGGER.info("Stopping timeline at tick {}", timelineTick);
-
-		BlockJournal.flushWatches();
-		session().visits.endAllVisits();
-		session().ghosts.stopAll();
-		session().ghosts.clearPending();
-		BlockJournal.save();
-		MobJournal.save();
-		ChatTimeline.save();
-		AdvancementTimeline.save();
-		EntityJournal.save();
-		EffectJournal.save();
-		MobBinding.save();
-
-		isLooping = false;
-		config.isLooping = false;
-		config.timelineTick = timelineTick;
-		loopSceneManager.saveRecordingPlayers();
-		VoicechatInteractionCompat.clearCooldowns();
-		config.save();
-		broadcastSync();
+		session().timeline.stop();
 	}
 
 	public static void resetTimeline() {
-		stopLoop();
-		session().ghosts.stopAll();
-		session().ghosts.clearPending();
-
-		removeAllRecordings();
-		BlockJournal.clear();
-		MobJournal.clear();
-		ProcessJournal.clear();
-		ChatTimeline.clear();
-		AdvancementTimeline.clear();
-		EntityJournal.clear();
-		EffectJournal.clear();
-		MobBinding.clear();
-		VoicechatCompat.deleteAllAudio();
-		loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
-
-		timelineTick = 0;
-		config.timelineTick = 0;
-		config.nextVisitId = 1;
-		loopSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
-		session().lastJumpOrigin = -1;
-		session().ghosts.markNeedsRebuild();
-		config.save();
-		broadcastSync();
+		session().timeline.reset();
 	}
 
 	public static String jumpTo(long target, String initiatorName) {
-		if (!isLooping) return "Timeline is not running (use /timetravel start)";
-		if (!MocapAdapter.isReady()) return "Mocap is not ready yet";
-
-		target = Math.max(0, target);
-		if (maxJumpTicks > 0) {
-			long min = Math.max(0, timelineTick - maxJumpTicks);
-			long max = timelineTick + maxJumpTicks;
-			target = Math.min(max, Math.max(min, target));
-		}
-		if (target == timelineTick) return "Already at " + TimeFormat.clock(target);
-
-		PlayerData initiatorPd = loopSceneManager.getRecordingPlayer(initiatorName);
-		long nowServerTick = server.getTickCount();
-		if (initiatorPd != null) {
-			if (jumpCooldownTicks > 0 && initiatorPd.getLastJumpServerTick() >= 0 && nowServerTick - initiatorPd.getLastJumpServerTick() < jumpCooldownTicks) {
-				return "Time jump cooldown - wait a moment";
-			}
-			initiatorPd.setLastJumpServerTick(nowServerTick);
-		}
-
-		long from = timelineTick;
-		session().lastJumpOrigin = from;
-		int dir = target > from ? 1 : -1;
-		LOOP_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
-
-		BlockJournal.flushWatches();
-		EntityJournal.fastForward(from, target);
-		ProcessJournal.beforeJump();
-		session().visits.endAllVisits(dir);
-
-		GhostManager ghosts = session().ghosts;
-		ghosts.stopAll();
-
-		timelineTick = target;
-		config.timelineTick = target;
-		if (syncDayTime) {
-			serverLevel.setDayTime(dayTimeOrigin + target);
-		}
-		ghosts.setIdle(false);
-
-		BlockJournal.onJump(from, target);
-		MobJournal.onJump(from, target);
-		EntityJournal.onJump();
-		EffectJournal.rebuildUpcoming();
-		ProcessJournal.afterJump(from, target);
-		ChatTimeline.onJump(target);
-		AdvancementTimeline.onJump();
-
-		VisitManager visits = session().visits;
-		forEachOnlineRecorded((p, pd) -> visits.beginVisit(p, pd, dir));
-		ghosts.rebuild();
-		ghosts.flushPending();
-		ghosts.flushSounds();
-
-		loopSceneManager.saveRecordingPlayers();
-		config.save();
-		broadcastSync();
-
-		String msg = initiatorName + " jumped " + (target > from ? "forward" : "back") + " to "
-				+ TimeFormat.format(target, displayTimeInTicks) + " ("
-				+ TimeFormat.delta(target - from, displayTimeInTicks) + ")";
-		server.getPlayerList().broadcastSystemMessage(Component.literal(msg), false);
-		return null;
+		return session().timeline.jumpTo(target, initiatorName);
 	}
 
 	public static void onServerTick() {
-		TimelineSession s = session();
-		Runnable task;
-		while ((task = s.delayedTasks.poll()) != null) {
-			try {
-				task.run();
-			} catch (Exception e) {
-				LOOP_LOGGER.error("Error executing delayed task", e);
-			}
-		}
-
-		BlockJournal.flushWatches();
-
-		if (!isLooping || !MocapAdapter.isReady()) return;
-
-		GhostManager ghosts = s.ghosts;
-		if (countOnlineRecorded() == 0) {
-			if (!ghosts.isIdle()) {
-				ghosts.setIdle(true);
-				ghosts.stopAll();
-				ghosts.markNeedsRebuild();
-			}
-			return;
-		}
-		ghosts.setIdle(false);
-
-		if (ghosts.consumeNeedsRebuild()) ghosts.rebuild();
-		ghosts.flushPending();
-		ghosts.flushSounds();
-
-		timelineTick++;
-		config.timelineTick = timelineTick;
-		BlockJournal.tick();
-		EntityJournal.tick();
-		MobJournal.tick();
-		ProcessJournal.tick();
-		ChatTimeline.tick();
-		AdvancementTimeline.tick();
-		EffectJournal.tick();
-		if (syncDayTime) {
-			serverLevel.setDayTime(dayTimeOrigin + timelineTick);
-		}
-		ghosts.tickActive();
-		if (trackVoice) VoicechatCompat.onTick();
-		s.deathChain.tick();
-
-		if (timelineTick % 20 == 0) broadcastSync();
-		if (timelineTick % 1200 == 0) config.save();
-		if (timelineTick % 1200 == 0) MobBinding.prune();
-		if (timelineTick % 6000 == 0) {
-			BlockJournal.saveIfDirty();
-			MobJournal.saveIfDirty();
-			ChatTimeline.saveIfDirty();
-			AdvancementTimeline.saveIfDirty();
-			EntityJournal.saveIfDirty();
-			EffectJournal.saveIfDirty();
-			MobBinding.saveIfDirty();
-		}
+		session().timeline.tick();
 	}
 
 	public static void handlePlayerDimensionChange(ServerPlayer player) {
@@ -324,8 +132,9 @@ public class TimeTravel {
 	//player lifecycle
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
-			session().visits.beginVisit(player, pd);
-			GhostManager ghosts = session().ghosts;
+			TimelineSession s = session();
+			s.visits.beginVisit(player, pd);
+			GhostManager ghosts = s.ghosts;
 			if (ghosts.isIdle()) {
 				ghosts.setIdle(false);
 				ghosts.markNeedsRebuild();
@@ -362,29 +171,27 @@ public class TimeTravel {
 		VoicechatInteractionCompat.clearCooldowns();
 	}
 
-	//visits and recording
-	private static void beginVisit(ServerPlayer player, PlayerData pd) {
-		beginVisit(player, pd, 0);
+	static void forEachOnlineRecorded(BiConsumer<ServerPlayer, PlayerData> action) {
+		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
+			if (isGhost(player)) continue;
+			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getName().getString());
+			if (pd == null || !pd.getActive()) continue;
+			action.accept(player, pd);
+		}
 	}
 
-	private static void beginVisit(ServerPlayer player, PlayerData pd, int arrivalDir) {
-		Visit visit = new Visit(config.nextVisitId++, timelineTick);
-		visit.arrivalDir = arrivalDir;
-		visit.startDim = player.level().dimension().location().toString();
-		visit.sx = player.getX();
-		visit.sy = player.getY();
-		visit.sz = player.getZ();
-		pd.setCurrentVisit(visit);
-		pd.resetSegments();
-		pd.resetPieceCounter();
-		pd.setLastDimensionKey(player.level().dimension());
-		startChunk(player, pd);
+	public static int countOnlineRecorded() {
+		int count = 0;
+		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+			if (isGhost(player)) continue;
+			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+			if (pd != null && pd.getActive()) count++;
+		}
+		return count;
 	}
-	private static void startChunk(ServerPlayer player, PlayerData pd) {
-		pd.clearPieceStarts();
-		pd.addPieceStart(timelineTick);
-		pd.setChunkStartTick(timelineTick);
-		MocapAdapter.startRecording(player, pd.getName());
+
+	static boolean isGhost(ServerPlayer player) {
+		return Ghosts.is(player);
 	}
 
 	public static int visitIdOf(Entity e) {
@@ -415,29 +222,6 @@ public class TimeTravel {
 	public static int countPendingGhosts() {
 		TimelineSession s = session;
 		return s == null ? 0 : s.ghosts.countPending();
-	}
-
-	private static void forEachOnlineRecorded(BiConsumer<ServerPlayer, PlayerData> action) {
-		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
-			if (isGhost(player)) continue;
-			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getName().getString());
-			if (pd == null || !pd.getActive()) continue;
-			action.accept(player, pd);
-		}
-	}
-
-	public static int countOnlineRecorded() {
-		int count = 0;
-		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-			if (isGhost(player)) continue;
-			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
-			if (pd != null && pd.getActive()) count++;
-		}
-		return count;
-	}
-
-	private static boolean isGhost(ServerPlayer player) {
-		return Ghosts.is(player);
 	}
 
 	public static void sendSync(ServerPlayer player) {

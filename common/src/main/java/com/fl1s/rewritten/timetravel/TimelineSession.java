@@ -14,6 +14,9 @@ public final class TimelineSession {
     /** Visit lifecycle: begin/end on join/leave/jump, save mocap pieces. */
     final VisitManager visits = new VisitManager();
 
+    /** Core timeline: clock, jumps, per-tick work. */
+    final Timeline timeline = new Timeline();
+
     /** Server tick of the previous jump (for the return command). */
     long lastJumpOrigin = -1;
 
