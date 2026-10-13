@@ -16,9 +16,13 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 import java.io.Reader;
 import java.io.Writer;
@@ -42,6 +46,7 @@ public final class MobJournal {
         String uuid;
         String nbt;
         boolean explode;
+        transient Vec3 deathPos;
     }
 
     private static final List<Entry> entries = new ArrayList<>();
@@ -74,9 +79,8 @@ public final class MobJournal {
         if (pd == null || !pd.getActive()) return;
 
         String uuid = entity.getUUID().toString();
-        for (Entry e : entries) {
-            if (e.uuid.equals(uuid) && Math.abs(e.tick - TimeTravel.timelineTick) <= 40) return;
-        }
+        entries.removeIf(old -> old.uuid.equals(uuid));
+        upcoming.removeIf(old -> old.uuid.equals(uuid));
 
         CompoundTag tag = new CompoundTag();
         if (!entity.save(tag)) return;
@@ -96,29 +100,51 @@ public final class MobJournal {
         dirty = true;
     }
 
+    private static Collection<Entry> canonical() {
+        Map<String, Entry> m = new HashMap<>();
+        for (Entry e : entries) {
+            m.merge(e.uuid, e, (a, b) ->
+                    (a.tick != b.tick ? a.tick < b.tick : a.seq < b.seq) ? a : b);
+        }
+        return m.values();
+    }
+
+    public static void onEntityDeath(LivingEntity entity, DamageSource src) {
+        onEntityDeath(entity, src, false);
+    }
+
+    public static void onEntityDeath(LivingEntity entity, DamageSource src, boolean explode) {
+        if (src != null) {
+            Entity killer = src.getEntity();
+            Entity direct = src.getDirectEntity();
+            if (isReplayEntity(killer) || isReplayEntity(direct)) return;
+        }
+        onEntityDeath(entity, explode);
+    }
+
+    private static boolean isReplayEntity(Entity e) {
+        if (e == null) return false;
+        if (e.getClass().getName().contains("FakePlayer")) return true;
+        return e instanceof PrimedTnt && e.getTags().contains(EntityJournal.TAG);
+    }
+
     public static void tick() {
         while (!upcoming.isEmpty() && upcoming.peek().tick <= TimeTravel.timelineTick) {
             apply(upcoming.poll(), true, true);
         }
+        if (TimeTravel.timelineTick % 5 == 0) steer();
     }
 
     public static void onJump(long from, long to) {
-        List<Entry> affected = new ArrayList<>();
-        if (to < from) {
-            for (Entry e : entries) if (e.tick > to && e.tick <= from) affected.add(e);
-            affected.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
-            for (Entry e : affected) apply(e, false, false); //resurrection
-        } else {
-            for (Entry e : entries) if (e.tick > from && e.tick <= to) affected.add(e);
-            affected.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
-            for (Entry e : affected) apply(e, true, false); //remove
+        for (Entry e : canonical()) {
+            apply(e, e.tick <= to, false);
         }
         rebuildUpcoming();
     }
 
     public static void rebuildUpcoming() {
         upcoming.clear();
-        for (Entry e : entries) if (e.tick > TimeTravel.timelineTick) upcoming.add(e);
+        for (Entry e : canonical()) if (e.tick > TimeTravel.timelineTick) upcoming.add(e);
     }
 
     private static void apply(Entry e, boolean die, boolean effects) {
@@ -147,11 +173,54 @@ public final class MobJournal {
             CompoundTag tag = TagParser.parseTag(e.nbt);
             ListTag pos = tag.getList("Pos", 6);
             if (pos.size() < 3 || !level.isLoaded(BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2)))) return;
-
+            TimeTravel.LOOP_LOGGER.info("Revive {} (visit {}) deathTick={} now={}", e.uuid, e.visit, e.tick, TimeTravel.timelineTick);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived != null) level.addFreshEntity(revived);
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply mob journal entry {}", e.uuid, ex);
+        }
+    }
+
+    private static Vec3 deathPos(Entry e) {
+        if (e.deathPos == null) {
+            try {
+                ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
+                e.deathPos = new Vec3(p.getDouble(0), p.getDouble(1), p.getDouble(2));
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+        return e.deathPos;
+    }
+
+    private static void steer() {
+        long now = TimeTravel.timelineTick;
+        for (Entry e : upcoming) {
+            long remaining = e.tick - now;
+            if (remaining <= 0 || remaining > 1200) continue;
+
+            Vec3 target = deathPos(e);
+            if (target == null) continue;
+
+            ServerLevel level = TimeTravel.server.getLevel(
+                    ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(e.dim)));
+            if (level == null) continue;
+            if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || mob.isRemoved()) continue;
+
+            double dist = mob.position().distanceTo(target);
+            if (dist < 1.5) continue;
+
+            if (remaining <= 10) {
+                mob.getNavigation().stop();
+                mob.teleportTo(target.x, target.y, target.z);
+                continue;
+            }
+
+            double speed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED);
+            double reach = speed * (remaining - 10);
+            if (dist > reach * 0.6) {
+                mob.getNavigation().moveTo(target.x, target.y, target.z, 1.3);
+            }
         }
     }
 
