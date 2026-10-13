@@ -1,10 +1,9 @@
 package com.fl1s.rewritten.timetravel;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
+import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import com.fl1s.rewritten.timetravel.util.Levels;
+import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
@@ -28,27 +27,29 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.io.Reader;
-import java.io.Writer;
-import java.lang.reflect.Type;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 public final class MobJournal {
-    private MobJournal() {}
+    private MobJournal() {
+    }
 
     private static final double RANGE = 96.0;
     private static final long STEER_WINDOW = 1200;
     private static final long GLIDE_TICKS = 10;
-    private static final long NAV_TICKS = 200;;
+    private static final long NAV_TICKS = 200;
+
     private static final double MAX_SPEED_MOD = 4.0;
     private static final double NEAR_PLAYER = 48.0;
     private static final int TRAIL_STEP = 2;
     private static final int TRAIL_MAX = 600;
     private static final int TRAIL_TRACKED_MAX = 256;
-    private static final Gson GSON = new GsonBuilder().create();
-    private static final Type LIST_TYPE = new TypeToken<ArrayList<Entry>>() {}.getType();
 
     static final class Sample {
         long tick;
@@ -68,20 +69,18 @@ public final class MobJournal {
         long seq;
         int visit = -1;
         String dim;
-        String uuid;
+        UUID uuid;
         String nbt;
         boolean explode;
         List<Sample> trail;
         transient Vec3 deathPos;
     }
 
-    private static final List<Entry> entries = new ArrayList<>();
-    private static final Map<String, Entry> canon = new HashMap<>();
+    private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_mobs.json", new TypeToken<ArrayList<Entry>>() {
+    }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
+
+    private static final Map<UUID, Entry> canon = new HashMap<>();
     private static final Map<UUID, Trail> trails = new HashMap<>();
-    private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(
-            Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
-    private static long nextSeq = 0;
-    private static boolean dirty = false;
     private static boolean killing = false;
 
     public static boolean isKilling() {
@@ -134,9 +133,9 @@ public final class MobJournal {
         PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(nearest.getGameProfile().getName());
         if (pd == null || !pd.getActive()) return;
 
-        String uuid = entity.getUUID().toString();
-        entries.removeIf(old -> old.uuid.equals(uuid));
-        upcoming.removeIf(old -> old.uuid.equals(uuid));
+        UUID uuid = entity.getUUID();
+        STORE.entries().removeIf(old -> old.uuid.equals(uuid));
+        STORE.upcoming().removeIf(old -> old.uuid.equals(uuid));
 
         CompoundTag tag = new CompoundTag();
         if (!entity.save(tag)) return;
@@ -146,7 +145,7 @@ public final class MobJournal {
 
         Entry entry = new Entry();
         entry.tick = TimeTravel.timelineTick;
-        entry.seq = nextSeq++;
+        entry.seq = STORE.nextSeq();
         entry.visit = pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
         entry.dim = level.dimension().location().toString();
         entry.uuid = uuid;
@@ -157,9 +156,9 @@ public final class MobJournal {
             addSample(trail, entity);
             entry.trail = new ArrayList<>(trail.samples);
         }
-        entries.add(entry);
+        STORE.entries().add(entry);
         canon.put(uuid, entry);
-        dirty = true;
+        STORE.markDirty();
     }
 
     public static void track(Mob mob, Entity who) {
@@ -236,9 +235,7 @@ public final class MobJournal {
     }
 
     public static void tick() {
-        while (!upcoming.isEmpty() && upcoming.peek().tick <= TimeTravel.timelineTick) {
-            apply(upcoming.poll(), true, true);
-        }
+        STORE.tick(e -> apply(e, true, true));
         drive();
         steer(TimeTravel.timelineTick % 5 == 0);
         if (TimeTravel.timelineTick % TRAIL_STEP == 0) sampleTrails();
@@ -246,11 +243,11 @@ public final class MobJournal {
 
     private static void drive() {
         long now = TimeTravel.timelineTick;
-        for (Entry e : upcoming) {
+        for (Entry e : STORE.upcoming()) {
             if (e.trail == null || e.trail.isEmpty() || now < e.trail.get(0).tick || now >= e.tick) continue;
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
-            if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || !mob.isAlive()) continue;
+            if (!(level.getEntity(e.uuid) instanceof Mob mob) || !mob.isAlive()) continue;
 
             Sample s = sampleAt(e.trail, now);
             mob.getNavigation().stop();
@@ -281,7 +278,7 @@ public final class MobJournal {
 
     private static void steer(boolean nav) {
         long now = TimeTravel.timelineTick;
-        for (Entry e : upcoming) {
+        for (Entry e : STORE.upcoming()) {
             boolean trailed = e.trail != null && !e.trail.isEmpty();
             long due = trailed ? e.trail.get(0).tick : e.tick;
             long remaining = due - now;
@@ -293,7 +290,7 @@ public final class MobJournal {
 
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
-            if (!(level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob) || mob.isRemoved()) continue;
+            if (!(level.getEntity(e.uuid) instanceof Mob mob) || mob.isRemoved()) continue;
 
             Vec3 pos = mob.position();
             double dist = pos.distanceTo(target);
@@ -338,20 +335,21 @@ public final class MobJournal {
 
     public static void rebuildUpcoming() {
         rebuildCanon();
-        upcoming.clear();
-        for (Entry e : canon.values()) if (e.tick > TimeTravel.timelineTick) upcoming.add(e);
+        STORE.upcoming().clear();
+        for (Entry e : canon.values()) {
+            if (e.tick > TimeTravel.timelineTick) STORE.upcoming().add(e);
+        }
     }
 
     private static void rebuildCanon() {
         canon.clear();
-        for (Entry e : entries) {
-            canon.merge(e.uuid, e, (a, b) ->
-                    (a.tick != b.tick ? a.tick < b.tick : a.seq < b.seq) ? a : b);
+        for (Entry e : STORE.entries()) {
+            canon.merge(e.uuid, e, (a, b) -> (a.tick != b.tick ? a.tick < b.tick : a.seq < b.seq) ? a : b);
         }
     }
 
     public static int ownerVisit(UUID uuid) {
-        Entry e = canon.get(uuid.toString());
+        Entry e = canon.get(uuid);
         return (e != null && e.tick > TimeTravel.timelineTick) ? e.visit : -1;
     }
 
@@ -371,7 +369,7 @@ public final class MobJournal {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) return;
 
-            Entity existing = level.getEntity(UUID.fromString(e.uuid));
+            Entity existing = level.getEntity(e.uuid);
             if (die) {
                 if (existing != null && !existing.isRemoved()) {
                     if (effects && e.explode && existing instanceof Creeper) {
@@ -408,7 +406,8 @@ public final class MobJournal {
                 tag.put("Motion", still);
             }
             ListTag pos = tag.getList("Pos", 6);
-            if (pos.size() < 3 || !level.isLoaded(BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2)))) return;
+            if (pos.size() < 3 || !level.isLoaded(BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2))))
+                return;
 
             TimeTravel.LOOP_LOGGER.info("Revive {} (visit {}) deathTick={} now={}", e.uuid, e.visit, e.tick, TimeTravel.timelineTick);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
@@ -426,30 +425,30 @@ public final class MobJournal {
 
     public static boolean isDoomed(Entity attacker) {
         if (!(attacker instanceof Mob)) return false;
-        Entry e = canon.get(attacker.getUUID().toString());
+        Entry e = canon.get(attacker.getUUID());
         return e != null && e.tick > TimeTravel.timelineTick;
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
         long now = TimeTravel.timelineTick;
         List<Entry> mine = new ArrayList<>();
-        for (Entry e : entries) if (visitIds.contains(e.visit)) mine.add(e);
+        for (Entry e : STORE.entries()) if (visitIds.contains(e.visit)) mine.add(e);
         mine.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
         for (Entry e : mine) {
             if (e.tick <= now) apply(e, false, false);
             else release(e);
         }
-        entries.removeAll(mine);
-        upcoming.removeAll(mine);
+        STORE.entries().removeAll(mine);
+        STORE.upcoming().removeAll(mine);
         rebuildUpcoming();
-        dirty = true;
+        STORE.markDirty();
     }
 
     private static void release(Entry e) {
         try {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) return;
-            if (level.getEntity(UUID.fromString(e.uuid)) instanceof Mob mob && !mob.isRemoved()) {
+            if (level.getEntity(e.uuid) instanceof Mob mob && !mob.isRemoved()) {
                 mob.getNavigation().stop();
                 mob.setDeltaMovement(Vec3.ZERO);
                 mob.fallDistance = 0;
@@ -459,53 +458,28 @@ public final class MobJournal {
         }
     }
 
-    private static Path file() {
-        return TimeTravel.worldFolder.resolve("timetravel_rewritten_mobs.json");
-    }
-
     public static void load() {
-        entries.clear();
-        upcoming.clear();
         canon.clear();
         trails.clear();
-        nextSeq = 0;
-        Path f = file();
-        if (Files.exists(f)) {
-            try (Reader r = Files.newBufferedReader(f)) {
-                List<Entry> loaded = GSON.fromJson(r, LIST_TYPE);
-                if (loaded != null) {
-                    entries.addAll(loaded);
-                    for (Entry e : loaded) nextSeq = Math.max(nextSeq, e.seq + 1);
-                }
-            } catch (Exception ex) {
-                TimeTravel.LOOP_LOGGER.error("Failed to load mob journal", ex);
-            }
+        STORE.load();
+        STORE.upcoming().clear();
+        rebuildCanon();
+        for (Entry e : canon.values()) {
+            if (e.tick > TimeTravel.timelineTick) STORE.upcoming().add(e);
         }
-        dirty = false;
-        rebuildUpcoming();
     }
 
     public static void saveIfDirty() {
-        if (dirty) save();
+        STORE.saveIfDirty();
     }
 
     public static void save() {
-        if (TimeTravel.worldFolder == null) return;
-        try (Writer w = Files.newBufferedWriter(file())) {
-            GSON.toJson(entries, LIST_TYPE, w);
-            dirty = false;
-        } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to save mob journal", ex);
-        }
+        STORE.save();
     }
 
     public static void clear() {
-        entries.clear();
-        upcoming.clear();
         canon.clear();
         trails.clear();
-        nextSeq = 0;
-        dirty = true;
-        save();
+        STORE.clear();
     }
 }
