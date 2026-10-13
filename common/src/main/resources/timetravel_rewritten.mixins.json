@@ -3,6 +3,6 @@
   "package": "com.fl1s.rewritten.timetravel.mixin",
   "compatibilityLevel": "JAVA_21",
   "plugin": "com.llamalad7.mixinextras.MixinExtrasPlugin",
-  "mixins": ["ServerLevelMixin", "LevelMixin", "PrimedTntMixin", "LevelTicksMixin", "ServerPlayerGameModeMixin"],
+  "mixins": ["ServerLevelMixin", "LevelMixin", "PrimedTntMixin", "LevelTicksMixin", "ServerPlayerGameModeMixin", "MobHurtMixin", "MobTargetMixin", "CreeperMixin"],
   "injectors": { "defaultRequire": 1 }
 }

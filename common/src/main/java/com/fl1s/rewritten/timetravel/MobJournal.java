@@ -12,10 +12,13 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 
 import java.io.Reader;
 import java.io.Writer;
@@ -38,6 +41,7 @@ public final class MobJournal {
         String dim;
         String uuid;
         String nbt;
+        boolean explode;
     }
 
     private static final List<Entry> entries = new ArrayList<>();
@@ -47,6 +51,10 @@ public final class MobJournal {
     private static boolean dirty = false;
 
     public static void onEntityDeath(LivingEntity entity) {
+        onEntityDeath(entity, false);
+    }
+
+    public static void onEntityDeath(LivingEntity entity, boolean explode) {
         if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.loopSceneManager == null) return;
         if (!(entity.level() instanceof ServerLevel level) || entity instanceof Player) return;
         if (!entity.getType().canSerialize()) return;
@@ -83,6 +91,7 @@ public final class MobJournal {
         entry.dim = level.dimension().location().toString();
         entry.uuid = uuid;
         entry.nbt = tag.toString();
+        entry.explode = explode;
         entries.add(entry);
         dirty = true;
     }
@@ -120,7 +129,14 @@ public final class MobJournal {
             Entity existing = level.getEntity(UUID.fromString(e.uuid));
             if (die) {
                 if (existing != null && !existing.isRemoved()) {
-                    if (effects) level.broadcastEntityEvent(existing, (byte) 60);
+                    if (effects && e.explode && existing instanceof Creeper) {
+                        CompoundTag saved = TagParser.parseTag(e.nbt);
+                        int radius = saved.contains("ExplosionRadius") ? saved.getByte("ExplosionRadius") : 3;
+                        float power = radius * (saved.getBoolean("powered") ? 2.0f : 1.0f);
+                        level.explode(existing, existing.getX(), existing.getY(), existing.getZ(), power, Level.ExplosionInteraction.MOB);
+                    } else if (effects) {
+                        level.broadcastEntityEvent(existing, (byte) 60);
+                    }
                     existing.discard();
                 }
                 return;
@@ -138,6 +154,22 @@ public final class MobJournal {
             TimeTravel.LOOP_LOGGER.error("Failed to apply mob journal entry {}", e.uuid, ex);
         }
     }
+
+    public static boolean shouldShield(LivingEntity victim, DamageSource source) {
+        if (!TimeTravel.isLooping) return false;
+        if (!(victim instanceof ServerPlayer) || !victim.getClass().getName().contains("FakePlayer")) return false;
+        return isDoomed(source.getEntity()) || isDoomed(source.getDirectEntity());
+    }
+
+    public static boolean isDoomed(Entity attacker) {
+        if (!(attacker instanceof net.minecraft.world.entity.Mob)) return false;
+        String uuid = attacker.getUUID().toString();
+        for (Entry e : entries) {
+            if (e.tick > TimeTravel.timelineTick && e.uuid.equals(uuid)) return true;
+        }
+        return false;
+    }
+
     public static void eraseVisits(Set<Integer> visitIds) {
         List<Entry> mine = new ArrayList<>();
         for (Entry e : entries) if (visitIds.contains(e.visit)) mine.add(e);

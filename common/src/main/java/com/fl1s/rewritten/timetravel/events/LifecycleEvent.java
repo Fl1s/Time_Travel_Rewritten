@@ -45,6 +45,7 @@ public class LifecycleEvent {
         EntityJournal.load();
         EffectJournal.load();
         MobJournal.load();
+        MobBinding.load();
         ChatTimeline.load();
 
         TimeTravel.server = server;

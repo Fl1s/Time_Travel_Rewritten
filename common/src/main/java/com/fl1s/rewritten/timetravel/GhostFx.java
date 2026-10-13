@@ -37,6 +37,10 @@ public final class GhostFx {
         return entity instanceof LivingEntity living && !entity.isRemoved() && living.isDeadOrDying();
     }
 
+    public Entity entity() {
+        return entity;
+    }
+
     public void tick() {
         if (entity == null || entity.isRemoved() || !(entity.level() instanceof ServerLevel level)) return;
         if (entity.getY() > 100000) {

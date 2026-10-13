@@ -13,6 +13,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.mt1006.mocap.api.v1.controller.MocapController;
 import net.mt1006.mocap.api.v1.controller.MocapPlaybackRoot;
@@ -85,7 +86,7 @@ public class TimeTravel {
 	public static final Queue<Runnable> delayedTasks = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
 	private record PendingPiece(long startTick, String recording, String playerName, int skipTicks, int visitId,
-			int segment, long visitStartTick) {}
+								int segment, long visitStartTick) {}
 
 	private record Ghost(MocapPlaybackRoot root, String playerName, int visitId, GhostFx fx) {}
 
@@ -100,6 +101,7 @@ public class TimeTravel {
 			new PriorityQueue<>(Comparator.comparingLong(PendingPiece::startTick));
 	private static final List<Ghost> ghostRoots = new ArrayList<>();
 	public static int ghostLookaheadTicks = 0;
+	public static final long PENDING_VISIT_WINDOW = 1200;
 	private static boolean needsRebuild = true;
 	private static boolean idle = false;
 
@@ -158,6 +160,7 @@ public class TimeTravel {
 		ChatTimeline.save();
 		EntityJournal.save();
 		EffectJournal.save();
+		MobBinding.save();
 
 		isLooping = false;
 		config.isLooping = false;
@@ -180,6 +183,7 @@ public class TimeTravel {
 		ChatTimeline.clear();
 		EntityJournal.clear();
 		EffectJournal.clear();
+		MobBinding.clear();
 		VoicechatCompat.deleteAllAudio();
 		loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
@@ -305,12 +309,14 @@ public class TimeTravel {
 		if (timelineTick % 20 == 0) broadcastSync();
 		if (timelineTick % 100 == 0) ghostRoots.removeIf(g -> g.root().isFinished());
 		if (timelineTick % 1200 == 0) config.save();
+		if (timelineTick % 1200 == 0) MobBinding.prune();
 		if (timelineTick % 6000 == 0) {
 			BlockJournal.saveIfDirty();
 			MobJournal.saveIfDirty();
 			ChatTimeline.saveIfDirty();
 			EntityJournal.saveIfDirty();
 			EffectJournal.saveIfDirty();
+			MobBinding.saveIfDirty();
 		}
 	}
 
@@ -362,6 +368,7 @@ public class TimeTravel {
 		ChatTimeline.save();
 		EntityJournal.save();
 		EffectJournal.save();
+		MobBinding.save();
 		if (worldFolder != null && config != null) config.save();
 		VoicechatInteractionCompat.clearCooldowns();
 	}
@@ -651,6 +658,7 @@ public class TimeTravel {
 		ChatTimeline.eraseVisits(ids);
 		EntityJournal.eraseVisits(ids);
 		EffectJournal.eraseVisits(ids);
+		MobBinding.eraseVisits(ids);
 		ChatTimeline.resend(timelineTick);
 
 		loopSceneManager.saveRecordingPlayers();
@@ -753,6 +761,50 @@ public class TimeTravel {
 
 	private static boolean isGhost(ServerPlayer player) {
 		return player.getClass().getName().contains("FakePlayer");
+	}
+
+	public static int visitIdOf(Entity entity) {
+		if (!(entity instanceof ServerPlayer player)) return -1;
+		if (isGhost(player)) {
+			for (Ghost ghost : ghostRoots) {
+				if (ghost.fx().entity() == entity) return ghost.visitId();
+			}
+			return -1;
+		}
+		PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+		if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return -1;
+		return pd.getCurrentVisit().id;
+	}
+
+	public static Entity entityOfVisit(int visitId) {
+		for (Ghost ghost : ghostRoots) {
+			if (ghost.visitId() != visitId || ghost.root().isFinished()) continue;
+			Entity entity = ghost.fx().entity();
+			if (entity != null && !entity.isRemoved()) return entity;
+		}
+		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+			if (isGhost(player)) continue;
+			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+			if (pd != null && pd.getCurrentVisit() != null && pd.getCurrentVisit().id == visitId) return player;
+		}
+		return null;
+	}
+
+	public static boolean visitPending(int visitId) {
+		for (PlayerData pd : loopSceneManager.getRecordingPlayers()) {
+			for (Visit v : pd.getVisits()) {
+				if (v.id == visitId) return v.startTick > timelineTick && v.startTick - timelineTick <= PENDING_VISIT_WINDOW;
+			}
+		}
+		return false;
+	}
+
+	public static boolean visitKnown(int visitId) {
+		for (PlayerData pd : loopSceneManager.getRecordingPlayers()) {
+			if (pd.getCurrentVisit() != null && pd.getCurrentVisit().id == visitId) return true;
+			for (Visit v : pd.getVisits()) if (v.id == visitId) return true;
+		}
+		return false;
 	}
 
 	private static void forEachOnlineRecorded(BiConsumer<ServerPlayer, PlayerData> action) {
