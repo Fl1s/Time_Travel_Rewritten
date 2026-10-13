@@ -8,9 +8,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
@@ -18,12 +20,9 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.SoundType;
-import net.minecraft.world.level.block.BrewingStandBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
@@ -199,10 +198,21 @@ public final class BlockJournal {
                     level.playSound(null, pos, type.getPlaceSound(), SoundSource.BLOCKS,
                             (type.getVolume() + 1.0f) / 2.0f, type.getPitch() * 0.8f);
                 }
+                if (toNew) scheduleRelease(level, pos, state);
             }
             touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
+        }
+    }
+
+    private static void scheduleRelease(ServerLevel level, BlockPos pos, BlockState state) {
+        Block block = state.getBlock();
+        if (!state.hasProperty(BlockStateProperties.POWERED) || !state.getValue(BlockStateProperties.POWERED)) return;
+        if (block instanceof ButtonBlock) {
+            level.scheduleTick(pos, block, state.is(BlockTags.WOODEN_BUTTONS) ? 30 : 20);
+        } else if (block instanceof BasePressurePlateBlock) {
+            level.scheduleTick(pos, block, 20);
         }
     }
 
