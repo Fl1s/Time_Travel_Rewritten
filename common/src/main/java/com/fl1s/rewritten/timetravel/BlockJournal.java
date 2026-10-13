@@ -69,6 +69,11 @@ public final class BlockJournal {
     private static long nextSeq = 0;
     private static boolean dirty = false;
 
+    private static final double TRACK_RANGE_SQ = 64.0 * 64.0;
+    private static final long DEDUP_TICKS = 40;
+    private static final Map<Long, List<Entry>> byPos = new HashMap<>();
+    private static boolean applying = false;
+
     //hooks (called from loader events)
     public static void watch(ServerPlayer player, BlockPos center) {
         if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
@@ -99,6 +104,78 @@ public final class BlockJournal {
         }
     }
 
+    public static void onBlockChanged(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
+        if (applying || !TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!shouldTrack(old, now)) return;
+        PlayerData pd = nearestRecorder(level, pos);
+        if (pd == null) return;
+
+        String dim = level.dimension().location().toString();
+        String oldS = BlockStateParser.serialize(old);
+        String newS = BlockStateParser.serialize(now);
+        int visit = pd.getCurrentVisit().id;
+
+        List<Entry> same = byPos.get(pos.asLong());
+        if (same != null) {
+            for (Entry e : same) {
+                if (e.visit != visit && e.dim.equals(dim) && Math.abs(e.tick - TimeTravel.timelineTick) <= DEDUP_TICKS
+                        && oldS.equals(e.oldState) && newS.equals(e.newState)) return;
+            }
+        }
+
+        Entry entry = new Entry();
+        entry.dim = dim;
+        entry.x = pos.getX();
+        entry.y = pos.getY();
+        entry.z = pos.getZ();
+        entry.oldState = oldS;
+        entry.newState = newS;
+        entry.oldParsed = old;
+        entry.newParsed = now;
+        entry.tick = TimeTravel.timelineTick;
+        entry.seq = nextSeq++;
+        entry.visit = visit;
+        entries.add(entry);
+        index(entry);
+        dirty = true;
+    }
+
+    private static boolean shouldTrack(BlockState old, BlockState now) {
+        Block a = old.getBlock();
+        Block b = now.getBlock();
+        if (a == b && (a instanceof AbstractFurnaceBlock || a instanceof BrewingStandBlock)) return false;
+        if (a instanceof LiquidBlock && (b instanceof LiquidBlock || now.isAir())) return false;
+        if (b instanceof LiquidBlock && old.isAir()) return false;
+        if (a instanceof FireBlock && (b instanceof FireBlock || now.isAir())) return false;
+        if (b instanceof FireBlock && old.isAir()) return false;
+        if (a instanceof LeavesBlock && (a == b || now.isAir())) return false;
+        return true;
+    }
+
+    static PlayerData nearestRecorder(ServerLevel level, BlockPos pos) {
+        double cx = pos.getX() + 0.5, cy = pos.getY() + 0.5, cz = pos.getZ() + 0.5;
+        for (ServerPlayer p : level.players()) {
+            if (p.getClass().getName().contains("FakePlayer")) continue;
+            if (p.distanceToSqr(cx, cy, cz) > TRACK_RANGE_SQ) continue;
+            PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(p.getName().getString());
+            if (pd != null && pd.getActive() && pd.getCurrentVisit() != null) return pd;
+        }
+        return null;
+    }
+
+    public static boolean isApplying() {
+        return applying;
+    }
+
+    private static void index(Entry e) {
+        byPos.computeIfAbsent(BlockPos.asLong(e.x, e.y, e.z), k -> new ArrayList<>()).add(e);
+    }
+
+    private static void rebuildIndex() {
+        byPos.clear();
+        for (Entry e : entries) index(e);
+    }
+
     public static void flushWatches() {
         pollContainers();
         if (watches.isEmpty()) return;
@@ -106,34 +183,7 @@ public final class BlockJournal {
         watches.clear();
 
         for (Watch w : copy) {
-            String dim = w.level().dimension().location().toString();
-            for (Map.Entry<BlockPos, BlockState> e : w.before().entrySet()) {
-                ProcessJournal.trackIfProcess(w.level(), e.getKey());
-
-                BlockState now = w.level().getBlockState(e.getKey());
-                if (now.equals(e.getValue())) continue;
-
-                Block nowBlock = now.getBlock();
-                if (nowBlock == e.getValue().getBlock()
-                        && (nowBlock instanceof AbstractFurnaceBlock || nowBlock instanceof BrewingStandBlock)) {
-                    continue;
-                }
-
-                Entry entry = new Entry();
-                entry.dim = dim;
-                entry.x = e.getKey().getX();
-                entry.y = e.getKey().getY();
-                entry.z = e.getKey().getZ();
-                entry.oldState = BlockStateParser.serialize(e.getValue());
-                entry.newState = BlockStateParser.serialize(now);
-                entry.oldParsed = e.getValue();
-                entry.newParsed = now;
-                entry.tick = TimeTravel.timelineTick;
-                entry.seq = nextSeq++;
-                entry.visit = w.visit();
-                entries.add(entry);
-                dirty = true;
-            }
+            for (BlockPos p : w.before().keySet()) ProcessJournal.trackIfProcess(w.level(), p);
         }
     }
 
@@ -189,7 +239,12 @@ public final class BlockJournal {
                 level.removeBlockEntity(pos);
             }
 
-            level.setBlock(pos, state, SET_FLAGS);
+            applying = true;
+            try {
+                level.setBlock(pos, state, SET_FLAGS);
+            } finally {
+                applying = false;
+            }
             if (toNew) scheduleRelease(level, pos, state);
             touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
         } catch (Exception ex) {

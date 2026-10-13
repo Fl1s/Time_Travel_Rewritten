@@ -42,6 +42,7 @@ public class LifecycleEvent {
 
         TimeTravel.loopSceneManager.setRecordingPlayers(c.recordingPlayers);
         BlockJournal.load();
+        EntityJournal.load();
         EffectJournal.load();
         MobJournal.load();
         ChatTimeline.load();

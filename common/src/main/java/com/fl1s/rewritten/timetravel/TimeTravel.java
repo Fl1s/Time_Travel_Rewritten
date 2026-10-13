@@ -136,6 +136,7 @@ public class TimeTravel {
 		needsRebuild = true;
 		BlockJournal.rebuildUpcoming();
 		MobJournal.rebuildUpcoming();
+		EntityJournal.rebuildUpcoming();
 		EffectJournal.rebuildUpcoming();
 		ProcessJournal.rebuildUpcoming();
 		ChatTimeline.rebuildUpcoming();
@@ -155,6 +156,7 @@ public class TimeTravel {
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
+		EntityJournal.save();
 		EffectJournal.save();
 
 		isLooping = false;
@@ -176,6 +178,7 @@ public class TimeTravel {
 		MobJournal.clear();
 		ProcessJournal.clear();
 		ChatTimeline.clear();
+		EntityJournal.clear();
 		EffectJournal.clear();
 		VoicechatCompat.deleteAllAudio();
 		loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
@@ -217,6 +220,7 @@ public class TimeTravel {
 		LOOP_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
 		BlockJournal.flushWatches();
+		EntityJournal.fastForward(from, target);
 		ProcessJournal.beforeJump();
 		endAllVisits(dir);
 
@@ -231,6 +235,7 @@ public class TimeTravel {
 
 		BlockJournal.onJump(from, target);
 		MobJournal.onJump(from, target);
+		EntityJournal.onJump();
 		EffectJournal.rebuildUpcoming();
 		ProcessJournal.afterJump(from, target);
 		ChatTimeline.onJump(target);
@@ -282,6 +287,7 @@ public class TimeTravel {
 		timelineTick++;
 		config.timelineTick = timelineTick;
 		BlockJournal.tick();
+		EntityJournal.tick();
 		MobJournal.tick();
 		ProcessJournal.tick();
 		ChatTimeline.tick();
@@ -303,6 +309,7 @@ public class TimeTravel {
 			BlockJournal.saveIfDirty();
 			MobJournal.saveIfDirty();
 			ChatTimeline.saveIfDirty();
+			EntityJournal.saveIfDirty();
 			EffectJournal.saveIfDirty();
 		}
 	}
@@ -353,6 +360,7 @@ public class TimeTravel {
 		BlockJournal.save();
 		MobJournal.save();
 		ChatTimeline.save();
+		EntityJournal.save();
 		EffectJournal.save();
 		if (worldFolder != null && config != null) config.save();
 		VoicechatInteractionCompat.clearCooldowns();
@@ -641,6 +649,7 @@ public class TimeTravel {
 		BlockJournal.eraseVisits(ids);
 		MobJournal.eraseVisits(ids);
 		ChatTimeline.eraseVisits(ids);
+		EntityJournal.eraseVisits(ids);
 		EffectJournal.eraseVisits(ids);
 		ChatTimeline.resend(timelineTick);
 
