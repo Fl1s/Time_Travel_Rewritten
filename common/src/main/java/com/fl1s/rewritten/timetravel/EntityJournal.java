@@ -11,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.AreaEffectCloud;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.FallingBlockEntity;
@@ -48,7 +49,10 @@ public final class EntityJournal {
 
     private record Due(long tick, PrimedTnt tnt) {}
 
+    private record CloudRef(String dim, long tick) {}
+
     private static final List<Entry> entries = new ArrayList<>();
+    private static final Map<UUID, CloudRef> clouds = new HashMap<>();
     private static final PriorityQueue<Entry> upcoming = new PriorityQueue<>(
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
     private static final Map<UUID, String> live = new HashMap<>();
@@ -76,6 +80,10 @@ public final class EntityJournal {
 
     public static void onSpawn(ServerLevel level, Entity entity) {
         if (!TimeTravel.isLooping || replaying || TimeTravel.loopSceneManager == null) return;
+        if (entity instanceof AreaEffectCloud) {
+            clouds.put(entity.getUUID(), new CloudRef(level.dimension().location().toString(), TimeTravel.timelineTick));
+            return;
+        }
         if (!isTracked(entity)) return;
         PlayerData pd = BlockJournal.nearestRecorder(level, entity.blockPosition());
         if (pd == null) return;
@@ -143,6 +151,7 @@ public final class EntityJournal {
 
     public static void onJump() {
         discardLive();
+        discardClouds();
         rebuildUpcoming();
         long now = TimeTravel.timelineTick;
         for (Entry e : new ArrayList<>(entries)) {
@@ -160,6 +169,22 @@ public final class EntityJournal {
             if (entity != null) entity.discard();
         }
         live.clear();
+    }
+
+    private static void discardClouds() {
+        long now = TimeTravel.timelineTick;
+        Iterator<Map.Entry<UUID, CloudRef>> it = clouds.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, CloudRef> en = it.next();
+            ServerLevel level = levelOf(en.getValue().dim());
+            Entity cloud = level == null ? null : level.getEntity(en.getKey());
+            if (cloud == null || cloud.isRemoved()) {
+                it.remove();
+            } else if (en.getValue().tick() > now) {
+                cloud.discard();
+                it.remove();
+            }
+        }
     }
 
     public static void rebuildUpcoming() {
@@ -213,6 +238,7 @@ public final class EntityJournal {
         entries.clear();
         upcoming.clear();
         live.clear();
+        clouds.clear();
         nextSeq = 0;
         Path f = file();
         if (Files.exists(f)) {
@@ -246,6 +272,7 @@ public final class EntityJournal {
 
     public static void clear() {
         discardLive();
+        clouds.clear();
         entries.clear();
         upcoming.clear();
         nextSeq = 0;
