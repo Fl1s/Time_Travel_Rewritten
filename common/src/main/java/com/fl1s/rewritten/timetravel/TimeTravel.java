@@ -62,6 +62,7 @@ public class TimeTravel {
 	public static LoopSceneManager loopSceneManager;
 	public static Path worldFolder;
 
+	public static final int GHOST_SYNC_SKIP_LIMIT = 8000;
 	public static final int GHOST_SKIP_PER_TICK = 40;
 	private static TimelineSession session;
 	record PendingPiece(long startTick, String recording, String playerName, int skipTicks, int visitId,
@@ -143,6 +144,7 @@ public class TimeTravel {
 		config.save();
 		broadcastSync();
 		LOOP_LOGGER.info("Timeline started at tick {}", timelineTick);
+		ProcessJournal.snapshotOrigins(server.getPlayerList().getPlayers());
 	}
 
 	public static void stopLoop() {
@@ -353,6 +355,9 @@ public class TimeTravel {
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
 			beginVisit(player, pd);
 			if (session().idle) { session().idle = false; session().needsRebuild = true; }
+		}
+		if (isLooping) {
+			ProcessJournal.snapshotOrigins(java.util.List.of(player));
 		}
 		sendSync(player);
 	}
@@ -664,15 +669,21 @@ public class TimeTravel {
 				piece.recording(), pd.getNickname(), pd.getSkin(), delayTicks);
 		if (playback == null) return;
 
-		net.minecraft.world.entity.Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
+		int pendingSkip = piece.skipTicks();
+		if (pendingSkip > 0) {
+			int syncSkip = Math.min(pendingSkip, GHOST_SYNC_SKIP_LIMIT);
+			playback.tick(syncSkip);
+			pendingSkip -= syncSkip;
+		}
+
+		Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
 		GhostFx fx = new GhostFx(ghostEntity);
 		if (piece.skipTicks() > 0) fx.graceUntil = timelineTick + 10;
-		session().ghostRoots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx, piece.skipTicks()));
+		session().ghostRoots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx, pendingSkip));
 		if (trackVoice && voiceChatLoaded) {
 			VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(), piece.visitStartTick(), ghostEntity);
 		}
 	}
-
 	private static void stopGhosts() {
 		TimelineSession s = session;
 		if (s == null) return;

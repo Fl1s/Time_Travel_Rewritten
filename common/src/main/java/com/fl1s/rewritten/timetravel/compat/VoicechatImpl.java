@@ -81,7 +81,7 @@ public final class VoicechatImpl {
         try {
             LOOP_CATEGORY = serverApi.volumeCategoryBuilder()
                     .setId(CATEGORY_ID)
-                    .setName("Time Travel Voices")
+                    .setName("TT Voices")
                     .build();
             serverApi.registerVolumeCategory(LOOP_CATEGORY);
         } catch (Exception e) {

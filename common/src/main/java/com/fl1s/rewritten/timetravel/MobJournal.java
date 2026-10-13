@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.fl1s.rewritten.timetravel.util.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
@@ -27,9 +28,12 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+import java.lang.reflect.Type;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +66,15 @@ public final class MobJournal {
         final List<Sample> samples = new ArrayList<>();
     }
 
+    public static final class Spawn {
+        long tick;
+        String dim;
+        String nbt;
+        double x, y, z;
+
+        public Spawn() {}
+    }
+
     public static final class Entry {
         long tick;
         long seq;
@@ -76,8 +89,6 @@ public final class MobJournal {
         transient Vec3 deathPos;
     }
 
-    private record Spawn(long tick, double x, double y, double z) {}
-
     private static final Journal<Entry> STORE = new Journal<>(
             "timetravel_rewritten_mobs.json",
             new TypeToken<ArrayList<Entry>>() {}.getType(),
@@ -85,6 +96,7 @@ public final class MobJournal {
             e -> e.seq,
             e -> e.visit);
 
+    private static final Type SPAWNS_TYPE = new TypeToken<HashMap<String, Spawn>>() {}.getType();
     private static final Map<UUID, Entry> canon = new HashMap<>();
     private static final Map<UUID, Trail> trails = new HashMap<>();
     private static final Map<UUID, Spawn> spawns = new HashMap<>();
@@ -129,9 +141,18 @@ public final class MobJournal {
         if (Ghosts.is(entity)) return;
         UUID uuid = entity.getUUID();
         if (spawns.containsKey(uuid) || canon.containsKey(uuid)) return;
-        spawns.put(uuid, new Spawn(
-                TimeTravel.timelineTick,
-                entity.getX(), entity.getY(), entity.getZ()));
+
+        CompoundTag tag = new CompoundTag();
+        if (!entity.save(tag)) return;
+
+        Spawn s = new Spawn();
+        s.tick = TimeTravel.timelineTick;
+        s.dim = level.dimension().location().toString();
+        s.nbt = tag.toString();
+        s.x = entity.getX();
+        s.y = entity.getY();
+        s.z = entity.getZ();
+        spawns.put(uuid, s);
     }
 
     public static void onEntityDeath(LivingEntity entity, boolean explode) {
@@ -175,10 +196,10 @@ public final class MobJournal {
 
         Spawn newSpawn = spawns.remove(uuid);
         if (newSpawn != null) {
-            entry.spawnTick = newSpawn.tick();
-            entry.spawnX = newSpawn.x();
-            entry.spawnY = newSpawn.y();
-            entry.spawnZ = newSpawn.z();
+            entry.spawnTick = newSpawn.tick;
+            entry.spawnX = newSpawn.x;
+            entry.spawnY = newSpawn.y;
+            entry.spawnZ = newSpawn.z;
         } else {
             Entry prev = canon.get(uuid);
             if (prev != null) {
@@ -384,7 +405,42 @@ public final class MobJournal {
         for (Entry e : canon.values()) {
             apply(e, e.tick <= to, false);
         }
+        if (to < from) {
+            discardSpawnsBetween(to, from);
+        } else if (to > from) {
+            reviveSpawnsBetween(from, to);
+        }
+
         rebuildUpcoming();
+    }
+
+    private static void discardSpawnsBetween(long to, long from) {
+        for (Map.Entry<UUID, Spawn> en : new ArrayList<>(spawns.entrySet())) {
+            Spawn s = en.getValue();
+            if (s.tick <= to || s.tick > from) continue;
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim));
+            if (level == null) continue;
+            Entity e = level.getEntity(en.getKey());
+            if (e != null && !e.isRemoved()) e.discard();
+        }
+    }
+
+    private static void reviveSpawnsBetween(long from, long to) {
+        for (Map.Entry<UUID, Spawn> en : new ArrayList<>(spawns.entrySet())) {
+            Spawn s = en.getValue();
+            if (s.tick <= from || s.tick > to) continue;
+            if (s.nbt == null) continue;
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim));
+            if (level == null) continue;
+            if (level.getEntity(en.getKey()) != null) continue; // already present
+            try {
+                CompoundTag tag = TagParser.parseTag(s.nbt);
+                Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
+                if (revived != null) level.addFreshEntity(revived);
+            } catch (Exception ex) {
+                TimeTravel.LOOP_LOGGER.error("Failed to revive natural spawn {}", en.getKey(), ex);
+            }
+        }
     }
 
     public static void rebuildUpcoming() {
@@ -448,6 +504,8 @@ public final class MobJournal {
                 }
                 return;
             }
+
+            // Do not revive a mob before its natural spawn tick on a time jump back.
             if (e.spawnTick != null && TimeTravel.timelineTick < e.spawnTick) {
                 if (existing != null && !existing.isRemoved()) existing.discard();
                 return;
@@ -525,11 +583,28 @@ public final class MobJournal {
         }
     }
 
+    private static Path spawnsFile() {
+        return TimeTravel.worldFolder.resolve("timetravel_rewritten_mob_spawns.json");
+    }
+
     public static void load() {
         canon.clear();
         trails.clear();
         spawns.clear();
         STORE.load();
+        if (TimeTravel.worldFolder != null) {
+            Map<String, Spawn> loadedSpawns = JsonStore.load(spawnsFile(), SPAWNS_TYPE);
+            if (loadedSpawns != null) {
+                for (Map.Entry<String, Spawn> en : loadedSpawns.entrySet()) {
+                    try {
+                        UUID id = UUID.fromString(en.getKey());
+                        Spawn s = en.getValue();
+                        if (s != null) spawns.put(id, s);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        }
         rebuildUpcoming();
     }
 
@@ -539,6 +614,12 @@ public final class MobJournal {
 
     public static void save() {
         STORE.save();
+        if (TimeTravel.worldFolder == null) return;
+        Map<String, Spawn> out = new HashMap<>();
+        for (Map.Entry<UUID, Spawn> en : spawns.entrySet()) {
+            out.put(en.getKey().toString(), en.getValue());
+        }
+        JsonStore.save(spawnsFile(), out, SPAWNS_TYPE);
     }
 
     public static void clear() {

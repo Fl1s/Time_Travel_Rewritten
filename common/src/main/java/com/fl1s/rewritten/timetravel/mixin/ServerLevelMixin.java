@@ -4,6 +4,7 @@ import com.fl1s.rewritten.timetravel.BlockJournal;
 import com.fl1s.rewritten.timetravel.EffectJournal;
 import com.fl1s.rewritten.timetravel.EntityJournal;
 import com.fl1s.rewritten.timetravel.MobJournal;
+import com.fl1s.rewritten.timetravel.ProcessJournal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
@@ -12,6 +13,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -53,5 +55,10 @@ public abstract class ServerLevelMixin {
         ServerLevel self = (ServerLevel) (Object) this;
         EntityJournal.onSpawn(self, entity);
         MobJournal.onEntitySpawn(self, entity);
+    }
+
+    @Inject(method = "sendBlockUpdated", at = @At("HEAD"), cancellable = true)
+    private void tt$suppressFastSimUpdates(BlockPos pos, BlockState oldState, BlockState newState, int flags, CallbackInfo ci) {
+        if (ProcessJournal.isFastSimulating()) ci.cancel();
     }
 }
