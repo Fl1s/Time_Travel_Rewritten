@@ -36,8 +36,9 @@ public abstract class ServerLevelMixin {
         EffectJournal.recordLevelEvent((ServerLevel) (Object) this, except, type, pos, data);
     }
 
-    @Inject(method = "blockEvent(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;II)V", at = @At("HEAD"))
+    @Inject(method = "blockEvent(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;II)V", at = @At("HEAD"), cancellable = true)
     private void tt$blockEvent(BlockPos pos, Block block, int a, int b, CallbackInfo ci) {
+        if (com.fl1s.rewritten.timetravel.BlockJournal.isApplying()) { ci.cancel(); return; }
         EffectJournal.recordBlockEvent((ServerLevel) (Object) this, pos, block, a, b);
     }
 

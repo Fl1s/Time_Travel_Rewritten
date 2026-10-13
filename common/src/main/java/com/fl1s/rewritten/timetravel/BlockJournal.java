@@ -107,6 +107,9 @@ public final class BlockJournal {
     public static void onBlockChanged(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
         if (applying || !TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
         if (!shouldTrack(old, now)) return;
+        if (old.is(Blocks.MOVING_PISTON)) old = Blocks.AIR.defaultBlockState();
+        if (now.is(Blocks.MOVING_PISTON)) now = Blocks.AIR.defaultBlockState();
+        if (old.equals(now)) return;
         PlayerData pd = nearestRecorder(level, pos);
         if (pd == null) return;
 
@@ -230,6 +233,7 @@ public final class BlockJournal {
 
             BlockState state = toNew ? newState(e) : oldState(e);
             if (state == null) return;
+            if (state.is(Blocks.MOVING_PISTON)) state = Blocks.AIR.defaultBlockState();
 
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
             BlockState current = level.getBlockState(pos);
@@ -264,6 +268,7 @@ public final class BlockJournal {
 
     private static void finishBatch() {
         if (touched.isEmpty()) return;
+        applying = true;
         try {
             for (Map.Entry<ServerLevel, Set<BlockPos>> en : touched.entrySet()) {
                 ServerLevel level = en.getKey();
@@ -274,24 +279,21 @@ public final class BlockJournal {
                 }
                 for (BlockPos p : positions) {
                     BlockState st = level.getBlockState(p);
-                    if (st.is(net.minecraft.world.level.block.Blocks.MOVING_PISTON) || st.is(net.minecraft.world.level.block.Blocks.PISTON_HEAD)) {
-                        level.setBlock(p, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+                    if (st.is(Blocks.MOVING_PISTON)) {
+                        level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
                         continue;
                     }
                     if (st.isAir()) continue;
                     BlockState fixed = Block.updateFromNeighbourShapes(st, level, p);
-                    if (fixed.equals(st)) {
-                        level.updateNeighborsAt(p, st.getBlock());
-                        continue;
-                    }
+                    if (fixed.equals(st)) continue;
                     if (!fixed.is(st.getBlock()) && level.getBlockEntity(p) != null) level.removeBlockEntity(p);
                     level.setBlock(p, fixed, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
-                    level.updateNeighborsAt(p, fixed.getBlock());
                 }
             }
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to refresh block connections", ex);
         } finally {
+            applying = false;
             touched.clear();
         }
     }
