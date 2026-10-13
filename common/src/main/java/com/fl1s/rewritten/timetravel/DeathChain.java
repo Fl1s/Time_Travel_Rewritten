@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
+import com.fl1s.rewritten.timetravel.journal.WeatherJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.network.chat.Component;
@@ -130,6 +131,7 @@ public final class DeathChain {
         EffectJournal.eraseVisits(ids);
         MobBinding.eraseVisits(ids);
         WorldEntityJournal.eraseVisits(ids);
+        WeatherJournal.get().eraseVisits(ids);
         ChatTimeline.resend(TimeTravel.timelineTick);
 
         scene.saveRecordingPlayers();

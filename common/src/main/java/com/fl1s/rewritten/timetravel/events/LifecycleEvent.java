@@ -4,6 +4,7 @@ import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.journal.EnderDragonFightJournal;
+import com.fl1s.rewritten.timetravel.journal.WeatherJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -55,6 +56,7 @@ public class LifecycleEvent {
         AdvancementTimeline.load();
         WorldEntityJournal.load();
         EnderDragonFightJournal.get().load();
+        WeatherJournal.get().load();
 
         TimeTravel.server = server;
         TimeTravel.serverLevel = server.overworld();

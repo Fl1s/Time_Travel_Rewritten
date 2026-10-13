@@ -3,8 +3,10 @@ package com.fl1s.rewritten.timetravel;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.journal.EnderDragonFightJournal;
+import com.fl1s.rewritten.timetravel.journal.WeatherJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 public final class Timeline {
 
@@ -38,6 +40,7 @@ public final class Timeline {
         AdvancementTimeline.rebuildUpcoming();
         EnderDragonFightJournal.get().rebuildUpcoming();
         WorldEntityJournal.rebuildUpcoming();
+        WeatherJournal.get().rebuildUpcoming();
         ProcessJournal.snapshotOrigins(TimeTravel.server.getPlayerList().getPlayers());
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
@@ -62,6 +65,7 @@ public final class Timeline {
         MobBinding.save();
         EnderDragonFightJournal.get().save();
         WorldEntityJournal.save();
+        WeatherJournal.get().save();
 
         TimeTravel.isLooping = false;
         TimeTravel.config.isLooping = false;
@@ -89,6 +93,7 @@ public final class Timeline {
         MobBinding.clear();
         EnderDragonFightJournal.get().clear();
         WorldEntityJournal.clear();
+        WeatherJournal.get().clear();
         VoicechatCompat.deleteAllAudio();
         TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
@@ -133,6 +138,7 @@ public final class Timeline {
         TimeTravel.LOOP_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
         EnderDragonFightJournal.get().snapshotAll(visitId);
+        WeatherJournal.get().snapshotAll(visitId);
 
         BlockJournal.flushWatches();
         EntityJournal.fastForward(from, target);
@@ -150,6 +156,7 @@ public final class Timeline {
         ghosts.setIdle(false);
 
         EnderDragonFightJournal.get().restore(target);
+        WeatherJournal.get().restore(target);
 
         BlockJournal.onJump(from, target);
         MobJournal.onJump(from, target);
@@ -161,6 +168,7 @@ public final class Timeline {
         AdvancementTimeline.onJump();
         EnderDragonFightJournal.get().rebuildUpcoming();
         WorldEntityJournal.rebuildUpcoming();
+        WeatherJournal.get().rebuildUpcoming();
 
         TimeTravel.forEachOnlineRecorded((p, pd) -> s.visits.beginVisit(p, pd, dir));
         ghosts.rebuild();
@@ -218,6 +226,7 @@ public final class Timeline {
         AdvancementTimeline.tick();
         EffectJournal.tick();
         EnderDragonFightJournal.get().tick();
+        WeatherJournal.get().tick();
         if (TimeTravel.syncDayTime) {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.timelineTick);
         }
@@ -238,6 +247,7 @@ public final class Timeline {
             MobBinding.saveIfDirty();
             EnderDragonFightJournal.get().saveIfDirty();
             WorldEntityJournal.saveIfDirty();
+            WeatherJournal.get().saveIfDirty();
         }
     }
 }

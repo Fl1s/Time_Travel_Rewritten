@@ -13,6 +13,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
@@ -497,11 +498,12 @@ public final class BlockJournal {
             be.loadWithComponents(tag, TimeTravel.server.registryAccess());
             be.setChanged();
 
-            Packet<ClientGamePacketListener> packet = be.getUpdatePacket();
-            if (packet != null) {
-                for (ServerPlayer sp : level.players()) {
-                    if (sp.connection != null) sp.connection.send(packet);
-                }
+            BlockState state = level.getBlockState(pos);
+            level.sendBlockUpdated(pos, state, state, Block.UPDATE_ALL);
+
+            Packet<ClientGamePacketListener> packet = ClientboundBlockEntityDataPacket.create(be);
+            for (ServerPlayer sp : level.players()) {
+                if (sp.connection != null) sp.connection.send(packet);
             }
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply block entity journal entry at {} {} {}", e.x, e.y, e.z, ex);
