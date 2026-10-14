@@ -26,6 +26,7 @@ import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.lang.reflect.Type;
@@ -46,12 +47,17 @@ public final class MobJournal {
 
     private static final double RANGE = 96.0;
     private static final long GLIDE_TICKS = 10;
-    private static final long NAV_TICKS = 200;;
+    private static final long NAV_TICKS = 200;
     private static final double MAX_SPEED_MOD = 4.0;
     private static final double NEAR_PLAYER = 48.0;
     private static final int TRAIL_STEP = 2;
     private static final int TRAIL_MAX = 600;
     private static final int TRAIL_TRACKED_MAX = 256;
+
+    private static final int LIVING_SAMPLE_INTERVAL = 60;
+    private static final int LIVING_STEER_INTERVAL = 20;
+    private static final double LIVING_RADIUS = 64.0;
+    private static final double LIVING_DRIFT_THRESHOLD = 2.0;
 
     static final class Sample {
         long tick;
@@ -67,10 +73,11 @@ public final class MobJournal {
     }
 
     public static final class Spawn {
-        long tick;
-        String dim;
-        String nbt;
-        double x, y, z;
+        public long tick;
+        public String dim;
+        public String nbt;
+        public double x, y, z;
+        public transient UUID uuid;
 
         public Spawn() {}
     }
@@ -103,6 +110,9 @@ public final class MobJournal {
 
     private static final PriorityQueue<Entry> pendingSpawns = new PriorityQueue<>(
             Comparator.comparingLong(e -> e.spawnTick == null ? Long.MAX_VALUE : e.spawnTick));
+
+    private static final PriorityQueue<Spawn> pendingNaturalSpawns = new PriorityQueue<>(
+            Comparator.comparingLong(s -> s.tick));
 
     private static boolean killing = false;
 
@@ -152,6 +162,7 @@ public final class MobJournal {
         s.x = entity.getX();
         s.y = entity.getY();
         s.z = entity.getZ();
+        s.uuid = uuid;
         spawns.put(uuid, s);
     }
 
@@ -247,6 +258,27 @@ public final class MobJournal {
         t.samples.add(s);
     }
 
+    private static void snapshotLivingMobs() {
+        for (ServerLevel level : TimeTravel.server.getAllLevels()) {
+            for (ServerPlayer p : level.players()) {
+                if (Ghosts.is(p) || p.isSpectator()) continue;
+                AABB box = p.getBoundingBox().inflate(LIVING_RADIUS);
+                for (Mob mob : level.getEntitiesOfClass(Mob.class, box)) {
+                    if (Ghosts.is(mob) || mob.isRemoved()) continue;
+                    UUID uuid = mob.getUUID();
+                    Trail t = trails.get(uuid);
+                    if (t == null) {
+                        if (trails.size() >= TRAIL_TRACKED_MAX) continue;
+                        t = new Trail();
+                        t.dim = level.dimension().location().toString();
+                        trails.put(uuid, t);
+                    }
+                    addSample(t, mob);
+                }
+            }
+        }
+    }
+
     private static void sampleTrails() {
         Iterator<Map.Entry<UUID, Trail>> it = trails.entrySet().iterator();
         while (it.hasNext()) {
@@ -258,6 +290,8 @@ public final class MobJournal {
                 it.remove();
                 continue;
             }
+            if (!(m instanceof Mob)) continue;
+            if (canon.containsKey(en.getKey())) continue;
             addSample(t, m);
         }
     }
@@ -288,6 +322,16 @@ public final class MobJournal {
         return r;
     }
 
+    private static Sample findSampleAt(List<Sample> s, long tick) {
+        if (s == null || s.isEmpty()) return null;
+        Sample best = null;
+        for (Sample sample : s) {
+            if (sample.tick > tick) break;
+            best = sample;
+        }
+        return best != null ? best : s.get(0);
+    }
+
     private static Vec3 positionAt(Entry e, long tick) {
         boolean haveTrail = e.trail != null && !e.trail.isEmpty();
         if (haveTrail && tick >= e.trail.get(0).tick) {
@@ -301,6 +345,12 @@ public final class MobJournal {
     }
 
     public static void tick() {
+        while (!pendingNaturalSpawns.isEmpty()
+                && pendingNaturalSpawns.peek().tick <= TimeTravel.timelineTick) {
+            Spawn s = pendingNaturalSpawns.poll();
+            reviveNaturalSpawn(s);
+        }
+
         while (!pendingSpawns.isEmpty()) {
             Entry e = pendingSpawns.peek();
             if (e.spawnTick == null || e.spawnTick > TimeTravel.timelineTick) break;
@@ -310,10 +360,68 @@ public final class MobJournal {
             }
         }
 
+        if (TimeTravel.timelineTick % LIVING_SAMPLE_INTERVAL == 0) {
+            snapshotLivingMobs();
+        }
+
         STORE.tick(e -> apply(e, true, true));
         drive();
+        if (TimeTravel.timelineTick % LIVING_STEER_INTERVAL == 0) {
+            steerLiving();
+        }
         steer(TimeTravel.timelineTick % 5 == 0);
         if (TimeTravel.timelineTick % TRAIL_STEP == 0) sampleTrails();
+    }
+
+    private static void steerLiving() {
+        long now = TimeTravel.timelineTick;
+        for (Map.Entry<UUID, Trail> en : trails.entrySet()) {
+            UUID uuid = en.getKey();
+            Trail t = en.getValue();
+
+            if (canon.containsKey(uuid)) continue;
+
+            List<Sample> s = t.samples;
+            if (s.size() < 2) continue;
+
+            Sample last = s.get(s.size() - 1);
+            if (now < last.tick) continue;
+
+            long elapsed = now - last.tick;
+            if (elapsed > LIVING_SAMPLE_INTERVAL * 3L) continue;
+
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(t.dim));
+            if (level == null) continue;
+            Entity e = level.getEntity(uuid);
+            if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+            if (isFrozenByVillager(uuid)) continue;
+
+            Sample target = s.size() >= 2 ? s.get(s.size() - 2) : last;
+            double dx = mob.getX() - last.x;
+            double dz = mob.getZ() - last.z;
+            double drift = Math.sqrt(dx * dx + dz * dz);
+            if (drift < LIVING_DRIFT_THRESHOLD) continue;
+
+            mob.getNavigation().moveTo(last.x, last.y, last.z, 1.0);
+        }
+    }
+
+    private static boolean isFrozenByVillager(UUID uuid) {
+        return false;
+    }
+
+    private static void reviveNaturalSpawn(Spawn s) {
+        if (s.uuid == null) return;
+        ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim));
+        if (level == null) return;
+        if (level.getEntity(s.uuid) != null) return;
+        try {
+            CompoundTag tag = TagParser.parseTag(s.nbt);
+            Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
+            if (revived != null) level.addFreshEntity(revived);
+        } catch (Exception ex) {
+            TimeTravel.LOOP_LOGGER.error("Failed to revive natural spawn {}", s.uuid, ex);
+        }
     }
 
     private static void drive() {
@@ -411,7 +519,35 @@ public final class MobJournal {
             reviveSpawnsBetween(from, to);
         }
 
+        applyLivingPositions(to);
+
         rebuildUpcoming();
+    }
+
+    private static void applyLivingPositions(long to) {
+        for (Map.Entry<UUID, Trail> en : trails.entrySet()) {
+            UUID uuid = en.getKey();
+            Trail t = en.getValue();
+            if (canon.containsKey(uuid)) continue;
+
+            Sample s = findSampleAt(t.samples, to);
+            if (s == null) continue;
+
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(t.dim));
+            if (level == null) continue;
+            Entity e = level.getEntity(uuid);
+            if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+
+            mob.getNavigation().stop();
+            mob.teleportTo(s.x, s.y, s.z);
+            if (s.rot) {
+                mob.setYRot(s.yaw);
+                mob.setXRot(s.pitch);
+                mob.setYHeadRot(s.yaw);
+                mob.setYBodyRot(s.yaw);
+            }
+            mob.setDeltaMovement(Vec3.ZERO);
+        }
     }
 
     private static void discardSpawnsBetween(long to, long from) {
@@ -432,7 +568,7 @@ public final class MobJournal {
             if (s.nbt == null) continue;
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim));
             if (level == null) continue;
-            if (level.getEntity(en.getKey()) != null) continue; // already present
+            if (level.getEntity(en.getKey()) != null) continue;
             try {
                 CompoundTag tag = TagParser.parseTag(s.nbt);
                 Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
@@ -447,6 +583,7 @@ public final class MobJournal {
         rebuildCanon();
         STORE.upcoming().clear();
         pendingSpawns.clear();
+        pendingNaturalSpawns.clear();
         for (Entry e : canon.values()) {
             if (e.tick > TimeTravel.timelineTick) {
                 STORE.upcoming().add(e);
@@ -455,6 +592,11 @@ public final class MobJournal {
                         && e.spawnTick < e.tick) {
                     pendingSpawns.add(e);
                 }
+            }
+        }
+        for (Spawn s : spawns.values()) {
+            if (s.tick > TimeTravel.timelineTick) {
+                pendingNaturalSpawns.add(s);
             }
         }
     }
@@ -505,7 +647,6 @@ public final class MobJournal {
                 return;
             }
 
-            // Do not revive a mob before its natural spawn tick on a time jump back.
             if (e.spawnTick != null && TimeTravel.timelineTick < e.spawnTick) {
                 if (existing != null && !existing.isRemoved()) existing.discard();
                 return;
@@ -533,8 +674,6 @@ public final class MobJournal {
             ListTag pos = tag.getList("Pos", 6);
             if (pos.size() < 3 || !level.isLoaded(BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2)))) return;
 
-            TimeTravel.LOOP_LOGGER.info("Revive {} (visit {}) spawnTick={} deathTick={} now={}",
-                    e.uuid, e.visit, e.spawnTick, e.tick, TimeTravel.timelineTick);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived != null) level.addFreshEntity(revived);
         } catch (Exception ex) {
@@ -599,7 +738,10 @@ public final class MobJournal {
                     try {
                         UUID id = UUID.fromString(en.getKey());
                         Spawn s = en.getValue();
-                        if (s != null) spawns.put(id, s);
+                        if (s != null) {
+                            s.uuid = id;
+                            spawns.put(id, s);
+                        }
                     } catch (Exception ignored) {
                     }
                 }
@@ -627,6 +769,7 @@ public final class MobJournal {
         trails.clear();
         spawns.clear();
         pendingSpawns.clear();
+        pendingNaturalSpawns.clear();
         STORE.clear();
     }
 }

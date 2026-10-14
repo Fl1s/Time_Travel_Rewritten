@@ -41,6 +41,7 @@ public final class Timeline {
         EnderDragonFightJournal.get().rebuildUpcoming();
         WorldEntityJournal.rebuildUpcoming();
         WeatherJournal.get().rebuildUpcoming();
+        VillagerJournal.rebuildUpcoming();
         ProcessJournal.snapshotOrigins(TimeTravel.server.getPlayerList().getPlayers());
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
@@ -66,6 +67,7 @@ public final class Timeline {
         EnderDragonFightJournal.get().save();
         WorldEntityJournal.save();
         WeatherJournal.get().save();
+        VillagerJournal.save();
 
         TimeTravel.isLooping = false;
         TimeTravel.config.isLooping = false;
@@ -94,6 +96,7 @@ public final class Timeline {
         EnderDragonFightJournal.get().clear();
         WorldEntityJournal.clear();
         WeatherJournal.get().clear();
+        VillagerJournal.clear();
         VoicechatCompat.deleteAllAudio();
         TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
@@ -161,6 +164,7 @@ public final class Timeline {
         BlockJournal.onJump(from, target);
         MobJournal.onJump(from, target);
         WorldEntityJournal.onJump(from, target);
+        VillagerJournal.onJump(from, target);
         EntityJournal.onJump();
         EffectJournal.rebuildUpcoming();
         ProcessJournal.afterJump(from, target);
@@ -169,6 +173,7 @@ public final class Timeline {
         EnderDragonFightJournal.get().rebuildUpcoming();
         WorldEntityJournal.rebuildUpcoming();
         WeatherJournal.get().rebuildUpcoming();
+        VillagerJournal.rebuildUpcoming();
 
         TimeTravel.forEachOnlineRecorded((p, pd) -> s.visits.beginVisit(p, pd, dir));
         ghosts.rebuild();
@@ -227,6 +232,7 @@ public final class Timeline {
         EffectJournal.tick();
         EnderDragonFightJournal.get().tick();
         WeatherJournal.get().tick();
+        VillagerJournal.tick();
         if (TimeTravel.syncDayTime) {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.timelineTick);
         }
@@ -248,6 +254,7 @@ public final class Timeline {
             EnderDragonFightJournal.get().saveIfDirty();
             WorldEntityJournal.saveIfDirty();
             WeatherJournal.get().saveIfDirty();
+            VillagerJournal.saveIfDirty();
         }
     }
 }

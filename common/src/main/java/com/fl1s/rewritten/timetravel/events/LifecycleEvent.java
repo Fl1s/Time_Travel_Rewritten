@@ -55,6 +55,7 @@ public class LifecycleEvent {
         ChatTimeline.load();
         AdvancementTimeline.load();
         WorldEntityJournal.load();
+        VillagerJournal.load();
         EnderDragonFightJournal.get().load();
         WeatherJournal.get().load();
 

@@ -169,6 +169,7 @@ public class TimeTravel {
 		EffectJournal.save();
 		MobBinding.save();
 		WorldEntityJournal.save();
+		VillagerJournal.save();
 		EnderDragonFightJournal.get().save();
 		WeatherJournal.get().save();
 		if (worldFolder != null && config != null) config.save();
