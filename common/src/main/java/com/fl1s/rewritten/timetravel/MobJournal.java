@@ -22,6 +22,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.player.Player;
@@ -149,6 +150,7 @@ public final class MobJournal {
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
         if (!TimeTravel.isLooping || !(entity instanceof Mob)) return;
+        if (entity instanceof EnderDragon) return;
         if (Ghosts.is(entity)) return;
         UUID uuid = entity.getUUID();
         if (spawns.containsKey(uuid) || canon.containsKey(uuid)) return;
@@ -171,6 +173,7 @@ public final class MobJournal {
         if (killing) return;
         if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.loopSceneManager == null) return;
         if (!(entity.level() instanceof ServerLevel level) || entity instanceof Player) return;
+        if (entity instanceof EnderDragon) return;
         if (!entity.getType().canSerialize()) return;
 
         ServerPlayer nearest = null;
@@ -234,6 +237,7 @@ public final class MobJournal {
 
     public static void track(Mob mob, Entity who) {
         if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (mob instanceof EnderDragon) return;
         if (!(who instanceof ServerPlayer sp) || Ghosts.is(sp)) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
         if (trails.containsKey(mob.getUUID()) || trails.size() >= TRAIL_TRACKED_MAX) return;

@@ -19,8 +19,7 @@ public final class EnderDragonFightJournal extends PersistentDataJournal {
     private static final EnderDragonFightJournal INSTANCE = new EnderDragonFightJournal();
 
     private boolean initialized = false;
-    private boolean lastDragonKilled;
-    private boolean lastPreviouslyKilled;
+    private EndDragonFight.Data lastData;
 
     private EnderDragonFightJournal() {
         super("timetravel_rewritten_dragon.json");
@@ -60,6 +59,12 @@ public final class EnderDragonFightJournal extends PersistentDataJournal {
             return;
         }
 
+        for (Entity e : end.getAllEntities()) {
+            if (e instanceof EnderDragon dragon && !dragon.isRemoved()) {
+                dragon.discard();
+            }
+        }
+
         if (existing != null) {
             ServerBossEvent oldBar = ((EnderDragonFightMixin) existing).tt$getDragonEvent();
             oldBar.setVisible(false);
@@ -68,12 +73,6 @@ public final class EnderDragonFightJournal extends PersistentDataJournal {
 
         EndDragonFight restored = new EndDragonFight(end, end.getSeed(), data);
         end.setDragonFight(restored);
-
-        for (Entity e : end.getAllEntities()) {
-            if (e instanceof EnderDragon dragon) {
-                dragon.setDragonFight(restored);
-            }
-        }
         initialized = false;
     }
 
@@ -84,17 +83,15 @@ public final class EnderDragonFightJournal extends PersistentDataJournal {
         if (end == null) return;
         EndDragonFight fight = end.getDragonFight();
         if (fight == null) return;
-        EndDragonFight.Data data = fight.saveData();
+        EndDragonFight.Data current = fight.saveData();
         if (!initialized) {
             initialized = true;
-            lastDragonKilled = data.dragonKilled();
-            lastPreviouslyKilled = data.previouslyKilled();
+            lastData = current;
             snapshotOne(ID, -1);
             return;
         }
-        if (data.dragonKilled() != lastDragonKilled || data.previouslyKilled() != lastPreviouslyKilled) {
-            lastDragonKilled = data.dragonKilled();
-            lastPreviouslyKilled = data.previouslyKilled();
+        if (!current.equals(lastData)) {
+            lastData = current;
             snapshotOne(ID, -1);
         }
     }
