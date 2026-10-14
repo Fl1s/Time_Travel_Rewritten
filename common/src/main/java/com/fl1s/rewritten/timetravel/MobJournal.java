@@ -57,6 +57,9 @@ public final class MobJournal {
     private static final int LIVING_SAMPLE_INTERVAL = 100;
     private static final double LIVING_RADIUS = 64.0;
 
+    private static final int LIVING_DRIFT_INTERVAL = 10;
+    private static final double LIVING_DRIFT_THRESHOLD_SQ = 6.0 * 6.0;
+
     static final class Sample {
         long tick;
         double x, y, z;
@@ -354,7 +357,9 @@ public final class MobJournal {
 
         STORE.tick(e -> apply(e, true, true));
         drive();
-        driveLiving();
+        if (TimeTravel.timelineTick % LIVING_DRIFT_INTERVAL == 0) {
+            driveLiving();
+        }
         steer(TimeTravel.timelineTick % 5 == 0);
         if (TimeTravel.timelineTick % TRAIL_STEP == 0) sampleTrails();
     }
@@ -379,19 +384,14 @@ public final class MobJournal {
 
             Vec3 pos = mob.position();
             double dx = target.x - pos.x, dy = target.y - pos.y, dz = target.z - pos.z;
-            double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            double distSq = dx * dx + dy * dy + dz * dz;
 
-            if (dist < 0.5) {
-                if (target.rot) {
-                    mob.setYRot(target.yaw);
-                    mob.setXRot(target.pitch);
-                    mob.setYHeadRot(target.yaw);
-                }
-                continue;
-            }
+            if (distSq < LIVING_DRIFT_THRESHOLD_SQ) continue;
 
-            double speedMod = Math.min(2.0, Math.max(0.5, dist / 3.0));
+            double dist = Math.sqrt(distSq);
+            double speedMod = Math.min(2.0, Math.max(0.5, dist / 6.0));
             mob.getNavigation().moveTo(target.x, target.y, target.z, speedMod);
+
             if (target.rot && dist < 4.0) {
                 mob.setYRot(target.yaw);
                 mob.setYHeadRot(target.yaw);
@@ -416,12 +416,17 @@ public final class MobJournal {
     private static void drive() {
         long now = TimeTravel.timelineTick;
         for (Entry e : STORE.upcoming()) {
-            if (e.trail == null || e.trail.isEmpty() || now < e.trail.get(0).tick || now >= e.tick) continue;
+            if (e.trail == null || e.trail.isEmpty()) continue;
+            long remaining = e.tick - now;
+            if (remaining > GLIDE_TICKS) continue;
+            if (now < e.trail.getFirst().tick || now >= e.tick) continue;
+
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
             if (!(level.getEntity(e.uuid) instanceof Mob mob) || !mob.isAlive()) continue;
 
             Sample s = sampleAt(e.trail, now);
+            if (s == null) continue;
             mob.getNavigation().stop();
             mob.setPos(s.x, s.y, s.z);
             mob.setDeltaMovement(Vec3.ZERO);
