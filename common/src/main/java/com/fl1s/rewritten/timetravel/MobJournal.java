@@ -54,10 +54,8 @@ public final class MobJournal {
     private static final int TRAIL_MAX = 600;
     private static final int TRAIL_TRACKED_MAX = 256;
 
-    private static final int LIVING_SAMPLE_INTERVAL = 60;
-    private static final int LIVING_STEER_INTERVAL = 20;
+    private static final int LIVING_SAMPLE_INTERVAL = 100;
     private static final double LIVING_RADIUS = 64.0;
-    private static final double LIVING_DRIFT_THRESHOLD = 2.0;
 
     static final class Sample {
         long tick;
@@ -322,16 +320,6 @@ public final class MobJournal {
         return r;
     }
 
-    private static Sample findSampleAt(List<Sample> s, long tick) {
-        if (s == null || s.isEmpty()) return null;
-        Sample best = null;
-        for (Sample sample : s) {
-            if (sample.tick > tick) break;
-            best = sample;
-        }
-        return best != null ? best : s.get(0);
-    }
-
     private static Vec3 positionAt(Entry e, long tick) {
         boolean haveTrail = e.trail != null && !e.trail.isEmpty();
         if (haveTrail && tick >= e.trail.get(0).tick) {
@@ -366,48 +354,49 @@ public final class MobJournal {
 
         STORE.tick(e -> apply(e, true, true));
         drive();
-        if (TimeTravel.timelineTick % LIVING_STEER_INTERVAL == 0) {
-            steerLiving();
-        }
+        driveLiving();
         steer(TimeTravel.timelineTick % 5 == 0);
         if (TimeTravel.timelineTick % TRAIL_STEP == 0) sampleTrails();
     }
 
-    private static void steerLiving() {
+    private static void driveLiving() {
         long now = TimeTravel.timelineTick;
         for (Map.Entry<UUID, Trail> en : trails.entrySet()) {
             UUID uuid = en.getKey();
-            Trail t = en.getValue();
-
             if (canon.containsKey(uuid)) continue;
 
+            Trail t = en.getValue();
             List<Sample> s = t.samples;
             if (s.size() < 2) continue;
 
-            Sample last = s.get(s.size() - 1);
-            if (now < last.tick) continue;
-
-            long elapsed = now - last.tick;
-            if (elapsed > LIVING_SAMPLE_INTERVAL * 3L) continue;
+            Sample target = sampleAt(s, now);
+            if (target == null) continue;
 
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(t.dim));
             if (level == null) continue;
             Entity e = level.getEntity(uuid);
             if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
-            if (isFrozenByVillager(uuid)) continue;
 
-            Sample target = s.size() >= 2 ? s.get(s.size() - 2) : last;
-            double dx = mob.getX() - last.x;
-            double dz = mob.getZ() - last.z;
-            double drift = Math.sqrt(dx * dx + dz * dz);
-            if (drift < LIVING_DRIFT_THRESHOLD) continue;
+            Vec3 pos = mob.position();
+            double dx = target.x - pos.x, dy = target.y - pos.y, dz = target.z - pos.z;
+            double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-            mob.getNavigation().moveTo(last.x, last.y, last.z, 1.0);
+            if (dist < 0.5) {
+                if (target.rot) {
+                    mob.setYRot(target.yaw);
+                    mob.setXRot(target.pitch);
+                    mob.setYHeadRot(target.yaw);
+                }
+                continue;
+            }
+
+            double speedMod = Math.min(2.0, Math.max(0.5, dist / 3.0));
+            mob.getNavigation().moveTo(target.x, target.y, target.z, speedMod);
+            if (target.rot && dist < 4.0) {
+                mob.setYRot(target.yaw);
+                mob.setYHeadRot(target.yaw);
+            }
         }
-    }
-
-    private static boolean isFrozenByVillager(UUID uuid) {
-        return false;
     }
 
     private static void reviveNaturalSpawn(Spawn s) {
@@ -507,9 +496,6 @@ public final class MobJournal {
     }
 
     public static void onJump(long from, long to) {
-        if (to < from) {
-            for (Trail t : trails.values()) t.samples.removeIf(s -> s.tick > to);
-        }
         for (Entry e : canon.values()) {
             apply(e, e.tick <= to, false);
         }
@@ -518,36 +504,7 @@ public final class MobJournal {
         } else if (to > from) {
             reviveSpawnsBetween(from, to);
         }
-
-        applyLivingPositions(to);
-
         rebuildUpcoming();
-    }
-
-    private static void applyLivingPositions(long to) {
-        for (Map.Entry<UUID, Trail> en : trails.entrySet()) {
-            UUID uuid = en.getKey();
-            Trail t = en.getValue();
-            if (canon.containsKey(uuid)) continue;
-
-            Sample s = findSampleAt(t.samples, to);
-            if (s == null) continue;
-
-            ServerLevel level = TimeTravel.server.getLevel(Levels.key(t.dim));
-            if (level == null) continue;
-            Entity e = level.getEntity(uuid);
-            if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
-
-            mob.getNavigation().stop();
-            mob.teleportTo(s.x, s.y, s.z);
-            if (s.rot) {
-                mob.setYRot(s.yaw);
-                mob.setXRot(s.pitch);
-                mob.setYHeadRot(s.yaw);
-                mob.setYBodyRot(s.yaw);
-            }
-            mob.setDeltaMovement(Vec3.ZERO);
-        }
     }
 
     private static void discardSpawnsBetween(long to, long from) {
