@@ -1,7 +1,6 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.MobBinding;
-import com.fl1s.rewritten.timetravel.MobJournal;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -19,9 +18,7 @@ public abstract class MobTargetMixin {
         Mob mob = (Mob) (Object) this;
         if (!MobBinding.allows(mob, target)) {
             ci.cancel();
-            return;
         }
-        MobJournal.track(mob, target);
     }
 
     @Inject(method = "serverAiStep", at = @At("HEAD"))

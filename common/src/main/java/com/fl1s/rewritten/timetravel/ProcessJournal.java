@@ -233,6 +233,7 @@ public final class ProcessJournal {
     public static void beforeJump() {
         snapshotAll();
     }
+
     public static void afterJump(long from, long to) {
         for (Key k : new ArrayList<>(tracked)) {
             ServerLevel level = levelOf(k);
@@ -312,4 +313,16 @@ public final class ProcessJournal {
         pendingSim.clear();
         nextSeq = 0;
     }
+
+    public static void load() {}
+
+    public static void save() {}
+
+    public static void saveIfDirty() {}
+
+    public static void onJump(long from, long to) {
+        afterJump(from, to);
+    }
+
+    public static void eraseVisits(Set<Integer> visitIds) {}
 }

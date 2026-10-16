@@ -2,7 +2,6 @@
   "required": true,
   "package": "com.fl1s.rewritten.timetravel.mixin",
   "compatibilityLevel": "JAVA_21",
-  "plugin": "com.llamalad7.mixinextras.MixinExtrasPlugin",
-  "mixins": ["ServerLevelMixin", "LevelMixin", "PrimedTntMixin", "LevelTicksMixin", "ServerPlayerGameModeMixin", "MobHurtMixin", "MobTargetMixin", "CreeperMixin", "PlayerAdvancementsMixin"],
+  "mixins": ["ServerLevelMixin", "LevelMixin", "PrimedTntMixin", "LevelTicksMixin", "ServerPlayerGameModeMixin", "MobHurtMixin", "MobTargetMixin", "CreeperMixin", "PlayerAdvancementsMixin", "BlockEntityMixin", "PlayerAttackMixin", "LivingEntityAccessor", "LivingEntityDropMixin", "ItemEntityPickupMixin", "VehicleProtectionMixin", "BaseRailBlockAccessor", "DispenserBlockEntityMixin", "DispenserBlockMixin"],
   "injectors": { "defaultRequire": 1 }
 }

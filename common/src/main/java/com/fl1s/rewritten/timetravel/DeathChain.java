@@ -122,12 +122,7 @@ public final class DeathChain {
         }
         pd.getVisits().removeIf(v -> v.id >= fromVisitId);
 
-        BlockJournal.eraseVisits(ids);
-        MobJournal.eraseVisits(ids);
-        ChatTimeline.eraseVisits(ids);
-        AdvancementTimeline.eraseVisits(ids);
-        EntityJournal.eraseVisits(ids);
-        EffectJournal.eraseVisits(ids);
+        TimeTravel.JOURNALS.eraseVisitsAll(ids);
         MobBinding.eraseVisits(ids);
         ChatTimeline.resend(TimeTravel.timelineTick);
 

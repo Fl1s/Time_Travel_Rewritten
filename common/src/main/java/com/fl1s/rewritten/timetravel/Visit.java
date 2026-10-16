@@ -16,8 +16,14 @@ public class Visit {
     public double ex, ey, ez;
     public long deathTick = -1;
     public List<Long> deathTicks = new ArrayList<>();
+    public List<ModeChange> modes = new ArrayList<>();
+    public List<RideChange> rides = new ArrayList<>();
+    public List<AttackEvent> attacks = new ArrayList<>();
     public transient boolean wasDead;
     public transient boolean doomed;
+    public transient int lastMode = -1;
+    public transient boolean lastFlying;
+    public transient String lastVehicle;
 
     public Visit() {}
 
@@ -35,6 +41,44 @@ public class Visit {
         public Piece(String recording, long startTick) {
             this.recording = recording;
             this.startTick = startTick;
+        }
+    }
+
+    public static class ModeChange {
+        public long tick;
+        public int mode;
+        public boolean flying;
+
+        public ModeChange() {}
+
+        public ModeChange(long tick, int mode, boolean flying) {
+            this.tick = tick;
+            this.mode = mode;
+            this.flying = flying;
+        }
+    }
+
+    public static class RideChange {
+        public long tick;
+        public String vehicle;
+
+        public RideChange() {}
+
+        public RideChange(long tick, String vehicle) {
+            this.tick = tick;
+            this.vehicle = vehicle;
+        }
+    }
+
+    public static class AttackEvent {
+        public long tick;
+        public String target;
+
+        public AttackEvent() {}
+
+        public AttackEvent(long tick, String target) {
+            this.tick = tick;
+            this.target = target;
         }
     }
 }
