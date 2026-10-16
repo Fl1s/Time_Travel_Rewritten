@@ -17,6 +17,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.function.BooleanSupplier;
+
 @Mixin(ServerLevel.class)
 public abstract class ServerLevelMixin {
     @Inject(method = "playSeededSound(Lnet/minecraft/world/entity/player/Player;DDDLnet/minecraft/core/Holder;Lnet/minecraft/sounds/SoundSource;FFJ)V", at = @At("HEAD"), cancellable = true)
@@ -35,6 +37,11 @@ public abstract class ServerLevelMixin {
     private void tt$levelEvent(Player except, int type, BlockPos pos, int data, CallbackInfo ci) {
         if (BlockJournal.isApplying()) { ci.cancel(); return; }
         EffectJournal.recordLevelEvent((ServerLevel) (Object) this, except, type, pos, data);
+    }
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void tt$captureTickLevel(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        RedstoneJournal.setCurrentLevel((ServerLevel) (Object) this);
     }
 
     @Inject(method = "blockEvent(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;II)V", at = @At("HEAD"), cancellable = true)

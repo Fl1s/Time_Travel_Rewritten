@@ -341,7 +341,13 @@ public final class BlockJournal {
             boolean rail = current.getBlock() instanceof BaseRailBlock || state.getBlock() instanceof BaseRailBlock;
             int flags = (rail && !toNew) ? QUIET_FLAGS : (rail ? Block.UPDATE_ALL : SET_FLAGS);
             level.setBlock(pos, state, flags);
-            if (rail && !level.getBlockState(pos).equals(state)) level.setBlock(pos, state, QUIET_FLAGS);
+            if (rail) {
+                BlockState after = level.getBlockState(pos);
+                BlockState fixed = Block.updateFromNeighbourShapes(after, level, pos);
+                if (!fixed.equals(after)) {
+                    level.setBlock(pos, fixed, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                }
+            }
             touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);

@@ -87,6 +87,12 @@ public final class VehicleTrailJournal {
         ReplayState.observe(now);
     }
 
+    public static boolean hasFutureSamples(UUID id, long now) {
+        Track t = tracks.get(id);
+        if (t == null || t.samples.isEmpty()) return false;
+        return t.samples.get(t.samples.size() - 1).tick > now;
+    }
+
     private static void record(Entity e, String dim, long now) {
         Track t = tracks.computeIfAbsent(e.getUUID(), k -> new Track(dim));
         Sample s = makeSample(e, now);

@@ -38,6 +38,15 @@ public final class RedstoneJournal {
 
     private static final Map<Long, Entry> pendingByKey = new HashMap<>();
     private static boolean restoring = false;
+    private static ServerLevel currentLevel;
+
+    public static ServerLevel currentLevel() {
+        return currentLevel;
+    }
+
+    public static void setCurrentLevel(ServerLevel level) {
+        currentLevel = level;
+    }
 
     public static void onSchedule(Level level, BlockPos pos, Block block, int delay) {
         if (restoring) return;
