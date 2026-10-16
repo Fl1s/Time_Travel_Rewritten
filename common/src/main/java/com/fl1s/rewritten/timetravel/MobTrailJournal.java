@@ -109,6 +109,7 @@ public final class MobTrailJournal {
                     UUID id = mob.getUUID();
                     if (!sampledThisTick.add(id)) continue;
                     if (p.distanceToSqr(mob) > r2) continue;
+                    MobSpawnJournal.ensureRegistered(level, mob);
                     Track t = tracks.computeIfAbsent(id, k -> new Track(dim));
                     if (!t.samples.isEmpty() && t.samples.get(t.samples.size() - 1).tick == now) continue;
                     t.samples.add(makeSample(mob, now));
@@ -199,7 +200,12 @@ public final class MobTrailJournal {
                 mob.setTarget(null);
                 mob.getNavigation().stop();
                 mob.setHealth(0);
-                mob.die(mob.damageSources().generic());
+                ItemFlowJournal.setSuppressDrop(true);
+                try {
+                    mob.die(mob.damageSources().generic());
+                } finally {
+                    ItemFlowJournal.setSuppressDrop(false);
+                }
             }
             return;
         }

@@ -9,6 +9,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -19,6 +20,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
@@ -53,6 +55,7 @@ public final class ItemFlowJournal {
 
     private static final PriorityQueue<Entry> pending = new PriorityQueue<>(
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
+    private static final ArrayList<Entry> retry = new ArrayList<>();
 
     private static boolean applying = false;
     private static boolean suppressDrop = false;
@@ -65,10 +68,24 @@ public final class ItemFlowJournal {
     public static void beginDeathCapture(LivingEntity e) { capturingEntity = e; }
     public static void endDeathCapture() { capturingEntity = null; }
 
+    public static boolean isGhostKill() {
+        return capturingEntity != null && killedByGhost(capturingEntity);
+    }
+
+    private static boolean killedByGhost(LivingEntity victim) {
+        DamageSource src = victim.getLastDamageSource();
+        if (src == null) return false;
+        Entity attacker = src.getEntity();
+        Entity direct = src.getDirectEntity();
+        return (attacker != null && Ghosts.is(attacker)) || (direct != null && Ghosts.is(direct));
+    }
+
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
         if (!(entity instanceof ItemEntity item)) return;
         if (capturingEntity == null) return;
         if (capturingEntity.level() != level) return;
+        if (MobJournal.isKilling() || MobJournal.isApplying()) return;
+        if (killedByGhost(capturingEntity)) return;
         recordDrop(item, level, item.getX(), item.getY(), item.getZ());
     }
 
@@ -84,7 +101,6 @@ public final class ItemFlowJournal {
         Entry e = new Entry();
         e.kind = KIND_PICKUP;
         e.tick = TimeTravel.timelineTick;
-        e.originTick = e.tick - item.getAge();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = sp.getName().getString();
@@ -94,6 +110,7 @@ public final class ItemFlowJournal {
         e.z = item.getZ();
         e.stack = picked.save(TimeTravel.server.registryAccess()).toString();
         e.itemUuid = item.getUUID();
+        e.originTick = e.tick - item.getAge();
         STORE.entries().add(e);
         STORE.markDirty();
     }
@@ -121,19 +138,27 @@ public final class ItemFlowJournal {
     public static void tick() {
         if (!TimeTravel.isLooping) return;
         long now = TimeTravel.timelineTick;
+        for (Iterator<Entry> it = retry.iterator(); it.hasNext(); ) {
+            Entry r = it.next();
+            ServerLevel rl = TimeTravel.server.getLevel(Levels.key(r.dim));
+            if (rl == null || now - r.tick > 20 || replayPickup(rl, r)) it.remove();
+        }
         while (!pending.isEmpty() && pending.peek().tick <= now) {
             Entry e = pending.poll();
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
-            if (e.kind == KIND_PICKUP) replayPickup(level, e);
-            else if (e.kind == KIND_DROP) replayDrop(level, e);
+            if (e.kind == KIND_PICKUP) {
+                if (!replayPickup(level, e)) retry.add(e);
+            } else if (e.kind == KIND_DROP) {
+                replayDrop(level, e);
+            }
         }
     }
 
-    private static void replayPickup(ServerLevel level, Entry e) {
+    private static boolean replayPickup(ServerLevel level, Entry e) {
         Entity item = findLoaded(level, e.itemUuid);
         if (item == null || item.isRemoved()) item = findNearby(level, e);
-        if (item == null || item.isRemoved()) return;
+        if (item == null || item.isRemoved()) return false;
         applying = true;
         try {
             if (item instanceof ItemEntity ie && TimeTravel.entityOfVisit(e.visit) instanceof LivingEntity taker
@@ -144,6 +169,7 @@ public final class ItemFlowJournal {
         } finally {
             applying = false;
         }
+        return true;
     }
 
     private static ItemEntity findNearby(ServerLevel level, Entry e) {
@@ -151,7 +177,7 @@ public final class ItemFlowJournal {
             CompoundTag tag = TagParser.parseTag(e.stack);
             ItemStack stack = ItemStack.parse(TimeTravel.server.registryAccess(), tag).orElse(ItemStack.EMPTY);
             if (stack.isEmpty()) return null;
-            AABB box = new AABB(e.x, e.y, e.z, e.x, e.y, e.z).inflate(2.0);
+            AABB box = new AABB(e.x, e.y, e.z, e.x, e.y, e.z).inflate(4.0);
             ItemEntity best = null;
             double bestDist = Double.MAX_VALUE;
             for (ItemEntity c : level.getEntitiesOfClass(ItemEntity.class, box)) {
@@ -234,6 +260,7 @@ public final class ItemFlowJournal {
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
         pending.clear();
+        retry.clear();
         long now = TimeTravel.timelineTick;
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
@@ -250,6 +277,7 @@ public final class ItemFlowJournal {
 
     public static void clear() {
         pending.clear();
+        retry.clear();
         STORE.clear();
     }
 }

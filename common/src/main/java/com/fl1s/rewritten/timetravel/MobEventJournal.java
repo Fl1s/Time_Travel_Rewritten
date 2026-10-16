@@ -78,23 +78,28 @@ public final class MobEventJournal {
             if (!(entity instanceof LivingEntity living)) continue;
             if (living.isDeadOrDying() || living.isRemoved()) continue;
 
-            if (e.explode && living instanceof net.minecraft.world.entity.monster.Creeper creeper) {
-                creeper.setSwellDir(1);
-                creeper.setHealth(0);
-                living.die(living.damageSources().generic());
-            } else {
-                MobJournal.enterApplying();
-                try {
-                    living.invulnerableTime = 0;
-                    living.hurt(living.damageSources().genericKill(),
-                            living.getMaxHealth() + living.getAbsorptionAmount() + 1000.0f);
-                    if (!living.isDeadOrDying()) {
-                        living.setHealth(0);
-                        living.die(living.damageSources().generic());
+            ItemFlowJournal.setSuppressDrop(true);
+            try {
+                if (e.explode && living instanceof net.minecraft.world.entity.monster.Creeper creeper) {
+                    creeper.setSwellDir(1);
+                    creeper.setHealth(0);
+                    living.die(living.damageSources().generic());
+                } else {
+                    MobJournal.enterApplying();
+                    try {
+                        living.invulnerableTime = 0;
+                        living.hurt(living.damageSources().genericKill(),
+                                living.getMaxHealth() + living.getAbsorptionAmount() + 1000.0f);
+                        if (!living.isDeadOrDying()) {
+                            living.setHealth(0);
+                            living.die(living.damageSources().generic());
+                        }
+                    } finally {
+                        MobJournal.exitApplying();
                     }
-                } finally {
-                    MobJournal.exitApplying();
                 }
+            } finally {
+                ItemFlowJournal.setSuppressDrop(false);
             }
         }
     }
@@ -123,7 +128,7 @@ public final class MobEventJournal {
         STORE.load();
         for (Entry e : STORE.entries()) {
             Entry prev = latestDeath.get(e.uuid);
-            if (prev == null || e.tick < prev.tick) latestDeath.put(e.uuid, e);
+            if (prev == null || e.seq > prev.seq) latestDeath.put(e.uuid, e); //what if...
         }
         rebuildUpcoming();
     }

@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Fixed
+
+ - loot and xp pickup by past selves
+ - xp travelling back in time
+ - drop duplication
+ - mobs from unloaded chunks registration
+
+### [Contributors]
+
+- Fl1s
+
+
+## [1.21.1-0.8.9] - 2026-11-16
+
 ### Added
 
  - Predetermined doomed mobs death position and slow approach to it
