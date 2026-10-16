@@ -136,6 +136,10 @@ public final class ItemFlowJournal {
         if (item == null || item.isRemoved()) return;
         applying = true;
         try {
+            if (item instanceof ItemEntity ie && TimeTravel.entityOfVisit(e.visit) instanceof LivingEntity taker
+                    && taker.level() == level) {
+                taker.take(ie, ie.getItem().getCount());
+            }
             item.discard();
         } finally {
             applying = false;
