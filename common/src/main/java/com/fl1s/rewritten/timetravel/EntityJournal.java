@@ -18,10 +18,8 @@ import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.projectile.FireworkRocketEntity;
-import net.minecraft.world.entity.projectile.FishingHook;
-import net.minecraft.world.entity.projectile.Projectile;
-import net.minecraft.world.entity.projectile.ThrownEnderpearl;
+import net.minecraft.world.entity.projectile.*;
+import net.minecraft.world.level.block.entity.DispenserBlockEntity;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -39,6 +37,7 @@ public final class EntityJournal {
 
     public static final String TAG = "tt_replay";
     private static final double OWNER_MAX_DIST_SQ = 5.0 * 5.0;
+    private static final Map<UUID, Entry> flying = new HashMap<>();
 
     public static final class Entry {
         String dim;
@@ -50,6 +49,8 @@ public final class EntityJournal {
         int fuse;
         String owner;
         UUID uuid;
+        long landTick = -1;
+        String landNbt;
     }
 
     private record Due(long tick, PrimedTnt tnt) {
@@ -116,11 +117,36 @@ public final class EntityJournal {
         }
         STORE.entries().add(e);
         live.put(entity.getUUID(), e.dim);
+        if (entity instanceof AbstractArrow) flying.put(entity.getUUID(), e);
         STORE.markDirty();
     }
 
     public static void tick() {
-        STORE.tick(e -> spawn(e, e.fuse));
+        STORE.tick(e -> spawn(e, e.fuse, e.nbt));
+        trackLanding();
+    }
+
+    private static void trackLanding() {
+        if (flying.isEmpty() || replaying) return;
+        Iterator<Map.Entry<UUID, Entry>> it = flying.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, Entry> en = it.next();
+            Entry e = en.getValue();
+            ServerLevel level = levelOf(e.dim);
+            Entity arrow = level == null ? null : findLoaded(level, en.getKey());
+            if (arrow == null || arrow.isRemoved()) {
+                it.remove();
+                continue;
+            }
+            CompoundTag t = new CompoundTag();
+            if (arrow.save(t) && t.getBoolean("inGround")) {
+                t.remove("UUID");
+                e.landNbt = t.toString();
+                e.landTick = TimeTravel.timelineTick;
+                STORE.markDirty();
+                it.remove();
+            }
+        }
     }
 
     private static ServerLevel levelOf(String dim) {
@@ -148,7 +174,7 @@ public final class EntityJournal {
         }
     }
 
-    private static void spawn(Entry e, int fuse) {
+    private static void spawn(Entry e, int fuse, String nbt) {
         if (e.item && TimeTravel.trackItems) return;
         ServerLevel level = levelOf(e.dim);
         if (level == null) return;
@@ -161,13 +187,14 @@ public final class EntityJournal {
                 net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(p.getDouble(0) - 0.6, p.getDouble(1) - 0.6, p.getDouble(2) - 0.6, p.getDouble(0) + 0.6, p.getDouble(1) + 0.6, p.getDouble(2) + 0.6);
                 if (!level.getEntitiesOfClass(PrimedTnt.class, box).isEmpty()) return;
             }
-            CompoundTag tag = TagParser.parseTag(e.nbt);
+            CompoundTag tag = TagParser.parseTag(nbt);
             if (fuse > 0) tag.putShort("fuse", (short) fuse);
             tag.putBoolean("DropItem", false);
             Entity entity = EntityType.loadEntityRecursive(tag, level, en -> en);
             if (entity == null) return;
             entity.addTag(TAG);
             if (level.addFreshEntity(entity)) {
+                e.uuid = entity.getUUID();
                 live.put(entity.getUUID(), e.dim);
                 if (entity instanceof PrimedTnt && fuse == e.fuse) {
                     level.playSound(null, entity.getX(), entity.getY(), entity.getZ(), SoundEvents.TNT_PRIMED, SoundSource.BLOCKS, 1.0f, 1.0f);
@@ -194,7 +221,17 @@ public final class EntityJournal {
 
             boolean projectile = !e.item && e.fuse <= 0;
             if (projectile) {
-                if (e.tick > now && existing != null && !existing.isRemoved()) existing.discard();
+                boolean alive = existing != null && !existing.isRemoved();
+                if (e.tick > now) {
+                    if (alive) existing.discard();
+                    continue;
+                }
+                if (e.landTick >= 0 && e.landTick <= now) {
+                    if (!alive) spawn(e, 0, e.landNbt);
+                } else if (e.landTick > now && alive) {
+                    existing.discard();
+                    spawn(e, 0, e.nbt);
+                }
                 continue;
             }
 
@@ -207,9 +244,9 @@ public final class EntityJournal {
 
             if (e.fuse > 0) {
                 int remaining = (int) (e.fuse - (now - e.tick));
-                if (remaining > 0) spawn(e, remaining);
+                if (remaining > 0) spawn(e, remaining, e.nbt);
             } else {
-                spawn(e, 0);
+                spawn(e, 0, e.nbt);
             }
         }
 

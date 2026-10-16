@@ -512,7 +512,30 @@ public final class BlockJournal {
         }
     }
 
-    static List<ItemStack> copyOf(Container container) {
+    public static void recordContainerChange(ServerLevel level, BlockPos pos, List<ItemStack> before) {
+        if (applying || !TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!(level.getBlockEntity(pos) instanceof Container container)) return;
+        List<ItemStack> now = copyOf(container);
+        if (sameItems(before, now)) return;
+        PlayerData pd = nearestRecorder(level, pos);
+        if (pd == null) return;
+
+        Entry entry = new Entry();
+        entry.dim = level.dimension().location().toString();
+        entry.x = pos.getX();
+        entry.y = pos.getY();
+        entry.z = pos.getZ();
+        entry.oldItems = serializeItems(before);
+        entry.newItems = serializeItems(now);
+        entry.tick = TimeTravel.timelineTick;
+        entry.seq = STORE.nextSeq();
+        entry.visit = pd.getCurrentVisit().id;
+        entry.root = false;
+        STORE.entries().add(entry);
+        STORE.markDirty();
+    }
+
+    public static List<ItemStack> copyOf(Container container) {
         List<ItemStack> list = new ArrayList<>(container.getContainerSize());
         for (int i = 0; i < container.getContainerSize(); i++) {
             list.add(container.getItem(i).copy());
