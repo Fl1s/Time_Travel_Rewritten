@@ -192,6 +192,12 @@ public final class EntityJournal {
                     && (e.fuse <= 0 || now < e.tick + e.fuse);
             Entity existing = findLoaded(level, e.uuid);
 
+            boolean projectile = !e.item && e.fuse <= 0;
+            if (projectile) {
+                if (e.tick > now && existing != null && !existing.isRemoved()) existing.discard();
+                continue;
+            }
+
             if (!shouldExist) {
                 if (existing != null && !existing.isRemoved()) existing.discard();
                 continue;
