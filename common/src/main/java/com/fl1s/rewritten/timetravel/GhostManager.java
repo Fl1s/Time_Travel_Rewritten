@@ -40,14 +40,16 @@ public final class GhostManager {
         final String playerName;
         final int visitId;
         final GhostFx fx;
+        final Visit visit;
         int pendingSkip;
 
-        Ghost(GhostPlayback root, String playerName, int visitId, GhostFx fx, int pendingSkip) {
+        Ghost(GhostPlayback root, String playerName, int visitId, GhostFx fx, int pendingSkip, Visit visit) {
             this.root = root;
             this.playerName = playerName;
             this.visitId = visitId;
             this.fx = fx;
             this.pendingSkip = pendingSkip;
+            this.visit = visit;
         }
     }
 
@@ -139,6 +141,15 @@ public final class GhostManager {
         }
     }
 
+    public void replayEvents() {
+        long now = TimeTravel.timelineTick;
+        for (Ghost ghost : roots) {
+            if (ghost.pendingSkip > 0 || ghost.root.isFinished()) continue;
+            if (ghost.visit == null) continue;
+            if (ghost.fx.entity() instanceof ServerPlayer sp) GhostTracks.replay(ghost.visit, sp, now);
+        }
+    }
+
     public void tickActive() {
         for (Ghost ghost : roots) {
             if (ghost.pendingSkip > 0) {
@@ -173,7 +184,14 @@ public final class GhostManager {
         Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
         GhostFx fx = new GhostFx(ghostEntity);
         if (piece.skipTicks() > 0) fx.graceUntil = TimeTravel.timelineTick + 10;
-        roots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx, pendingSkip));
+        Visit ghostVisit = null;
+        for (Visit v : pd.getVisits()) {
+            if (v.id == piece.visitId()) {
+                ghostVisit = v;
+                break;
+            }
+        }
+        roots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx, pendingSkip, ghostVisit));
         if (TimeTravel.trackVoice && TimeTravel.voiceChatLoaded) {
             VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(),
                     piece.visitStartTick(), ghostEntity);

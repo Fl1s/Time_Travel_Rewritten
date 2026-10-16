@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
+import com.fl1s.rewritten.timetravel.journal.JournalRegistry;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
@@ -61,6 +62,8 @@ public class TimeTravel {
 	public static Path worldFolder;
 
 	public static int ghostLookaheadTicks = 0;
+
+	public static final JournalRegistry JOURNALS = new JournalRegistry();
 
 	private static TimelineSession session;
 
@@ -160,12 +163,7 @@ public class TimeTravel {
 			config.timelineTick = timelineTick;
 		}
 		BlockJournal.flushWatches();
-		BlockJournal.save();
-		MobJournal.save();
-		ChatTimeline.save();
-		AdvancementTimeline.save();
-		EntityJournal.save();
-		EffectJournal.save();
+		JOURNALS.saveAll();
 		MobBinding.save();
 		if (worldFolder != null && config != null) config.save();
 		VoicechatInteractionCompat.clearCooldowns();

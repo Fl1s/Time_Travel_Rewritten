@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.journal.Journal;
+import com.fl1s.rewritten.timetravel.util.Ghosts;
 import com.fl1s.rewritten.timetravel.util.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
@@ -48,6 +49,7 @@ public final class EntityJournal {
         int visit;
         int fuse;
         String owner;
+        UUID uuid;
     }
 
     private record Due(long tick, PrimedTnt tnt) {
@@ -85,6 +87,8 @@ public final class EntityJournal {
 
     public static void onSpawn(ServerLevel level, Entity entity) {
         if (!TimeTravel.isLooping || replaying || TimeTravel.loopSceneManager == null) return;
+        if (ItemFlowJournal.isApplying() || ItemFlowJournal.isCapturingDeath()) return;
+        if (MobJournal.isApplying()) return;
         if (entity instanceof AreaEffectCloud) {
             clouds.put(entity.getUUID(), new CloudRef(level.dimension().location().toString(), TimeTravel.timelineTick));
             return;
@@ -104,6 +108,7 @@ public final class EntityJournal {
         e.tick = TimeTravel.timelineTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
+        e.uuid = entity.getUUID();
         if (entity instanceof PrimedTnt tnt) e.fuse = tnt.getFuse();
         if (entity instanceof Projectile projectile) {
             Entity owner = projectile.getOwner();
@@ -122,18 +127,22 @@ public final class EntityJournal {
         return TimeTravel.server.getLevel(Levels.key(dim));
     }
 
+    private static Entity findLoaded(ServerLevel level, UUID uuid) {
+        for (Entity e : level.getAllEntities()) {
+            if (e.getUUID().equals(uuid)) return e;
+        }
+        return null;
+    }
+
     private static boolean ownerPresent(ServerLevel level, Entry e) {
         try {
-            net.minecraft.nbt.ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
-            double x = p.getDouble(0), y = p.getDouble(1), z = p.getDouble(2);
-
             Entity owner = level.getEntity(UUID.fromString(e.owner));
             if (owner == null) {
+                net.minecraft.nbt.ListTag p = TagParser.parseTag(e.nbt).getList("Pos", 6);
+                double x = p.getDouble(0), y = p.getDouble(1), z = p.getDouble(2);
                 return !level.isLoaded(net.minecraft.core.BlockPos.containing(x, y, z));
             }
-            if (!MobJournal.isDoomed(owner)) return false;
-            if (owner.isRemoved() || (owner instanceof LivingEntity living && living.isDeadOrDying())) return false;
-            return owner.level() == level && owner.distanceToSqr(x, y, z) <= OWNER_MAX_DIST_SQ;
+            return !owner.isRemoved() && owner.level() == level;
         } catch (Exception ex) {
             return false;
         }
@@ -172,22 +181,52 @@ public final class EntityJournal {
     }
 
     public static void onJump() {
-        discardLive();
-        discardClouds();
-        STORE.rebuildUpcoming();
+        if (TimeTravel.server == null) return;
         long now = TimeTravel.timelineTick;
-        for (Entry e : new ArrayList<>(STORE.entries())) {
-            if (e.fuse > 0 && e.tick <= now && e.tick + e.fuse > now) {
-                spawn(e, (int) (e.fuse - (now - e.tick)));
+
+        for (Entry e : STORE.entries()) {
+            ServerLevel level = levelOf(e.dim);
+            if (level == null) continue;
+
+            boolean shouldExist = e.tick <= now
+                    && (e.fuse <= 0 || now < e.tick + e.fuse);
+            Entity existing = findLoaded(level, e.uuid);
+
+            if (!shouldExist) {
+                if (existing != null && !existing.isRemoved()) existing.discard();
+                continue;
+            }
+
+            if (existing != null && !existing.isRemoved()) continue;
+
+            if (e.fuse > 0) {
+                int remaining = (int) (e.fuse - (now - e.tick));
+                if (remaining > 0) spawn(e, remaining);
+            } else {
+                spawn(e, 0);
             }
         }
+
+        live.entrySet().removeIf(en -> {
+            ServerLevel level = levelOf(en.getValue());
+            if (level == null) return true;
+            Entity e = findLoaded(level, en.getKey());
+            return e == null || e.isRemoved();
+        });
+
+        discardClouds();
+        STORE.rebuildUpcoming();
+    }
+
+    public static void onJump(long from, long to) {
+        onJump();
     }
 
     private static void discardLive() {
         for (Map.Entry<UUID, String> en : new ArrayList<>(live.entrySet())) {
             ServerLevel level = levelOf(en.getValue());
             if (level == null) continue;
-            Entity entity = level.getEntity(en.getKey());
+            Entity entity = findLoaded(level, en.getKey());
             if (entity != null) entity.discard();
         }
         live.clear();
@@ -199,7 +238,7 @@ public final class EntityJournal {
         while (it.hasNext()) {
             Map.Entry<UUID, CloudRef> en = it.next();
             ServerLevel level = levelOf(en.getValue().dim());
-            Entity cloud = level == null ? null : level.getEntity(en.getKey());
+            Entity cloud = level == null ? null : findLoaded(level, en.getKey());
             if (cloud == null || cloud.isRemoved()) {
                 it.remove();
             } else if (en.getValue().tick() > now) {
@@ -242,7 +281,7 @@ public final class EntityJournal {
             if (seen.contains(en.getKey())) continue;
             ServerLevel level = levelOf(en.getValue());
             if (level == null) continue;
-            if (level.getEntity(en.getKey()) instanceof PrimedTnt t) {
+            if (findLoaded(level, en.getKey()) instanceof PrimedTnt t) {
                 seen.add(t.getUUID());
                 long due = base + t.getFuse();
                 if (due <= to) q.add(new Due(due, t));

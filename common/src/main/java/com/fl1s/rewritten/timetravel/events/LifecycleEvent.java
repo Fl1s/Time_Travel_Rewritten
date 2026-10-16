@@ -43,16 +43,12 @@ public class LifecycleEvent {
         TimeTravel.trackVoice = c.trackVoice;
 
         TimeTravel.loopSceneManager.setRecordingPlayers(c.recordingPlayers);
-        BlockJournal.load();
-        EntityJournal.load();
-        EffectJournal.load();
-        MobJournal.load();
-        MobBinding.load();
-        ChatTimeline.load();
-        AdvancementTimeline.load();
 
         TimeTravel.server = server;
         TimeTravel.serverLevel = server.overworld();
+
+        TimeTravel.JOURNALS.loadAll();
+        MobBinding.load();
 
         MocapAdapter.init(server, TimeTravel.hurtLoopedPlayers, TimeTravel.trackItems, TimeTravel.entityTrackingDistance);
 

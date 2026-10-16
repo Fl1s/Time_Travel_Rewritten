@@ -65,6 +65,32 @@ public final class ChatTimeline {
         resend(to);
     }
 
+    public static void onJump(long from, long to) {
+        if (to < from) {
+            onJump(to);
+            return;
+        }
+        STORE.rebuildUpcoming();
+        sendBetween(from, to);
+    }
+
+    private static void sendBetween(long after, long upTo) {
+        if (!TimeTravel.trackChat || TimeTravel.server == null) return;
+
+        List<Line> fresh = new ArrayList<>();
+        for (Entry e : STORE.entries()) {
+            if (e.tick > after && e.tick <= upTo) fresh.add(new Line(e.tick, e.seq, component(e)));
+        }
+        AdvancementTimeline.collect(after, upTo, fresh);
+        if (fresh.isEmpty()) return;
+        fresh.sort(Comparator.comparingLong(Line::tick).thenComparingLong(Line::seq));
+
+        for (ServerPlayer player : new ArrayList<>(TimeTravel.server.getPlayerList().getPlayers())) {
+            if (Ghosts.is(player)) continue;
+            for (Line l : fresh) player.sendSystemMessage(l.text());
+        }
+    }
+
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
     }

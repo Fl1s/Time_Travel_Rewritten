@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.mixin;
 import com.fl1s.rewritten.timetravel.GhostFx;
 import com.fl1s.rewritten.timetravel.MobBinding;
 import com.fl1s.rewritten.timetravel.MobJournal;
+import com.fl1s.rewritten.timetravel.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.core.particles.ParticleTypes;
@@ -33,25 +34,34 @@ public abstract class MobHurtMixin {
     @ModifyVariable(method = "hurt", at = @At("HEAD"), argsOnly = true)
     private float tt$amount(float amount, DamageSource source) {
         LivingEntity self = (LivingEntity) (Object) this;
-        amount = tt$crit(self, source, amount);
-        return MobJournal.capGhostDamage(self, source, amount);
+        float v = tt$crit(self, source, amount);
+        if (self instanceof Mob mob && !MobJournal.isApplying() && MobTrailJournal.isReplaying() && MobTrailJournal.isPuppeted(mob)) {
+            float cur = mob.getHealth();
+            if (cur <= 1.0f) return 0.0f;
+            return Math.min(v, cur - 1.0f);
+        }
+        return v;
     }
 
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
     private void tt$hurt(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
-        if (MobJournal.shouldShield(self, source)) {
-            self.level().broadcastEntityEvent(self, (byte) 2);
-            cir.setReturnValue(false);
-            return;
-        }
+
+        if (MobJournal.isApplying()) return;
+
         if (tt$cloneBlocks(self, source)) {
             cir.setReturnValue(false);
             return;
         }
+
+        if (self instanceof ServerPlayer sp && Ghosts.is(sp) && MobJournal.isDoomed(source.getEntity())) {
+            self.level().broadcastEntityEvent(self, (byte) 2);
+            cir.setReturnValue(false);
+            return;
+        }
+
         if (self instanceof Mob mob) {
             MobBinding.onHurt(mob, source.getEntity());
-            MobJournal.track(mob, source.getEntity());
         }
     }
 

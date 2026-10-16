@@ -13,7 +13,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -52,8 +51,7 @@ public final class EffectJournal {
     private static boolean replaying = false;
 
     public static void recordSound(ServerLevel level, Player except, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch) {
-        if (!TimeTravel.isLooping || replaying) return;
-        if (except == null && !containerAt(level, BlockPos.containing(x, y, z))) return;
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
         PlayerData pd = recorder(level, except, x, y, z);
         if (pd == null) return;
         Optional<ResourceKey<SoundEvent>> key = sound.unwrapKey();
@@ -70,7 +68,7 @@ public final class EffectJournal {
     }
 
     public static void recordLevelEvent(ServerLevel level, Player except, int type, BlockPos pos, int data) {
-        if (!TimeTravel.isLooping || replaying || except == null) return;
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || except == null) return;
         PlayerData pd = recorder(level, except, pos.getX(), pos.getY(), pos.getZ());
         if (pd == null) return;
 
@@ -81,7 +79,7 @@ public final class EffectJournal {
     }
 
     public static void recordBlockEvent(ServerLevel level, BlockPos pos, Block block, int a, int b) {
-        if (!TimeTravel.isLooping || replaying) return;
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
         if (!level.isLoaded(pos)) return;
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof LidBlockEntity) && !(be instanceof ShulkerBoxBlockEntity)) return;
@@ -99,11 +97,6 @@ public final class EffectJournal {
         e.a = a;
         e.b = b;
         add(e);
-    }
-
-    private static boolean containerAt(ServerLevel level, BlockPos pos) {
-        if (!level.isLoaded(pos)) return false;
-        return level.getBlockEntity(pos) instanceof Container;
     }
 
     private static boolean isGhost(Player p) {
@@ -159,6 +152,10 @@ public final class EffectJournal {
 
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
+    }
+
+    public static void onJump(long from, long to) {
+        rebuildUpcoming();
     }
 
     private static void play(Entry e) {

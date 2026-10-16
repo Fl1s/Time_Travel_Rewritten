@@ -71,10 +71,18 @@ public final class AdvancementTimeline {
         STORE.rebuildUpcoming();
     }
 
+    public static void onJump(long from, long to) {
+        onJump();
+    }
+
     static void collect(long upTo, List<ChatTimeline.Line> out) {
+        collect(Long.MIN_VALUE, upTo, out);
+    }
+
+    static void collect(long after, long upTo, List<ChatTimeline.Line> out) {
         if (!TimeTravel.trackChat) return;
         for (Entry e : STORE.entries()) {
-            if (e.tick > upTo) continue;
+            if (e.tick > upTo || e.tick <= after) continue;
             Component c = component(e);
             if (c != null) out.add(new ChatTimeline.Line(e.tick, e.seq, c));
         }

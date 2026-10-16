@@ -4,13 +4,9 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Core timeline: shared clock, jump orchestration, and per-server-tick work.
- * <p>
- * Owned by {@link TimelineSession}. All entry points are called on the server
- * thread through thin static facades on {@link TimeTravel}.
  */
 public final class Timeline {
 
@@ -29,19 +25,20 @@ public final class Timeline {
         TimeTravel.dayTimeOrigin = TimeTravel.serverLevel.getDayTime() - TimeTravel.timelineTick;
         TimeTravel.config.dayTimeOrigin = TimeTravel.dayTimeOrigin;
 
+        MobSpawnJournal.snapshotInitial();
+        MobTrailJournal.seedInitial();
+        BlockEntityJournal.snapshotInitial();
+        VehicleSpawnJournal.snapshotInitial();
+        VehicleTrailJournal.seedInitial();
+        RedstoneJournal.rebuildUpcoming();
+
         TimelineSession s = TimeTravel.session();
         GhostManager ghosts = s.ghosts;
         ghosts.setIdle(false);
         ghosts.markNeedsRebuild();
 
         TimeTravel.forEachOnlineRecorded(s.visits::beginVisit);
-        BlockJournal.rebuildUpcoming();
-        MobJournal.rebuildUpcoming();
-        EntityJournal.rebuildUpcoming();
-        EffectJournal.rebuildUpcoming();
-        ProcessJournal.rebuildUpcoming();
-        ChatTimeline.rebuildUpcoming();
-        AdvancementTimeline.rebuildUpcoming();
+        TimeTravel.JOURNALS.rebuildUpcomingAll();
         ProcessJournal.snapshotOrigins(TimeTravel.server.getPlayerList().getPlayers());
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
@@ -57,12 +54,7 @@ public final class Timeline {
         s.visits.endAllVisits();
         s.ghosts.stopAll();
         s.ghosts.clearPending();
-        BlockJournal.save();
-        MobJournal.save();
-        ChatTimeline.save();
-        AdvancementTimeline.save();
-        EntityJournal.save();
-        EffectJournal.save();
+        TimeTravel.JOURNALS.saveAll();
         MobBinding.save();
 
         TimeTravel.isLooping = false;
@@ -81,13 +73,9 @@ public final class Timeline {
         s.ghosts.clearPending();
 
         TimeTravel.removeAllRecordings();
-        BlockJournal.clear();
-        MobJournal.clear();
-        ProcessJournal.clear();
-        ChatTimeline.clear();
-        AdvancementTimeline.clear();
-        EntityJournal.clear();
-        EffectJournal.clear();
+        TimeTravel.JOURNALS.clearAll();
+        ReplayState.reset();
+        RedstoneJournal.clear();
         MobBinding.clear();
         VoicechatCompat.deleteAllAudio();
         TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
@@ -145,13 +133,7 @@ public final class Timeline {
         }
         ghosts.setIdle(false);
 
-        BlockJournal.onJump(from, target);
-        MobJournal.onJump(from, target);
-        EntityJournal.onJump();
-        EffectJournal.rebuildUpcoming();
-        ProcessJournal.afterJump(from, target);
-        ChatTimeline.onJump(target);
-        AdvancementTimeline.onJump();
+        TimeTravel.JOURNALS.onJumpAll(from, target);
 
         TimeTravel.forEachOnlineRecorded((p, pd) -> s.visits.beginVisit(p, pd, dir));
         ghosts.rebuild();
@@ -201,13 +183,9 @@ public final class Timeline {
 
         TimeTravel.timelineTick++;
         TimeTravel.config.timelineTick = TimeTravel.timelineTick;
-        BlockJournal.tick();
-        EntityJournal.tick();
-        MobJournal.tick();
-        ProcessJournal.tick();
-        ChatTimeline.tick();
-        AdvancementTimeline.tick();
-        EffectJournal.tick();
+        GhostTracks.pollAll();
+        ghosts.replayEvents();
+        TimeTravel.JOURNALS.tickAll();
         if (TimeTravel.syncDayTime) {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.timelineTick);
         }
@@ -219,12 +197,7 @@ public final class Timeline {
         if (TimeTravel.timelineTick % 1200 == 0) TimeTravel.config.save();
         if (TimeTravel.timelineTick % 1200 == 0) MobBinding.prune();
         if (TimeTravel.timelineTick % 6000 == 0) {
-            BlockJournal.saveIfDirty();
-            MobJournal.saveIfDirty();
-            ChatTimeline.saveIfDirty();
-            AdvancementTimeline.saveIfDirty();
-            EntityJournal.saveIfDirty();
-            EffectJournal.saveIfDirty();
+            TimeTravel.JOURNALS.saveIfDirtyAll();
             MobBinding.saveIfDirty();
         }
     }

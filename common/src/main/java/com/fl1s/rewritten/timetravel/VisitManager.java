@@ -31,6 +31,7 @@ public final class VisitManager {
         pd.resetSegments();
         pd.resetPieceCounter();
         pd.setLastDimensionKey(player.level().dimension());
+        GhostTracks.poll(player, pd);
         startChunk(player, pd);
     }
 

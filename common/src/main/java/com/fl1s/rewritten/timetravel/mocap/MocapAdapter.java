@@ -37,6 +37,13 @@ import java.util.function.Predicate;
  * (or a change to the impl casts this mod relies on, e.g. {@code ActiveRecording}
  * and {@code PlaybackRoot}) needs to be fixed in one file instead of being
  * scattered across {@code TimeTravel} and {@code LifecycleEvent}.
+ * <p>
+ * Motion Capture records vehicles, projectiles and items but does not play them
+ * back: playback of every tracked entity is delegated to the mod's own journals
+ * ({@link com.fl1s.rewritten.timetravel.EntityJournal},
+ * {@link com.fl1s.rewritten.timetravel.VehicleSpawnJournal}), so a backward
+ * time jump can discard TNT, arrows and loot that mocap would otherwise leave
+ * orphaned in the world.
  */
 public final class MocapAdapter {
     private MocapAdapter() {}
@@ -60,7 +67,7 @@ public final class MocapAdapter {
             controller.setSetting("invulnerable_playback", String.valueOf(!hurtLoopedPlayers));
             controller.setSetting("use_creative_game_mode", String.valueOf(!hurtLoopedPlayers));
             controller.setSetting("entity_tracking_distance", "1");
-            controller.setSetting("hit_range", "1");
+            controller.setSetting("hit_range", "0");
             controller.setSetting("block_initialization", "false");
             controller.setSetting("drop_from_blocks", "false");
 
@@ -80,11 +87,10 @@ public final class MocapAdapter {
 
     public static void updateEntitiesToTrack(boolean items, int entityTrackingDistance) {
         if (controller == null) return;
-        String entitiesToTrack = "@vehicles" + (items ? ";@items" : "");
-        int distance = items ? entityTrackingDistance : 1;
-        controller.setSetting("track_entities", entitiesToTrack);
-        controller.setSetting("play_entities", entitiesToTrack);
-        controller.setSetting("entity_tracking_distance", String.valueOf(distance));
+        String trackEntities = "@vehicles" + (items ? ";@items" : "");
+        controller.setSetting("track_entities", trackEntities);
+        controller.setSetting("play_entities", "");
+        controller.setSetting("entity_tracking_distance", String.valueOf(items ? entityTrackingDistance : 1));
     }
 
     public static void setInvulnerablePlayback(boolean invulnerable, boolean creative) {
