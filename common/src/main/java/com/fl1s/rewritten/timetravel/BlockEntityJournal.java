@@ -236,13 +236,7 @@ public final class BlockEntityJournal {
             BlockState state = level.getBlockState(pos);
             level.sendBlockUpdated(pos, state, state, Block.UPDATE_ALL);
 
-            if (be instanceof JukeboxBlockEntity jukebox) {
-                level.levelEvent(1011, pos, 0);
-                ItemStack rec = jukebox.getTheItem();
-                if (!rec.isEmpty()) {
-                    level.levelEvent(1010, pos, Item.getId(rec.getItem()));
-                }
-            }
+            if (be instanceof JukeboxBlockEntity) BlockJournal.markJukebox(level, pos);
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply BE journal entry at {} {} {}", e.x, e.y, e.z, ex);
         } finally {

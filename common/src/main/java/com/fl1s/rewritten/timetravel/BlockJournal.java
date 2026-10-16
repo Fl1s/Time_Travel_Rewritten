@@ -18,6 +18,8 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.JukeboxSong;
+import net.minecraft.world.item.JukeboxSongPlayer;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.BaseRailBlock;
 import net.minecraft.world.level.block.Block;
@@ -26,6 +28,7 @@ import net.minecraft.world.level.block.BrewingStandBlock;
 import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.FireBlock;
 import net.minecraft.world.level.block.JukeboxBlock;
+import net.minecraft.world.level.block.LevelEvent;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.RedStoneWireBlock;
@@ -54,7 +57,6 @@ public final class BlockJournal {
 
     private static final int SET_FLAGS = Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS;
     private static final int QUIET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
-    private static final int LEVEL_EVENT_STOP_RECORD = 1011;
     private static final double TRACK_RANGE_SQ = 64.0 * 64.0;
     private static final long DEDUP_TICKS = 40;
 
@@ -274,6 +276,7 @@ public final class BlockJournal {
         STORE.tick(e -> {
             if (e.root) applyLive(e);
         });
+        flushJukeboxes();
     }
 
     private static void applyLive(Entry e) {
@@ -372,6 +375,9 @@ public final class BlockJournal {
             }
             if (rail) {
                 touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
+            }
+            if (current.getBlock() instanceof JukeboxBlock || state.getBlock() instanceof JukeboxBlock) {
+                markJukebox(level, pos);
             }
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
@@ -570,33 +576,45 @@ public final class BlockJournal {
                 if (jukebox) applying = wasApplying;
             }
 
-            if (jukebox) {
-                if (live) syncJukebox(level, pos);
-                else jukeboxes.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
-            }
+            if (jukebox) markJukebox(level, pos);
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply container journal entry at {} {} {}", e.x, e.y, e.z, ex);
         }
     }
 
+    public static void markJukebox(ServerLevel level, BlockPos pos) {
+        jukeboxes.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
+    }
+
+    //am I overthinking it
     private static void flushJukeboxes() {
         if (jukeboxes.isEmpty()) return;
-        try {
-            for (Map.Entry<ServerLevel, Set<BlockPos>> en : jukeboxes.entrySet()) {
-                for (BlockPos pos : en.getValue()) syncJukebox(en.getKey(), pos);
+        Map<ServerLevel, Set<BlockPos>> copy = new HashMap<>(jukeboxes);
+        jukeboxes.clear();
+        for (Map.Entry<ServerLevel, Set<BlockPos>> en : copy.entrySet()) {
+            ServerLevel level = en.getKey();
+            for (BlockPos pos : en.getValue()) {
+                try {
+                    if (level.getBlockEntity(pos) instanceof JukeboxBlockEntity jb) {
+                        syncJukebox(level, pos, jb);
+                    } else {
+                        level.levelEvent(LevelEvent.SOUND_STOP_JUKEBOX_SONG, pos, 0);
+                    }
+                } catch (Exception ex) {
+                    TimeTravel.LOOP_LOGGER.error("Failed to sync jukebox at {}", pos, ex);
+                }
             }
-        } finally {
-            jukeboxes.clear();
         }
     }
 
-    private static void syncJukebox(ServerLevel level, BlockPos pos) {
-        level.levelEvent(LEVEL_EVENT_STOP_RECORD, pos, 0);
-        BlockEntity be = level.getBlockEntity(pos);
-        if (be instanceof JukeboxBlockEntity jukebox) {
-            ItemStack disc = jukebox.getItem(0);
-            if (!disc.isEmpty()) jukebox.setItem(0, disc.copy());
-        }
+    private static void syncJukebox(ServerLevel level, BlockPos pos, JukeboxBlockEntity jukebox) {
+        JukeboxSongPlayer player = jukebox.getSongPlayer();
+        player.stop(level, level.getBlockState(pos));
+
+        ItemStack disc = jukebox.getTheItem();
+        if (disc.isEmpty()) return;
+        JukeboxSong.fromStack(level.registryAccess(), disc)
+                .ifPresent(song -> player.play(level, song));
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
