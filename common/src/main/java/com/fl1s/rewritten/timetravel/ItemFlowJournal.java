@@ -14,6 +14,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -42,6 +43,7 @@ public final class ItemFlowJournal {
         public double x, y, z;
         public String stack;
         public UUID itemUuid;
+        public long originTick = Long.MIN_VALUE;
     }
 
     private static final Journal<Entry> STORE = new Journal<>(
@@ -82,6 +84,7 @@ public final class ItemFlowJournal {
         Entry e = new Entry();
         e.kind = KIND_PICKUP;
         e.tick = TimeTravel.timelineTick;
+        e.originTick = e.tick - item.getAge();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = sp.getName().getString();
@@ -129,12 +132,35 @@ public final class ItemFlowJournal {
 
     private static void replayPickup(ServerLevel level, Entry e) {
         Entity item = findLoaded(level, e.itemUuid);
+        if (item == null || item.isRemoved()) item = findNearby(level, e);
         if (item == null || item.isRemoved()) return;
         applying = true;
         try {
             item.discard();
         } finally {
             applying = false;
+        }
+    }
+
+    private static ItemEntity findNearby(ServerLevel level, Entry e) {
+        try {
+            CompoundTag tag = TagParser.parseTag(e.stack);
+            ItemStack stack = ItemStack.parse(TimeTravel.server.registryAccess(), tag).orElse(ItemStack.EMPTY);
+            if (stack.isEmpty()) return null;
+            AABB box = new AABB(e.x, e.y, e.z, e.x, e.y, e.z).inflate(2.0);
+            ItemEntity best = null;
+            double bestDist = Double.MAX_VALUE;
+            for (ItemEntity c : level.getEntitiesOfClass(ItemEntity.class, box)) {
+                if (c.isRemoved() || !ItemStack.isSameItemSameComponents(c.getItem(), stack)) continue;
+                double d = c.distanceToSqr(e.x, e.y, e.z);
+                if (d < bestDist) {
+                    best = c;
+                    bestDist = d;
+                }
+            }
+            return best;
+        } catch (Exception ex) {
+            return null;
         }
     }
 
@@ -175,7 +201,7 @@ public final class ItemFlowJournal {
                 if (e.kind == KIND_DROP) {
                     Entity item = findLoaded(level, e.itemUuid);
                     if (item != null && !item.isRemoved()) item.discard();
-                } else if (e.kind == KIND_PICKUP) {
+                } else if (e.kind == KIND_PICKUP && e.originTick <= target) {
                     Entity item = findLoaded(level, e.itemUuid);
                     if (item == null || item.isRemoved()) {
                         try {
