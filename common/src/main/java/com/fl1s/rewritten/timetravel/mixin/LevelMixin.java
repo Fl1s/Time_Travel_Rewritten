@@ -21,7 +21,7 @@ public abstract class LevelMixin {
 
     @Inject(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z", at = @At("RETURN"))
     private void tt$setBlockReturn(BlockPos pos, BlockState state, int flags, int recursion, CallbackInfoReturnable<Boolean> cir) {
-        if ((Object) this instanceof ServerLevel level) BlockJournal.endSet(level, pos);
+        if ((Object) this instanceof ServerLevel level) BlockJournal.endSet(level, pos, cir.getReturnValueZ());
     }
 
     @Inject(method = "markAndNotifyBlock", at = @At("HEAD"))

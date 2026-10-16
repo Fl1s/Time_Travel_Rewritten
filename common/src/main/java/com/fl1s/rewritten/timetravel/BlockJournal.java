@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.journal.Journal;
+import com.fl1s.rewritten.timetravel.mixin.BaseRailBlockAccessor;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import com.fl1s.rewritten.timetravel.util.Levels;
 import com.google.gson.reflect.TypeToken;
@@ -154,9 +155,16 @@ public final class BlockJournal {
         setFrames.push(new SetFrame(level, pos.asLong(), level.getBlockState(pos), requested));
     }
 
-    public static void endSet(ServerLevel level, BlockPos pos) {
+    public static void endSet(ServerLevel level, BlockPos pos, boolean changed) {
         SetFrame top = setFrames.peek();
-        if (top != null && top.level == level && top.pos == pos.asLong()) setFrames.pop();
+        if (top == null || top.level != level || top.pos != pos.asLong()) return;
+        setFrames.pop();
+
+        if (!changed || top.notified || applying || !TimeTravel.isLooping
+                || TimeTravel.loopSceneManager == null) return;
+
+        BlockState now = level.getBlockState(pos);
+        if (!now.equals(top.before)) record(level, pos, top.before, now);
     }
 
     public static void flushWatches() {
@@ -176,12 +184,16 @@ public final class BlockJournal {
         SetFrame top = setFrames.peek();
         if (top != null && top.pos == pos.asLong() && top.level == level && top.requested == now) top.notified = true;
         for (SetFrame f : setFrames) {
-            if (!f.notified && f.pos == pos.asLong() && f.level == level && f.requested.equals(old) && !f.before.equals(old)) {
+            if (!f.notified && f.pos == pos.asLong() && f.level == level
+                    && f.requested.equals(old) && !f.before.equals(old)) {
                 old = f.before;
                 f.notified = true;
                 break;
             }
         }
+        record(level, pos, old, now);
+    }
+    private static void record(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
         if (old.is(Blocks.MOVING_PISTON)) old = Blocks.AIR.defaultBlockState();
         if (now.is(Blocks.MOVING_PISTON)) now = Blocks.AIR.defaultBlockState();
         if (old.equals(now) || !shouldTrack(old, now)) return;
@@ -196,7 +208,9 @@ public final class BlockJournal {
         List<Entry> same = byPos.get(pos.asLong());
         if (same != null) {
             for (Entry e : same) {
-                if (e.visit != visit && e.dim.equals(dim) && Math.abs(e.tick - TimeTravel.timelineTick) <= DEDUP_TICKS && oldS.equals(e.oldState) && newS.equals(e.newState))
+                if (e.visit != visit && e.dim.equals(dim)
+                        && Math.abs(e.tick - TimeTravel.timelineTick) <= DEDUP_TICKS
+                        && oldS.equals(e.oldState) && newS.equals(e.newState))
                     return;
             }
         }
@@ -213,7 +227,8 @@ public final class BlockJournal {
         entry.tick = TimeTravel.timelineTick;
         entry.seq = STORE.nextSeq();
         entry.visit = visit;
-        entry.root = actionDepth > 0 && !(old.getBlock() instanceof RedStoneWireBlock && now.getBlock() instanceof RedStoneWireBlock);
+        entry.root = actionDepth > 0
+                && !(old.getBlock() instanceof RedStoneWireBlock && now.getBlock() instanceof RedStoneWireBlock);
         STORE.entries().add(entry);
         index(entry);
         STORE.markDirty();
@@ -276,12 +291,19 @@ public final class BlockJournal {
             replayingLive = true;
             try {
                 level.setBlock(pos, state, Block.UPDATE_ALL);
-                if (state.getBlock() instanceof BaseRailBlock && !level.getBlockState(pos).equals(state)) {
-                    applying = true;
-                    try {
-                        level.setBlock(pos, state, QUIET_FLAGS);
-                    } finally {
-                        applying = false;
+                if (state.getBlock() instanceof BaseRailBlock) {
+                    BlockPos ip = pos.immutable();
+                    BlockState after = level.getBlockState(ip);
+                    if (after.getBlock() instanceof BaseRailBlock railBlock) {
+                        BlockState fixed = ((BaseRailBlockAccessor) railBlock).tt$updateState(after, level, ip, false);
+                        if (!fixed.equals(after)) {
+                            applying = true;
+                            try {
+                                level.setBlock(ip, fixed, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                            } finally {
+                                applying = false;
+                            }
+                        }
                     }
                 }
             } finally {
@@ -330,25 +352,27 @@ public final class BlockJournal {
 
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
             BlockState current = level.getBlockState(pos);
-            if (current.equals(state)) return;
-
-            if (!current.is(state.getBlock()) && level.getBlockEntity(pos) != null) {
-                level.removeBlockEntity(pos);
-            }
-            if (current.getBlock() instanceof JukeboxBlock || state.getBlock() instanceof JukeboxBlock) {
-                jukeboxes.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
-            }
             boolean rail = current.getBlock() instanceof BaseRailBlock || state.getBlock() instanceof BaseRailBlock;
-            int flags = (rail && !toNew) ? QUIET_FLAGS : (rail ? Block.UPDATE_ALL : SET_FLAGS);
-            level.setBlock(pos, state, flags);
-            if (rail) {
-                BlockState after = level.getBlockState(pos);
-                BlockState fixed = Block.updateFromNeighbourShapes(after, level, pos);
-                if (!fixed.equals(after)) {
-                    level.setBlock(pos, fixed, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            if (!current.equals(state)) {
+                if (!current.is(state.getBlock()) && level.getBlockEntity(pos) != null) {
+                    level.removeBlockEntity(pos);
+                }
+                int flags = (rail && !toNew) ? QUIET_FLAGS : (rail ? Block.UPDATE_ALL : SET_FLAGS);
+                level.setBlock(pos, state, flags);
+                if (rail) {
+                    BlockPos ip = pos.immutable();
+                    BlockState after = level.getBlockState(ip);
+                    if (after.getBlock() instanceof BaseRailBlock railBlock) {
+                        BlockState fixed = ((BaseRailBlockAccessor) railBlock).tt$updateState(after, level, ip, false);
+                        if (!fixed.equals(after)) {
+                            level.setBlock(ip, fixed, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                        }
+                    }
                 }
             }
-            touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
+            if (rail) {
+                touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
+            }
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
         } finally {
@@ -372,13 +396,26 @@ public final class BlockJournal {
                     positions.add(p);
                     for (Direction d : Direction.values()) positions.add(p.relative(d));
                 }
-                for (BlockPos p : positions) {
-                    BlockState st = level.getBlockState(p);
-                    if (st.isAir() || isPistonPart(st)) continue;
-                    BlockState fixed = Block.updateFromNeighbourShapes(st, level, p);
-                    if (fixed.equals(st)) continue;
-                    if (!fixed.is(st.getBlock()) && level.getBlockEntity(p) != null) level.removeBlockEntity(p);
-                    level.setBlock(p, fixed, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                boolean changed = true;
+                int passes = 0;
+                while (changed && passes++ < 8) {
+                    changed = false;
+                    for (BlockPos p : positions) {
+                        BlockState st = level.getBlockState(p);
+                        if (st.isAir()) continue;
+
+                        BlockState fixed;
+                        if (st.getBlock() instanceof BaseRailBlock railBlock) {
+                            fixed = ((BaseRailBlockAccessor) railBlock).tt$updateState(st, level, p, false);
+                        } else {
+                            if (isPistonPart(st)) continue;
+                            fixed = Block.updateFromNeighbourShapes(st, level, p);
+                        }
+                        if (fixed.equals(st)) continue;
+                        if (!fixed.is(st.getBlock()) && level.getBlockEntity(p) != null) level.removeBlockEntity(p);
+                        level.setBlock(p, fixed, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                        changed = true;
+                    }
                 }
             }
         } catch (Exception ex) {
