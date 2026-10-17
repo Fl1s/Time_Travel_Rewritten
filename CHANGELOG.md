@@ -6,12 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Fixed
+
+ - Armor stand tracking
+
+### [Contributors]
+
+ - Fl1s
+
 ## [1.21.1-0.9.5] - 2026-11-17
 
 ### Changed
 
-- /timetravel reset confirm -> /timetravel reset
-- Hotkeys category rename
+ - /timetravel reset confirm -> /timetravel reset
+ - Hotkeys category rename
 
 ### Fixed
 
