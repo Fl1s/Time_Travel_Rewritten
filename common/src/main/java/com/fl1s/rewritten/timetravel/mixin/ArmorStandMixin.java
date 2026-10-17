@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.ArmorStandJournal;
+import com.fl1s.rewritten.timetravel.EntityStateJournal;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.item.ItemStack;
@@ -13,11 +14,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ArmorStandMixin {
     @Inject(method = "setItemSlot", at = @At("HEAD"))
     private void tt$before(EquipmentSlot slot, ItemStack stack, CallbackInfo ci) {
-        ArmorStandJournal.beforeChange((ArmorStand) (Object) this);
+        EntityStateJournal.beforeChange((ArmorStand) (Object) this);
     }
 
     @Inject(method = "setItemSlot", at = @At("RETURN"))
     private void tt$after(EquipmentSlot slot, ItemStack stack, CallbackInfo ci) {
-        ArmorStandJournal.onChanged((ArmorStand) (Object) this);
+        EntityStateJournal.onChanged((ArmorStand) (Object) this);
     }
 }
