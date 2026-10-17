@@ -4,10 +4,8 @@ import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Objects;
@@ -71,18 +69,6 @@ public final class GhostTracks {
         if (ghost.gameMode.getGameModeForPlayer() != type) ghost.gameMode.changeGameModeForPlayer(type);
         if (ghost.getAbilities().mayfly && ghost.getAbilities().flying != current.flying) {
             ghost.getAbilities().flying = current.flying;
-        }
-    }
-
-    public static void onGhostSwing(ServerPlayer ghost) {
-        if (!TimeTravel.isLooping || !(ghost.level() instanceof ServerLevel level)) return;
-        Vec3 eye = ghost.getEyePosition();
-        Vec3 end = eye.add(ghost.getViewVector(1.0f).scale(3.0));
-        for (ServerPlayer p : level.players()) {
-            if (p == ghost || p.isSpectator() || !p.isAlive()) continue;
-            if (p.getBoundingBox().inflate(0.1).clip(eye, end).isEmpty()) continue;
-            p.hurt(level.damageSources().playerAttack(ghost), (float) ghost.getAttributeValue(Attributes.ATTACK_DAMAGE));
-            return;
         }
     }
 

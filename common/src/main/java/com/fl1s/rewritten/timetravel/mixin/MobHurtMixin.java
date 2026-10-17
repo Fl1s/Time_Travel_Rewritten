@@ -1,6 +1,10 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.*;
+import com.fl1s.rewritten.timetravel.GhostFx;
+import com.fl1s.rewritten.timetravel.MobBinding;
+import com.fl1s.rewritten.timetravel.MobJournal;
+import com.fl1s.rewritten.timetravel.MobTrailJournal;
+import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
@@ -8,7 +12,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
@@ -23,7 +26,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
@@ -105,11 +107,5 @@ public abstract class MobHurtMixin {
                 SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 1.0f, 0.8f + self.level().random.nextFloat() * 0.4f);
         if (source.getDirectEntity() instanceof AbstractArrow arrow) arrow.discard();
         return true;
-    }
-
-    @Inject(method = "swing(Lnet/minecraft/world/InteractionHand;Z)V", at = @At("HEAD"))
-    private void tt$swing(InteractionHand hand, boolean updateSelf, CallbackInfo ci) {
-        LivingEntity self = (LivingEntity) (Object) this;
-        if (self instanceof ServerPlayer sp && Ghosts.is(sp)) GhostTracks.onGhostSwing(sp);
     }
 }
