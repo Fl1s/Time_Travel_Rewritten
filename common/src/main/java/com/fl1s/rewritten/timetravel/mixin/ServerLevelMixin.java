@@ -61,6 +61,7 @@ public abstract class ServerLevelMixin {
         MobJournal.onEntitySpawn(self, entity);
         ItemFlowJournal.onEntitySpawn(self, entity);
         VehicleJournal.onEntitySpawn(self, entity);
+        EntityStateJournal.onSpawn(self, entity);
     }
 
     @Inject(method = "sendBlockUpdated", at = @At("HEAD"), cancellable = true)
