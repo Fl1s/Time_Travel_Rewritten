@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class BlockJournal {
     private BlockJournal() {
@@ -60,6 +61,7 @@ public final class BlockJournal {
     private static final double TRACK_RANGE_SQ = 64.0 * 64.0;
     private static final long DEDUP_TICKS = 40;
     private static final Direction[] DIRECTIONS = Direction.values();
+    private static final Map<BlockState, String> SERIALIZED = new ConcurrentHashMap<>();
 
     public static final class Entry {
         String dim;
@@ -125,6 +127,10 @@ public final class BlockJournal {
 
     public static void exitAction() {
         if (actionDepth > 0) actionDepth--;
+    }
+
+    private static String serialize(BlockState state) {
+        return SERIALIZED.computeIfAbsent(state, BlockStateParser::serialize);
     }
 
     public static void watch(ServerPlayer player, BlockPos center) {
@@ -205,8 +211,8 @@ public final class BlockJournal {
         if (pd == null) return;
 
         String dim = level.dimension().location().toString();
-        String oldS = BlockStateParser.serialize(old);
-        String newS = BlockStateParser.serialize(now);
+        String oldS = serialize(old);
+        String newS = serialize(now);
         int visit = pd.getCurrentVisit().id;
 
         List<Entry> same = byPos.get(pos.asLong());

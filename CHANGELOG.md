@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Changed
+ - Journals optimization (O(1) entity lookup & cached state/nbt parsing)
+
 ## [1.21.1-0.10.0] - 2026-11-17
 
 ### Added

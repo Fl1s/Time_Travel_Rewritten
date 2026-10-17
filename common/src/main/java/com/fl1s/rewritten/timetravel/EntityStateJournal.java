@@ -39,6 +39,7 @@ public final class EntityStateJournal {
         long tick;
         long seq;
         int visit;
+        transient CompoundTag parsed;
     }
 
     private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_entity_states.json",
@@ -198,7 +199,12 @@ public final class EntityStateJournal {
                 if (existing != null && !existing.isRemoved()) existing.discard();
                 return;
             }
-            CompoundTag tag = TagParser.parseTag(e.nbt);
+            CompoundTag cached = e.parsed;
+            if (cached == null) {
+                cached = TagParser.parseTag(e.nbt);
+                e.parsed = cached;
+            }
+            CompoundTag tag = cached.copy();
             if (existing != null && !existing.isRemoved() && isTracked(existing)) {
                 if (!signature(existing).equals(e.sig)) existing.load(tag);
             } else if (existing == null) {

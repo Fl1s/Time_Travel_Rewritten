@@ -5,6 +5,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.vehicle.AbstractMinecart;
 import net.minecraft.world.entity.vehicle.Boat;
@@ -75,12 +76,20 @@ public final class VehicleTrailJournal {
 
         sampledThisTick.clear();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
+            List<ServerPlayer> players = level.players();
+            if (players.isEmpty()) continue;
             String dim = level.dimension().location().toString();
-            for (Entity e : level.getAllEntities()) {
-                if (!VehicleJournal.isTracked(e)) continue;
-                if (Ghosts.is(e)) continue;
-                if (!sampledThisTick.add(e.getUUID())) continue;
-                record(e, dim, now);
+            double r = TimeTravel.entityTrackingDistance;
+            double r2 = r * r;
+            for (ServerPlayer p : players) {
+                List<Entity> nearby = level.getEntitiesOfClass(Entity.class, p.getBoundingBox().inflate(r));
+                for (Entity e : nearby) {
+                    if (!VehicleJournal.isTracked(e)) continue;
+                    if (Ghosts.is(e)) continue;
+                    if (p.distanceToSqr(e) > r2) continue;
+                    if (!sampledThisTick.add(e.getUUID())) continue;
+                    record(e, dim, now);
+                }
             }
         }
 
