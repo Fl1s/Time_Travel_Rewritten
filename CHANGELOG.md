@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Added
+
+- Text when attempting to kill a doomed mob
+
+### Fixed
+
+- The paradox that occurs when killing a mob that will canonically die later
+
 ## [1.21.1-0.10.1] - 2026-11-17
 
 ### Changed

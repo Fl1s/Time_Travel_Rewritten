@@ -5,8 +5,10 @@ import com.fl1s.rewritten.timetravel.MobBinding;
 import com.fl1s.rewritten.timetravel.MobJournal;
 import com.fl1s.rewritten.timetravel.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -48,6 +50,17 @@ public abstract class MobHurtMixin {
         LivingEntity self = (LivingEntity) (Object) this;
 
         if (MobJournal.isApplying()) return;
+
+        if (MobJournal.isDoomed(self)) {
+            Entity attacker = source.getEntity();
+            if (attacker == null || !Ghosts.is(attacker)) {
+                if (attacker instanceof ServerPlayer sp && self.level() instanceof ServerLevel sl) {
+                    DoomedFeedback.tryShow(sp, sl);
+                }
+                cir.setReturnValue(false);
+                return;
+            }
+        }
 
         if (tt$cloneBlocks(self, source)) {
             cir.setReturnValue(false);
