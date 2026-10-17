@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- The paradox that occurs when killing a mob that will canonically die later
+- Desync hat occurs when killing a mob that will canonically die later
 
 ## [1.21.1-0.10.1] - 2026-11-17
 
