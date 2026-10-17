@@ -112,16 +112,19 @@ public final class MobJournal {
 
     public static void load() {
         MobSpawnJournal.load();
+        MobTrailJournal.load();
         MobEventJournal.load();
     }
 
     public static void save() {
         MobSpawnJournal.save();
+        MobTrailJournal.save();
         MobEventJournal.save();
     }
 
     public static void saveIfDirty() {
         MobSpawnJournal.saveIfDirty();
+        MobTrailJournal.saveIfDirty();
         MobEventJournal.saveIfDirty();
     }
 

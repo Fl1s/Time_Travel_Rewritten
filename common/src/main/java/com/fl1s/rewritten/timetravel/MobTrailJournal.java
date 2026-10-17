@@ -272,9 +272,9 @@ public final class MobTrailJournal {
         mob.setNoAi(true);
         mob.setDeltaMovement(Vec3.ZERO);
         mob.fallDistance = 0;
-
+        boolean doomed = MobJournal.isDoomed(mob);
         if (s.health <= 0) {
-            if (!mob.isDeadOrDying()) {
+            if (doomed && !mob.isDeadOrDying()) {
                 mob.setTarget(null);
                 mob.getNavigation().stop();
                 mob.setHealth(0);
@@ -285,14 +285,17 @@ public final class MobTrailJournal {
                     ItemFlowJournal.setSuppressDrop(false);
                 }
             }
-            return;
+            if (doomed) return;
         }
-
-        if (mob.isDeadOrDying() || mob.deathTime > 0) {
+        if (doomed && (mob.isDeadOrDying() || mob.deathTime > 0)) {
             mob.deathTime = 0;
             mob.hurtTime = 0;
             mob.setPose(Pose.STANDING);
-            mob.setHealth(s.health);
+            mob.setHealth(1.0f);
+        }
+        float ceiling = s.health;
+        if (mob.getHealth() > ceiling) {
+            mob.setHealth(ceiling);
         }
 
         mob.setPos(s.x, s.y, s.z);
@@ -301,14 +304,8 @@ public final class MobTrailJournal {
         mob.setYHeadRot(s.yHeadRot);
         mob.setYBodyRot(s.yBodyRot);
 
-        if (Math.abs(mob.getHealth() - s.health) > 0.001f) {
-            mob.setHealth(s.health);
-        }
-
         mob.swinging = s.swinging;
-        if (s.swinging && mob.swingTime == 0) {
-            mob.swingTime = 1;
-        }
+        if (s.swinging && mob.swingTime == 0) mob.swingTime = 1;
 
         mob.setAggressive(s.aggressive);
 
@@ -414,7 +411,30 @@ public final class MobTrailJournal {
         }
     }
 
-    public static void onJump(long from, long to) {}
+    public static void onJump(long from, long to) {
+        if (to < from) {
+            long now = TimeTravel.timelineTick;
+            for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
+                Track t = en.getValue();
+                if (t.samples.isEmpty()) continue;
+                Sample s = sampleAt(t.samples, now);
+                if (s == null) continue;
+
+                ServerLevel level = TimeTravel.server.getLevel(
+                        ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim)));
+                if (level == null) continue;
+                Entity e = level.getEntity(en.getKey());
+                if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+
+                mob.setHealth(s.health);
+                if (mob.isDeadOrDying() || mob.deathTime > 0) {
+                    mob.deathTime = 0;
+                    mob.hurtTime = 0;
+                    mob.setPose(Pose.STANDING);
+                }
+            }
+        }
+    }
 
     public static void eraseVisits(Set<Integer> visitIds) {
         releaseAllPuppets();

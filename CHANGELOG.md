@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.10.2] - 2026-11-17
+
+### Added
+
+ - Text when attempting to kill a doomed mob
+
+### Fixed
+
+ - Desync hat occurs when killing a mob that will canonically die later
+ - Dropped items will not disappear if the player missed the event from which they appeared
+
 ## [1.21.1-0.10.1] - 2026-11-17
 
 ### Changed
