@@ -76,7 +76,7 @@ public final class BlockJournal {
         transient BlockState newParsed;
     }
 
-    private record Watch(ServerLevel level, List<BlockPos> positions) {
+    private record Watch(ServerLevel level, long[] positions) {
     }
 
     private static final class SetFrame {
@@ -135,12 +135,12 @@ public final class BlockJournal {
 
         ServerLevel level = player.serverLevel();
         BlockPos c = center.immutable();
-        List<BlockPos> positions = new ArrayList<>();
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
-                for (int dz = -2; dz <= 2; dz++) positions.add(c.offset(dx, dy, dz));
-            }
-        }
+        long[] positions = new long[125];
+        int i = 0;
+        for (int dx = -2; dx <= 2; dx++)
+            for (int dy = -2; dy <= 2; dy++)
+                for (int dz = -2; dz <= 2; dz++)
+                    positions[i++] = BlockPos.asLong(c.getX() + dx, c.getY() + dy, c.getZ() + dz);
         watches.add(new Watch(level, positions));
         int visitId = pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
         watchContainers(player, level, c, visitId);
@@ -178,7 +178,8 @@ public final class BlockJournal {
         List<Watch> copy = new ArrayList<>(watches);
         watches.clear();
         for (Watch w : copy) {
-            for (BlockPos p : w.positions()) ProcessJournal.trackIfProcess(w.level(), p);
+            for (long pos : w.positions())
+                ProcessJournal.trackIfProcess(w.level(), BlockPos.of(pos));
         }
     }
 
