@@ -143,10 +143,7 @@ public final class VehicleContainerJournal {
     }
 
     private static Entity findLoaded(ServerLevel level, UUID uuid) {
-        for (Entity e : level.getAllEntities()) {
-            if (e.getUUID().equals(uuid)) return e;
-        }
-        return null;
+        return level.getEntity(uuid);
     }
 
     private static void rebuildLastIndex() {

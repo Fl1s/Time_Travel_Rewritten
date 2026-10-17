@@ -153,10 +153,7 @@ public final class VehicleSpawnJournal {
     }
 
     private static Entity findLoaded(ServerLevel level, UUID uuid) {
-        for (Entity e : level.getAllEntities()) {
-            if (e.getUUID().equals(uuid)) return e;
-        }
-        return null;
+        return level.getEntity(uuid);
     }
 
     private static void revive(ServerLevel level, Entry e, long now) {
