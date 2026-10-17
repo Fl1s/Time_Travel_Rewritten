@@ -59,6 +59,7 @@ public final class BlockJournal {
     private static final int QUIET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
     private static final double TRACK_RANGE_SQ = 64.0 * 64.0;
     private static final long DEDUP_TICKS = 40;
+    private static final Direction[] DIRECTIONS = Direction.values();
 
     public static final class Entry {
         String dim;
@@ -400,7 +401,7 @@ public final class BlockJournal {
                 TreeSet<BlockPos> positions = new TreeSet<>(Comparator.comparingLong(BlockPos::asLong));
                 for (BlockPos p : en.getValue()) {
                     positions.add(p);
-                    for (Direction d : Direction.values()) positions.add(p.relative(d));
+                    for (Direction d : DIRECTIONS) positions.add(p.relative(d));
                 }
                 boolean changed = true;
                 int passes = 0;
