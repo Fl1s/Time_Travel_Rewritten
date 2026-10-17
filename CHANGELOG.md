@@ -8,10 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
- - loot and xp pickup by past selves
- - xp travelling back in time
- - drop duplication
- - mobs from unloaded chunks registration
+ - Loot and xp pickup by past selves
+ - Xp travelling back in time
+ - Drop duplication
+ - Mobs from unloaded chunks registration
+ - Creeper explosion rewind 
+ - Skeleton bow attack stacking over multiple time travels
 
 ### [Contributors]
 
