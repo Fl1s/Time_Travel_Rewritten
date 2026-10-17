@@ -15,7 +15,7 @@ import java.util.UUID;
 public final class DoomedFeedback {
     private DoomedFeedback() {}
 
-    private static final String[] MESSAGES = {
+    private static final String[] DOOMED_MESSAGES = {
             "message.timetravel_rewritten.doomed.1",
             "message.timetravel_rewritten.doomed.2",
             "message.timetravel_rewritten.doomed.3",
@@ -26,16 +26,26 @@ public final class DoomedFeedback {
             "message.timetravel_rewritten.doomed.8",
     };
 
+    private static final String[] REPLAY_MESSAGES = {
+            "message.timetravel_rewritten.replay.1",
+            "message.timetravel_rewritten.replay.2",
+            "message.timetravel_rewritten.replay.3",
+            "message.timetravel_rewritten.replay.4",
+            "message.timetravel_rewritten.replay.5",
+            "message.timetravel_rewritten.replay.6",
+    };
+
     private static final long COOLDOWN_TICKS = 40;
     private static final Map<UUID, Long> lastShown = new HashMap<>();
 
-    public static void tryShow(ServerPlayer player, ServerLevel level) {
+    public static void tryShow(ServerPlayer player, ServerLevel level, boolean doomed) {
         long now = level.getGameTime();
         Long last = lastShown.get(player.getUUID());
         if (last != null && now - last < COOLDOWN_TICKS) return;
         lastShown.put(player.getUUID(), now);
 
-        String key = MESSAGES[level.getRandom().nextInt(MESSAGES.length)];
+        String[] pool = doomed ? DOOMED_MESSAGES : REPLAY_MESSAGES;
+        String key = pool[level.getRandom().nextInt(pool.length)];
         player.displayClientMessage(Component.translatable(key), true);
     }
 

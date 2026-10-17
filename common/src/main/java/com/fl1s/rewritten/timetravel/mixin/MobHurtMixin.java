@@ -8,7 +8,6 @@ import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -36,8 +35,14 @@ public abstract class MobHurtMixin {
     @ModifyVariable(method = "hurt", at = @At("HEAD"), argsOnly = true)
     private float tt$amount(float amount, DamageSource source) {
         LivingEntity self = (LivingEntity) (Object) this;
+        if (MobJournal.isApplying()) return amount;
+        if (MobJournal.isDoomed(self)) {
+            float cur = self.getHealth();
+            if (cur <= 1.0f) return 0.0f;
+            return Math.min(amount, cur - 1.0f);
+        }
         float v = tt$crit(self, source, amount);
-        if (self instanceof Mob mob && !MobJournal.isApplying() && MobTrailJournal.isReplaying() && MobTrailJournal.isPuppeted(mob)) {
+        if (self instanceof Mob mob && MobTrailJournal.isReplaying() && MobTrailJournal.isPuppeted(mob)) {
             float cur = mob.getHealth();
             if (cur <= 1.0f) return 0.0f;
             return Math.min(v, cur - 1.0f);
@@ -51,14 +56,15 @@ public abstract class MobHurtMixin {
 
         if (MobJournal.isApplying()) return;
 
-        if (MobJournal.isDoomed(self)) {
+        boolean doomed = MobJournal.isDoomed(self);
+        boolean replayPuppet = self instanceof Mob mob
+                && MobTrailJournal.isReplaying()
+                && MobTrailJournal.isPuppeted(mob);
+        if ((doomed || replayPuppet) && self.getHealth() - amount <= 1.0f) {
             Entity attacker = source.getEntity();
-            if (attacker == null || !Ghosts.is(attacker)) {
-                if (attacker instanceof ServerPlayer sp && self.level() instanceof ServerLevel sl) {
-                    DoomedFeedback.tryShow(sp, sl);
-                }
-                cir.setReturnValue(false);
-                return;
+            if (attacker instanceof ServerPlayer sp && !Ghosts.is(sp)
+                    && self.level() instanceof ServerLevel sl) {
+                DoomedFeedback.tryShow(sp, sl, doomed);
             }
         }
 
@@ -89,7 +95,8 @@ public abstract class MobHurtMixin {
         if (fx == null || !fx.falling()) return amount;
 
         if (victim.level() instanceof ServerLevel sl) {
-            sl.sendParticles(ParticleTypes.CRIT, victim.getX(), victim.getY(0.5), victim.getZ(), 10, 0.3, 0.3, 0.3, 0.2);
+            sl.sendParticles(ParticleTypes.CRIT, victim.getX(), victim.getY(0.5), victim.getZ(),
+                    10, 0.3, 0.3, 0.3, 0.2);
             sl.playSound(null, victim.getX(), victim.getY(), victim.getZ(),
                     SoundEvents.PLAYER_ATTACK_CRIT, SoundSource.PLAYERS, 1.0f, 1.0f);
         }
