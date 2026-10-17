@@ -9,11 +9,7 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.entity.AreaEffectCloud;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.ExperienceOrb;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
@@ -68,6 +64,7 @@ public final class EntityJournal {
     public static boolean suppress = false;
 
     private static boolean isTracked(Entity e) {
+        if (e instanceof ExperienceOrb) return true;
         if (e instanceof PrimedTnt) return true;
         if (e instanceof ItemEntity item) return !(item.getOwner() instanceof Player);
         if (e instanceof Projectile) {
@@ -78,6 +75,7 @@ public final class EntityJournal {
 
     public static boolean shouldBlock(Entity e) {
         if (replaying) return false;
+        if (ItemFlowJournal.isGhostKill()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (MobJournal.isKilling()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (suppress) return isTracked(e);
         if (BlockJournal.isApplying())
@@ -88,13 +86,17 @@ public final class EntityJournal {
 
     public static void onSpawn(ServerLevel level, Entity entity) {
         if (!TimeTravel.isLooping || replaying || TimeTravel.loopSceneManager == null) return;
-        if (ItemFlowJournal.isApplying() || ItemFlowJournal.isCapturingDeath()) return;
+        boolean orb = entity instanceof ExperienceOrb;
+        if (ItemFlowJournal.isApplying()) return;
+        if (ItemFlowJournal.isCapturingDeath() && !orb) return;
+        if (orb && ItemFlowJournal.isGhostKill()) return;
         if (MobJournal.isApplying()) return;
         if (entity instanceof AreaEffectCloud) {
             clouds.put(entity.getUUID(), new CloudRef(level.dimension().location().toString(), TimeTravel.timelineTick));
             return;
         }
         if (!isTracked(entity)) return;
+        if (entity instanceof Projectile shot && shot.getOwner() instanceof Mob && ReplayState.isReplaying()) return;
         PlayerData pd = BlockJournal.nearestRecorder(level, entity.blockPosition());
         if (pd == null) return;
 

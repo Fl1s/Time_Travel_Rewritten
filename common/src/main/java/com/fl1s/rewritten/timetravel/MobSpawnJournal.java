@@ -9,6 +9,7 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
 
@@ -125,6 +126,13 @@ public final class MobSpawnJournal {
         }
     }
 
+    static void ensureRegistered(ServerLevel level, Mob mob) {
+        if (canon.containsKey(mob.getUUID())) return;
+        CompoundTag tag = new CompoundTag();
+        if (!mob.save(tag)) return;
+        registerInitial(level, mob, tag, -1L);
+    }
+
     public static void onJump(long from, long to) {
         long now = TimeTravel.timelineTick;
         for (Entry e : STORE.entries()) {
@@ -137,6 +145,11 @@ public final class MobSpawnJournal {
             if (!shouldExist) {
                 if (current != null && !current.isRemoved()) current.discard();
                 continue;
+            }
+            if (current != null && !current.isRemoved() && current instanceof LivingEntity living
+                    && (living.isDeadOrDying() || living.deathTime > 0)) {
+                current.discard();
+                current = null;
             }
 
             if (current == null || current.isRemoved()) {

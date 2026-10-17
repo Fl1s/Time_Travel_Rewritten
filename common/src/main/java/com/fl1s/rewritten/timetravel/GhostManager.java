@@ -10,6 +10,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -160,6 +162,7 @@ public final class GhostManager {
             }
             if (!ghost.root.isFinished()) ghost.fx.tick();
         }
+        touchOrbs();
         if (TimeTravel.timelineTick % 100 == 0) {
             roots.removeIf(g -> g.root.isFinished());
         }
@@ -260,6 +263,19 @@ public final class GhostManager {
         PlayerData pd = scene.getRecordingPlayer(player.getGameProfile().getName());
         if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return -1;
         return pd.getCurrentVisit().id;
+    }
+
+    private void touchOrbs() {
+        for (Ghost ghost : roots) {
+            if (ghost.pendingSkip > 0 || ghost.root.isFinished()) continue;
+            if (!(ghost.fx.entity() instanceof ServerPlayer sp) || sp.isRemoved()) continue;
+            AABB box = sp.getBoundingBox().inflate(1.0, 0.5, 1.0);
+            for (ExperienceOrb orb : sp.serverLevel().getEntitiesOfClass(ExperienceOrb.class, box)) {
+                if (orb.isRemoved()) continue;
+                sp.takeXpDelay = 0;
+                orb.playerTouch(sp);
+            }
+        }
     }
 
     public GhostFx fxOf(Entity e) {

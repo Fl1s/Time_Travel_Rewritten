@@ -120,6 +120,7 @@ public final class Timeline {
 
         BlockJournal.flushWatches();
         EntityJournal.fastForward(from, target);
+        MobJournal.fastForward(from, target);
         ProcessJournal.beforeJump();
         s.visits.endAllVisits(dir);
 

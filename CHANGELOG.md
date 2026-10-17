@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Changed
+
+- /timetravel reset confirm -> /timetravel reset
+- Hotkeys category rename
+
+### Fixed
+
+ - Loot and xp pickup by past selves
+ - Xp travelling back in time
+ - Drop duplication
+ - Mobs from unloaded chunks registration
+ - Creeper explosion rewind 
+ - Skeleton bow attack stacking over multiple time travels
+
+### [Contributors]
+
+- Fl1s
+
+## [1.21.1-0.8.9] - 2026-11-16
+
 ### Added
 
  - Predetermined doomed mobs death position and slow approach to it
