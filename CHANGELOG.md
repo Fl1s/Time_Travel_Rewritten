@@ -12,9 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
  - Item frames, pictures, armor stands and end crystals tracking
 
+### Changed
+ - File `timetravel_rewritten_armor_stands.json` replaced by `timetravel_rewritten_entity_states.json` so the old file need to be renamed
+
 ### Fixed
 
- - afterJump() furnace-like blocks data dupe
+ - Furnace-like blocks data dupe after jumping forward in time
 
 ### [Contributors]
 
