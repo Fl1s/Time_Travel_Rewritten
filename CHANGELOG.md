@@ -6,13 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.10.0] - 2026-11-17
+
 ### Added
 
  - Item frames, pictures, armor stands and end crystals tracking
 
 ### Fixed
 
- - Armor stand tracking
  - afterJump() furnace-like blocks data dupe
 
 ### [Contributors]
