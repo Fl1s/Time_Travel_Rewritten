@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Changed
+
+- /timetravel reset confirm -> /timetravel reset
+- Hotkeys category rename
+
 ### Fixed
 
  - Loot and xp pickup by past selves
@@ -18,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### [Contributors]
 
 - Fl1s
-
 
 ## [1.21.1-0.8.9] - 2026-11-16
 

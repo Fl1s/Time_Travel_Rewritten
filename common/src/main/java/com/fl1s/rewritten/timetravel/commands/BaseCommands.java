@@ -22,9 +22,7 @@ public class BaseCommands {
     public static void register(LiteralArgumentBuilder<CommandSourceStack> parentBuilder) {
         parentBuilder.then(Commands.literal("start").executes(BaseCommands::start));
         parentBuilder.then(Commands.literal("stop").executes(BaseCommands::stop));
-        parentBuilder.then(Commands.literal("reset")
-                .executes(BaseCommands::resetWarning)
-                .then(Commands.literal("confirm").executes(BaseCommands::reset)));
+        parentBuilder.then(Commands.literal("reset").executes(BaseCommands::reset));
         parentBuilder.then(Commands.literal("status").executes(BaseCommands::status));
         parentBuilder.then(Commands.literal("help").executes(BaseCommands::help));
         parentBuilder.then(Commands.literal("jump")
@@ -94,8 +92,7 @@ public class BaseCommands {
             return 0;
         }
         TimeTravel.startLoop();
-        source.sendSuccess(() -> Component.literal("Timeline started at " + TimeFormat.clock(TimeTravel.timelineTick)
-                + ". Use [ ] to scroll time and Enter to jump."), true);
+        source.sendSuccess(() -> Component.literal("Timeline started at " + TimeFormat.clock(TimeTravel.timelineTick)), true);
         return 1;
     }
 
@@ -114,12 +111,6 @@ public class BaseCommands {
         return SharedSuggestionProvider.suggest(TimeTravel.config.marks.keySet(), builder);
     }
 
-    private static int resetWarning(CommandContext<CommandSourceStack> context) {
-        context.getSource().sendFailure(Component.literal(
-                "This deletes ALL recorded visits, past selves voices, block/chest/chat history and sets time to 00:00. "
-                        + "Run '/timetravel reset confirm' if you are sure."));
-        return 0;
-    }
 
     private static int jumpReturn(CommandContext<CommandSourceStack> context) {
         if (TimeTravel.lastJumpOrigin() < 0) {
