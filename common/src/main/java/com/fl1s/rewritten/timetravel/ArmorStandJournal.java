@@ -1,7 +1,6 @@
 package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.journal.Journal;
-import com.fl1s.rewritten.timetravel.util.Ghosts;
 import com.fl1s.rewritten.timetravel.util.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
@@ -9,26 +8,22 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 public final class ArmorStandJournal {
-    private ArmorStandJournal() {
-    }
+    private ArmorStandJournal() {}
 
-    private static final double TRACK_RANGE = 48.0;
-    private static final String[] KEYS = {"ArmorItems", "HandItems", "Pose", "DisabledSlots", "Invisible", "ShowArms", "NoBasePlate", "Small", "Marker", "CustomName", "CustomNameVisible"};
+    private static final String[] KEYS = {"ArmorItems", "HandItems", "Pose", "DisabledSlots", "Invisible",
+            "ShowArms", "NoBasePlate", "Small", "Marker", "CustomName", "CustomNameVisible"};
 
     public static final class Entry {
         String dim;
@@ -40,14 +35,10 @@ public final class ArmorStandJournal {
         int visit;
     }
 
-    private record Known(String dim, long pos) {
-    }
-
-    private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_armor_stands.json", new TypeToken<ArrayList<Entry>>() {
-    }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
+    private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_armor_stands.json",
+            new TypeToken<ArrayList<Entry>>() {}.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
 
     private static final Map<UUID, List<Entry>> byUuid = new HashMap<>();
-    private static final Map<UUID, Known> known = new HashMap<>();
     private static boolean applying = false;
 
     private static ServerLevel levelOf(String dim) {
@@ -92,6 +83,16 @@ public final class ArmorStandJournal {
         return pd != null && pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
     }
 
+    private static ServerLevel activeLevel(ArmorStand stand) {
+        if (applying || !TimeTravel.isLooping || ReplayState.SUPPRESS) return null;
+        if (TimeTravel.loopSceneManager == null || TimeTravel.server == null) return null;
+        return stand.level() instanceof ServerLevel level ? level : null;
+    }
+
+    private static boolean inWorld(ServerLevel level, ArmorStand stand) {
+        return level.getEntity(stand.getUUID()) == stand;
+    }
+
     private static void record(ServerLevel level, ArmorStand stand, long tick, int visit) {
         CompoundTag tag = new CompoundTag();
         if (!stand.save(tag)) return;
@@ -106,71 +107,66 @@ public final class ArmorStandJournal {
         STORE.entries().add(e);
         index(e);
         STORE.markDirty();
-        known.put(e.uuid, new Known(e.dim, stand.blockPosition().asLong()));
     }
 
-    private static void recordGone(UUID id, String dim, BlockPos pos, ServerLevel level) {
-        Entry e = new Entry();
-        e.dim = dim;
-        e.uuid = id;
-        e.tick = TimeTravel.timelineTick;
-        e.seq = STORE.nextSeq();
-        e.visit = visitAt(level, pos);
-        STORE.entries().add(e);
-        index(e);
-        STORE.markDirty();
+    private static void ensureBaseline(ServerLevel level, ArmorStand stand) {
+        if (!byUuid.containsKey(stand.getUUID())) record(level, stand, -1, -1);
     }
 
     public static void onSpawn(ServerLevel level, Entity entity) {
         if (!(entity instanceof ArmorStand stand)) return;
-        if (!TimeTravel.isLooping || applying || ReplayState.SUPPRESS) return;
+        if (applying || !TimeTravel.isLooping || ReplayState.SUPPRESS) return;
         if (TimeTravel.loopSceneManager == null) return;
         if (byUuid.containsKey(stand.getUUID())) return;
         record(level, stand, TimeTravel.timelineTick, visitAt(level, stand.blockPosition()));
     }
 
-    public static void tick() {
-        if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.loopSceneManager == null) return;
-        STORE.tick(ArmorStandJournal::applyEntry);
-        long now = TimeTravel.timelineTick;
-        Set<UUID> seen = new HashSet<>();
-        for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            for (ServerPlayer p : level.players()) {
-                if (Ghosts.is(p)) continue;
-                for (ArmorStand stand : level.getEntitiesOfClass(ArmorStand.class, p.getBoundingBox().inflate(TRACK_RANGE))) {
-                    if (stand.isRemoved() || !seen.add(stand.getUUID())) continue;
-                    check(level, stand, now);
-                }
-            }
-        }
-        checkGone(now);
+    public static void beforeChange(ArmorStand stand) {
+        ServerLevel level = activeLevel(stand);
+        if (level == null || !inWorld(level, stand)) return;
+        ensureBaseline(level, stand);
     }
 
-    private static void check(ServerLevel level, ArmorStand stand, long now) {
+    public static void onChanged(ArmorStand stand) {
+        ServerLevel level = activeLevel(stand);
+        if (level == null || !inWorld(level, stand)) return;
         UUID id = stand.getUUID();
-        known.put(id, new Known(level.dimension().location().toString(), stand.blockPosition().asLong()));
+        long now = TimeTravel.timelineTick;
+        String sig = signature(stand);
         Entry at = stateAt(id, now);
-        if (at == null) {
-            record(level, stand, -1, -1);
-            return;
+        if (at != null && at.sig != null && at.sig.equals(sig)) return;
+        List<Entry> list = byUuid.get(id);
+        if (list != null) {
+            for (Entry x : list) {
+                if (x.sig != null && Math.abs(x.tick - now) <= 2 && x.sig.equals(sig)) return;
+            }
         }
-        if (at.sig != null && at.sig.equals(signature(stand))) return;
         record(level, stand, now, visitAt(level, stand.blockPosition()));
     }
 
-    private static void checkGone(long now) {
-        for (Iterator<Map.Entry<UUID, Known>> it = known.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<UUID, Known> en = it.next();
-            ServerLevel level = levelOf(en.getValue().dim());
-            if (level == null) continue;
-            BlockPos pos = BlockPos.of(en.getValue().pos());
-            if (!level.isLoaded(pos)) continue;
-            Entity ent = level.getEntity(en.getKey());
-            if (ent != null && !ent.isRemoved()) continue;
-            Entry at = stateAt(en.getKey(), now);
-            if (at != null && at.nbt != null) recordGone(en.getKey(), en.getValue().dim(), pos, level);
-            it.remove();
-        }
+    public static void onRemoved(Entity entity, Entity.RemovalReason reason) {
+        if (!(entity instanceof ArmorStand stand)) return;
+        if (reason != Entity.RemovalReason.KILLED && reason != Entity.RemovalReason.DISCARDED) return;
+        ServerLevel level = activeLevel(stand);
+        if (level == null || stand.isRemoved() || !inWorld(level, stand)) return;
+        ensureBaseline(level, stand);
+        UUID id = stand.getUUID();
+        Entry at = stateAt(id, TimeTravel.timelineTick);
+        if (at != null && at.nbt == null) return;
+        Entry e = new Entry();
+        e.dim = level.dimension().location().toString();
+        e.uuid = id;
+        e.tick = TimeTravel.timelineTick;
+        e.seq = STORE.nextSeq();
+        e.visit = visitAt(level, stand.blockPosition());
+        STORE.entries().add(e);
+        index(e);
+        STORE.markDirty();
+    }
+
+    public static void tick() {
+        if (!TimeTravel.isLooping || TimeTravel.server == null) return;
+        STORE.tick(ArmorStandJournal::applyEntry);
     }
 
     private static void applyEntry(Entry e) {
@@ -181,7 +177,6 @@ public final class ArmorStandJournal {
             Entity existing = level.getEntity(e.uuid);
             if (e.nbt == null) {
                 if (existing != null && !existing.isRemoved()) existing.discard();
-                known.remove(e.uuid);
                 return;
             }
             CompoundTag tag = TagParser.parseTag(e.nbt);
@@ -222,7 +217,6 @@ public final class ArmorStandJournal {
                 }
             }
         }
-        known.clear();
         STORE.rebuildUpcoming();
     }
 
@@ -236,21 +230,14 @@ public final class ArmorStandJournal {
     }
 
     public static void load() {
-        known.clear();
         STORE.load();
         rebuildIndex();
     }
 
-    public static void save() {
-        STORE.save();
-    }
-
-    public static void saveIfDirty() {
-        STORE.saveIfDirty();
-    }
+    public static void save() { STORE.save(); }
+    public static void saveIfDirty() { STORE.saveIfDirty(); }
 
     public static void clear() {
-        known.clear();
         byUuid.clear();
         STORE.clear();
     }
