@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Item frames, pictures, armor stands and end crystals tracking
+ - Item frames, pictures, armor stands and end crystals tracking
 
 ### Fixed
 
@@ -61,7 +61,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Time travel data leak across the worlds
  - Container dupe
  - Timeline mob spawning
-
 
 ### [Contributors]
  - Fl1s
