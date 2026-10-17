@@ -3,6 +3,8 @@
 [![GitHub Release](https://img.shields.io/badge/GitHub-Release-green?logo=github)](https://github.com/Fl1s/Time_Travel_Rewritten/releases/latest)
 [![Static Badge](https://img.shields.io/badge/Modrinth-Release-green?logo=Modrinth)](https://modrinth.com/mod/time-travel-rewritten/versions)
 
+https://github.com/user-attachments/assets/9edb60bc-1a26-46ae-b8ea-485697659877
+
 A Minecraft mod that lets you travel through a shared timeline and interact with past and future versions of yourself.
 
 Requires [Motion Capture Mod](https://modrinth.com/mod/motion-capture/).
