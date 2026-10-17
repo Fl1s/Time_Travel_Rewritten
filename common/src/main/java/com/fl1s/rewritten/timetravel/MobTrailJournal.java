@@ -138,10 +138,25 @@ public final class MobTrailJournal {
                     MobSpawnJournal.ensureRegistered(level, mob);
                     Track t = tracks.computeIfAbsent(id, k -> new Track(dim));
                     if (t.end == now) continue;
+
+                    List<Sample> list = t.samples;
+                    Sample last = list.isEmpty() ? null : list.get(list.size() - 1);
+
+                    if (last != null && last.tick == now) {
+                        t.end = now;
+                        continue;
+                    }
+                    if (last != null && !mob.isUsingItem() && cheapSameState(last, mob)) {
+                        PlayerData rec = BlockJournal.nearestRecorder(level, mob.blockPosition());
+                        int visit = rec != null && rec.getCurrentVisit() != null ? rec.getCurrentVisit().id : -1;
+                        if (visit == last.visit) {
+                            t.end = now;
+                            continue;
+                        }
+                    }
                     Sample s = makeSample(mob, now);
                     PlayerData rec = BlockJournal.nearestRecorder(level, mob.blockPosition());
                     s.visit = rec != null && rec.getCurrentVisit() != null ? rec.getCurrentVisit().id : -1;
-                    List<Sample> list = t.samples;
                     if (list.isEmpty() || !sameState(list.get(list.size() - 1), s)) list.add(s);
                     t.end = now;
                     dirty = true;
@@ -161,6 +176,21 @@ public final class MobTrailJournal {
                 && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining
                 && a.activeHand == b.activeHand
                 && a.swellDir == b.swellDir && a.swell == b.swell;
+    }
+
+    private static boolean cheapSameState(Sample a, Mob mob) {
+        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ()
+                && a.yRot == mob.getYRot() && a.xRot == mob.getXRot()
+                && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot
+                && a.health == mob.getHealth()
+                && a.swinging == mob.swinging
+                && a.attackAnim == mob.attackAnim
+                && a.aggressive == mob.isAggressive()
+                && a.usingItem == mob.isUsingItem()
+                && a.useItemRemaining == mob.getUseItemRemainingTicks()
+                && a.activeHand == mob.getUsedItemHand().ordinal()
+                && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0)
+                && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0);
     }
 
     private static Sample makeSample(Mob mob, long now) {
@@ -326,10 +356,7 @@ public final class MobTrailJournal {
     }
 
     private static Entity findLoaded(ServerLevel level, UUID uuid) {
-        for (Entity e : level.getAllEntities()) {
-            if (e.getUUID().equals(uuid)) return e;
-        }
-        return null;
+        return level.getEntity(uuid);
     }
 
     private static void releasePuppet(UUID id) {

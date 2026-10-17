@@ -43,6 +43,7 @@ public final class EffectJournal {
         long tick;
         long seq;
         int visit;
+        transient ResourceLocation cachedLocation;
     }
 
     private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_effects.json", new TypeToken<ArrayList<Entry>>() {
@@ -158,6 +159,19 @@ public final class EffectJournal {
         rebuildUpcoming();
     }
 
+    private static ResourceLocation cachedLocation(Entry e) {
+        ResourceLocation loc = e.cachedLocation;
+        if (loc == null) {
+            try {
+                loc = ResourceLocation.parse(e.id);
+                e.cachedLocation = loc;
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+        return loc;
+    }
+
     private static void play(Entry e) {
         if (e.kind == SOUND && isPlayerHurt(e.id)) return;
         ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -165,11 +179,19 @@ public final class EffectJournal {
         replaying = true;
         try {
             switch (e.kind) {
-                case SOUND ->
-                        BuiltInRegistries.SOUND_EVENT.getOptional(ResourceLocation.parse(e.id)).ifPresent(se -> level.playSound(null, e.x, e.y, e.z, se, SoundSource.valueOf(e.source), e.volume, e.pitch));
+                case SOUND -> {
+                    ResourceLocation loc = cachedLocation(e);
+                    if (loc != null) {
+                        BuiltInRegistries.SOUND_EVENT.getOptional(loc).ifPresent(se -> level.playSound(null, e.x, e.y, e.z, se, SoundSource.valueOf(e.source), e.volume, e.pitch));
+                    }
+                }
                 case LEVEL_EVENT -> level.levelEvent(null, e.a, BlockPos.containing(e.x, e.y, e.z), e.b);
-                case BLOCK_EVENT ->
-                        BuiltInRegistries.BLOCK.getOptional(ResourceLocation.parse(e.id)).ifPresent(block -> level.blockEvent(BlockPos.containing(e.x, e.y, e.z), block, e.a, e.b));
+                case BLOCK_EVENT -> {
+                    ResourceLocation loc = cachedLocation(e);
+                    if (loc != null) {
+                        BuiltInRegistries.BLOCK.getOptional(loc).ifPresent(block -> level.blockEvent(BlockPos.containing(e.x, e.y, e.z), block, e.a, e.b));
+                    }
+                }
                 default -> {
                 }
             }

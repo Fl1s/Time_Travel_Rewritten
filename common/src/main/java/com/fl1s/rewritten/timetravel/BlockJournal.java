@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class BlockJournal {
     private BlockJournal() {
@@ -59,6 +60,8 @@ public final class BlockJournal {
     private static final int QUIET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
     private static final double TRACK_RANGE_SQ = 64.0 * 64.0;
     private static final long DEDUP_TICKS = 40;
+    private static final Direction[] DIRECTIONS = Direction.values();
+    private static final Map<BlockState, String> SERIALIZED = new ConcurrentHashMap<>();
 
     public static final class Entry {
         String dim;
@@ -75,7 +78,7 @@ public final class BlockJournal {
         transient BlockState newParsed;
     }
 
-    private record Watch(ServerLevel level, List<BlockPos> positions) {
+    private record Watch(ServerLevel level, long[] positions) {
     }
 
     private static final class SetFrame {
@@ -126,6 +129,10 @@ public final class BlockJournal {
         if (actionDepth > 0) actionDepth--;
     }
 
+    private static String serialize(BlockState state) {
+        return SERIALIZED.computeIfAbsent(state, BlockStateParser::serialize);
+    }
+
     public static void watch(ServerPlayer player, BlockPos center) {
         if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
         if (Ghosts.is(player)) return;
@@ -134,12 +141,12 @@ public final class BlockJournal {
 
         ServerLevel level = player.serverLevel();
         BlockPos c = center.immutable();
-        List<BlockPos> positions = new ArrayList<>();
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
-                for (int dz = -2; dz <= 2; dz++) positions.add(c.offset(dx, dy, dz));
-            }
-        }
+        long[] positions = new long[125];
+        int i = 0;
+        for (int dx = -2; dx <= 2; dx++)
+            for (int dy = -2; dy <= 2; dy++)
+                for (int dz = -2; dz <= 2; dz++)
+                    positions[i++] = BlockPos.asLong(c.getX() + dx, c.getY() + dy, c.getZ() + dz);
         watches.add(new Watch(level, positions));
         int visitId = pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
         watchContainers(player, level, c, visitId);
@@ -177,7 +184,8 @@ public final class BlockJournal {
         List<Watch> copy = new ArrayList<>(watches);
         watches.clear();
         for (Watch w : copy) {
-            for (BlockPos p : w.positions()) ProcessJournal.trackIfProcess(w.level(), p);
+            for (long pos : w.positions())
+                ProcessJournal.trackIfProcess(w.level(), BlockPos.of(pos));
         }
     }
 
@@ -203,8 +211,8 @@ public final class BlockJournal {
         if (pd == null) return;
 
         String dim = level.dimension().location().toString();
-        String oldS = BlockStateParser.serialize(old);
-        String newS = BlockStateParser.serialize(now);
+        String oldS = serialize(old);
+        String newS = serialize(now);
         int visit = pd.getCurrentVisit().id;
 
         List<Entry> same = byPos.get(pos.asLong());
@@ -400,7 +408,7 @@ public final class BlockJournal {
                 TreeSet<BlockPos> positions = new TreeSet<>(Comparator.comparingLong(BlockPos::asLong));
                 for (BlockPos p : en.getValue()) {
                     positions.add(p);
-                    for (Direction d : Direction.values()) positions.add(p.relative(d));
+                    for (Direction d : DIRECTIONS) positions.add(p.relative(d));
                 }
                 boolean changed = true;
                 int passes = 0;

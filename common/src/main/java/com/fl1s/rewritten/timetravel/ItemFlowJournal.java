@@ -214,10 +214,7 @@ public final class ItemFlowJournal {
     }
 
     private static Entity findLoaded(ServerLevel level, UUID uuid) {
-        for (Entity e : level.getAllEntities()) {
-            if (e.getUUID().equals(uuid)) return e;
-        }
-        return null;
+        return level.getEntity(uuid);
     }
 
     public static void onJump(long from, long to) {

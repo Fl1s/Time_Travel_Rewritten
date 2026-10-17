@@ -20,6 +20,7 @@ public abstract class LevelTicksMixin<T> {
             ci.cancel();
             return;
         }
+        if (!TimeTravel.isLooping) return;
         if (!(tick.type() instanceof Block block)) return;
         ServerLevel level = RedstoneJournal.currentLevel();
         if (level == null) level = TimeTravel.serverLevel;
