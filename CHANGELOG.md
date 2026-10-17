@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
  - Armor stand tracking
  - Past selves now can hit the player
+ - afterJump() dupe
 
 ### [Contributors]
 

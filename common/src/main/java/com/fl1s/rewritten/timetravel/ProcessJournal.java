@@ -217,6 +217,8 @@ public final class ProcessJournal {
                 if (level == null) continue;
                 BlockPos pos = BlockPos.of(k.pos());
                 if (!level.isLoaded(pos)) continue;
+                BlockEntity touchedBe = level.getBlockEntity(pos);
+                if (touchedBe != null) syncBlockState(touchedBe);
                 BlockState state = level.getBlockState(pos);
                 level.sendBlockUpdated(pos, state, state, Block.UPDATE_ALL);
             }
@@ -242,7 +244,15 @@ public final class ProcessJournal {
             if (be == null || !isProcess(be)) continue;
 
             if (to > from) {
-                pendingSim.merge(k, to - from, Long::sum);
+                Snap best = bestEvent(k, from, to);
+                if (best != null) {
+                    restore(be, best.nbt);
+                    long delta = to - best.tick;
+                    if (delta > 0) pendingSim.put(k, delta);
+                    else pendingSim.remove(k);
+                } else {
+                    pendingSim.merge(k, to - from, Long::sum);
+                }
             } else {
                 pendingSim.remove(k);
                 Snap best = bestSnap(k, to);
@@ -265,6 +275,17 @@ public final class ProcessJournal {
         Snap best = null;
         for (Snap s : list) {
             if (s.tick > tick) continue;
+            if (best == null || s.tick > best.tick || (s.tick == best.tick && s.seq > best.seq)) best = s;
+        }
+        return best;
+    }
+
+    private static Snap bestEvent(Key k, long from, long to) {
+        List<Snap> list = snaps.get(k);
+        if (list == null) return null;
+        Snap best = null;
+        for (Snap s : list) {
+            if (!s.event || s.tick <= from || s.tick > to) continue;
             if (best == null || s.tick > best.tick || (s.tick == best.tick && s.seq > best.seq)) best = s;
         }
         return best;
