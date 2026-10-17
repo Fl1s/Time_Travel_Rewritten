@@ -9,11 +9,7 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.entity.AreaEffectCloud;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.ExperienceOrb;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
@@ -100,6 +96,7 @@ public final class EntityJournal {
             return;
         }
         if (!isTracked(entity)) return;
+        if (entity instanceof Projectile shot && shot.getOwner() instanceof Mob && ReplayState.isReplaying()) return;
         PlayerData pd = BlockJournal.nearestRecorder(level, entity.blockPosition());
         if (pd == null) return;
 

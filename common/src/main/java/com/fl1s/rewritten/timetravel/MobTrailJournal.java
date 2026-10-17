@@ -1,7 +1,10 @@
 package com.fl1s.rewritten.timetravel;
 
+import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.mixin.LivingEntityAccessor;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.util.JsonStore;
+import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
@@ -11,12 +14,17 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
+import java.lang.reflect.Type;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,6 +40,7 @@ public final class MobTrailJournal {
 
     public static final class Sample {
         public long tick;
+        public int visit;
         public double x, y, z;
         public float yRot, xRot, yHeadRot, yBodyRot;
         public float health;
@@ -42,21 +51,32 @@ public final class MobTrailJournal {
         public int useItemRemaining;
         public String useItemNbt;
         public int activeHand;
+        public int swellDir;
+        public int swell;
     }
 
     private static final class Track {
         final String dim;
         final List<Sample> samples = new ArrayList<>();
+        long end = -1;
         Track(String dim) { this.dim = dim; }
-        long lastTick() { return samples.isEmpty() ? -1 : samples.get(samples.size() - 1).tick; }
+        long lastTick() { return Math.max(end, samples.isEmpty() ? -1 : samples.get(samples.size() - 1).tick); }
         long firstTick() { return samples.isEmpty() ? Long.MAX_VALUE : samples.get(0).tick; }
     }
 
+    private static final class TrackData {
+        String dim;
+        long end;
+        List<Sample> samples;
+    }
+
+    private static final Type TRACKS_TYPE = new TypeToken<HashMap<String, TrackData>>() {}.getType();
     private static final Map<UUID, Track> tracks = new HashMap<>();
     private static final Set<UUID> sampledThisTick = new HashSet<>();
     private static final Set<UUID> puppets = new HashSet<>();
     private static final Map<UUID, Boolean> originalNoAi = new HashMap<>();
     private static boolean wasReplaying = false;
+    private static boolean dirty = false;
 
     public static boolean isReplaying() {
         return ReplayState.isReplaying();
@@ -68,7 +88,10 @@ public final class MobTrailJournal {
 
     static void seedFor(Mob mob, String dim, long now) {
         Track t = tracks.computeIfAbsent(mob.getUUID(), k -> new Track(dim));
-        if (t.samples.isEmpty()) t.samples.add(makeSample(mob, now));
+        if (t.samples.isEmpty()) {
+            t.samples.add(makeSample(mob, now));
+            t.end = now;
+        }
     }
 
     public static void seedInitial() {
@@ -80,7 +103,10 @@ public final class MobTrailJournal {
                 if (!(entity instanceof Mob mob)) continue;
                 if (Ghosts.is(mob)) continue;
                 Track t = tracks.computeIfAbsent(mob.getUUID(), k -> new Track(dim));
-                if (t.samples.isEmpty()) t.samples.add(makeSample(mob, now));
+                if (t.samples.isEmpty()) {
+                    t.samples.add(makeSample(mob, now));
+                    t.end = now;
+                }
             }
         }
     }
@@ -111,8 +137,14 @@ public final class MobTrailJournal {
                     if (p.distanceToSqr(mob) > r2) continue;
                     MobSpawnJournal.ensureRegistered(level, mob);
                     Track t = tracks.computeIfAbsent(id, k -> new Track(dim));
-                    if (!t.samples.isEmpty() && t.samples.get(t.samples.size() - 1).tick == now) continue;
-                    t.samples.add(makeSample(mob, now));
+                    if (t.end == now) continue;
+                    Sample s = makeSample(mob, now);
+                    PlayerData rec = BlockJournal.nearestRecorder(level, mob.blockPosition());
+                    s.visit = rec != null && rec.getCurrentVisit() != null ? rec.getCurrentVisit().id : -1;
+                    List<Sample> list = t.samples;
+                    if (list.isEmpty() || !sameState(list.get(list.size() - 1), s)) list.add(s);
+                    t.end = now;
+                    dirty = true;
                 }
             }
         }
@@ -120,9 +152,21 @@ public final class MobTrailJournal {
         ReplayState.observe(now);
     }
 
+    private static boolean sameState(Sample a, Sample b) {
+        return a.x == b.x && a.y == b.y && a.z == b.z
+                && a.yRot == b.yRot && a.xRot == b.xRot
+                && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot
+                && a.health == b.health && a.swinging == b.swinging
+                && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive
+                && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining
+                && a.activeHand == b.activeHand
+                && a.swellDir == b.swellDir && a.swell == b.swell;
+    }
+
     private static Sample makeSample(Mob mob, long now) {
         Sample s = new Sample();
         s.tick = now;
+        s.visit = -1;
         s.x = mob.getX();
         s.y = mob.getY();
         s.z = mob.getZ();
@@ -142,6 +186,10 @@ public final class MobTrailJournal {
                 s.useItemNbt = use.save(TimeTravel.server.registryAccess()).toString();
             }
             s.useItemRemaining = mob.getUseItemRemainingTicks();
+        }
+        if (mob instanceof Creeper creeper) {
+            s.swellDir = creeper.getSwellDir();
+            s.swell = ((CreeperAccessor) creeper).tt$getSwell();
         }
         return s;
     }
@@ -213,6 +261,7 @@ public final class MobTrailJournal {
         if (mob.isDeadOrDying() || mob.deathTime > 0) {
             mob.deathTime = 0;
             mob.hurtTime = 0;
+            mob.setPose(Pose.STANDING);
             mob.setHealth(s.health);
         }
 
@@ -232,6 +281,12 @@ public final class MobTrailJournal {
         }
 
         mob.setAggressive(s.aggressive);
+
+        if (mob instanceof Creeper creeper) {
+            if (creeper.getSwellDir() != s.swellDir) creeper.setSwellDir(s.swellDir);
+            CreeperAccessor ca = (CreeperAccessor) creeper;
+            if (Math.abs(ca.tt$getSwell() - s.swell) > 1) ca.tt$setSwell(s.swell);
+        }
 
         LivingEntityAccessor acc = (LivingEntityAccessor) (Object) mob;
         acc.tt$setAttackAnim(s.attackAnim);
@@ -334,12 +389,59 @@ public final class MobTrailJournal {
 
     public static void onJump(long from, long to) {}
 
-    public static void eraseVisits(Set<Integer> visitIds) {}
+    public static void eraseVisits(Set<Integer> visitIds) {
+        releaseAllPuppets();
+        for (Iterator<Map.Entry<UUID, Track>> it = tracks.entrySet().iterator(); it.hasNext(); ) {
+            Track t = it.next().getValue();
+            t.samples.removeIf(s -> visitIds.contains(s.visit));
+            if (t.samples.isEmpty()) it.remove();
+        }
+        dirty = true;
+    }
 
     public static void rebuildUpcoming() {}
-    public static void load() {}
-    public static void save() {}
-    public static void saveIfDirty() {}
+
+    private static Path file() {
+        return TimeTravel.worldFolder.resolve("timetravel_rewritten_mob_trails.json");
+    }
+
+    public static void load() {
+        tracks.clear();
+        dirty = false;
+        if (TimeTravel.worldFolder == null) return;
+        Map<String, TrackData> loaded = JsonStore.load(file(), TRACKS_TYPE);
+        if (loaded == null) return;
+        for (Map.Entry<String, TrackData> en : loaded.entrySet()) {
+            TrackData d = en.getValue();
+            if (d == null || d.dim == null || d.samples == null) continue;
+            Track t = new Track(d.dim);
+            t.samples.addAll(d.samples);
+            t.end = d.end;
+            try {
+                tracks.put(UUID.fromString(en.getKey()), t);
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+            ReplayState.observe(t.lastTick());
+        }
+    }
+
+    public static void save() {
+        if (TimeTravel.worldFolder == null) return;
+        Map<String, TrackData> out = new HashMap<>();
+        for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
+            TrackData d = new TrackData();
+            d.dim = en.getValue().dim;
+            d.end = en.getValue().end;
+            d.samples = en.getValue().samples;
+            out.put(en.getKey().toString(), d);
+        }
+        if (JsonStore.save(file(), out, TRACKS_TYPE)) dirty = false;
+    }
+
+    public static void saveIfDirty() {
+        if (dirty) save();
+    }
 
     public static void clear() {
         tracks.clear();
@@ -347,5 +449,6 @@ public final class MobTrailJournal {
         puppets.clear();
         originalNoAi.clear();
         wasReplaying = false;
+        save();
     }
 }

@@ -80,6 +80,10 @@ public final class MobJournal {
         return e.tick > TimeTravel.timelineTick ? e.visit : -1;
     }
 
+    public static void fastForward(long from, long to) {
+        MobEventJournal.fastForward(from, to);
+    }
+
     public static void track(Mob mob, Entity who) {}
 
     public static void tick() {

@@ -1,20 +1,16 @@
 package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.journal.Journal;
+import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import com.fl1s.rewritten.timetravel.util.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Creeper;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Discrete mob events. Records deaths (with an explosion flag) and replays
@@ -81,9 +77,12 @@ public final class MobEventJournal {
             ItemFlowJournal.setSuppressDrop(true);
             try {
                 if (e.explode && living instanceof net.minecraft.world.entity.monster.Creeper creeper) {
-                    creeper.setSwellDir(1);
-                    creeper.setHealth(0);
-                    living.die(living.damageSources().generic());
+                    MobJournal.enterApplying();
+                    try {
+                        ((CreeperAccessor) creeper).tt$explode();
+                    } finally {
+                        MobJournal.exitApplying();
+                    }
                 } else {
                     MobJournal.enterApplying();
                     try {
@@ -112,6 +111,32 @@ public final class MobEventJournal {
         latestDeath.values().removeIf(e -> visitIds.contains(e.visit));
         STORE.markDirty();
         rebuildUpcoming();
+    }
+
+    public static void fastForward(long from, long to) {
+        if (to <= from || TimeTravel.server == null || !TimeTravel.isLooping) return;
+        if (ReplayState.isReplaying()) return;
+        List<Creeper> fusing = new ArrayList<>();
+        for (ServerLevel level : TimeTravel.server.getAllLevels()) {
+            for (Entity entity : level.getAllEntities()) {
+                if (entity instanceof Creeper c && c.isAlive() && !Ghosts.is(c) && c.getSwellDir() > 0) fusing.add(c);
+            }
+        }
+        try {
+            for (Creeper c : fusing) {
+                CreeperAccessor acc = (CreeperAccessor) c;
+                long due = from + Math.max(1, acc.tt$getMaxSwell() - acc.tt$getSwell());
+                if (due > to) {
+                    acc.tt$setSwell(Math.min(acc.tt$getMaxSwell() - 1, acc.tt$getSwell() + (int) (to - from)));
+                    continue;
+                }
+                TimeTravel.timelineTick = due;
+                MobJournal.onEntityDeath(c, true);
+                acc.tt$explode();
+            }
+        } finally {
+            TimeTravel.timelineTick = from;
+        }
     }
 
     public static void rebuildUpcoming() {
