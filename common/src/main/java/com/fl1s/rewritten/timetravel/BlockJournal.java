@@ -252,7 +252,7 @@ public final class BlockJournal {
         if (b instanceof LiquidBlock && old.isAir()) return false;
         if (a instanceof FireBlock && (b instanceof FireBlock || now.isAir())) return false;
         if (b instanceof FireBlock && old.isAir()) return false;
-        if (a instanceof LeavesBlock && (a == b || now.isAir())) return false;
+        if (a instanceof LeavesBlock && (a == b || (now.isAir() && actionDepth == 0))) return false;
         return true;
     }
 

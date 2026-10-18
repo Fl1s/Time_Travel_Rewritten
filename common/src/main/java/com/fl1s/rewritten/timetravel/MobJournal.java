@@ -29,6 +29,7 @@ public final class MobJournal {
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
         MobSpawnJournal.onSpawn(level, entity);
+        MobStateJournal.onSpawn(level, entity);
         if (entity instanceof Mob) {
             MobTrailJournal.onSpawnSeen(entity.getUUID(), level.dimension().location().toString());
         }
@@ -91,20 +92,24 @@ public final class MobJournal {
         MobSpawnJournal.tick();
         MobTrailJournal.tick();
         MobEventJournal.tick();
+        MobStateJournal.tick();
     }
 
     public static void onJump(long from, long to) {
         MobSpawnJournal.onJump(from, to);
         MobTrailJournal.onJump(from, to);
         MobEventJournal.onJump(from, to);
+        MobStateJournal.onJump(from, to);
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
         MobSpawnJournal.eraseVisits(visitIds);
         MobTrailJournal.eraseVisits(visitIds);
         MobEventJournal.eraseVisits(visitIds);
+        MobStateJournal.eraseVisits(visitIds);
         if (TimeTravel.server != null && TimeTravel.isLooping) {
             MobSpawnJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
+            MobStateJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
         }
     }
 
@@ -112,29 +117,34 @@ public final class MobJournal {
         MobSpawnJournal.rebuildUpcoming();
         MobTrailJournal.rebuildUpcoming();
         MobEventJournal.rebuildUpcoming();
+        MobStateJournal.rebuildUpcoming();
     }
 
     public static void load() {
         MobSpawnJournal.load();
         MobTrailJournal.load();
         MobEventJournal.load();
+        MobStateJournal.load();
     }
 
     public static void save() {
         MobSpawnJournal.save();
         MobTrailJournal.save();
         MobEventJournal.save();
+        MobStateJournal.save();
     }
 
     public static void saveIfDirty() {
         MobSpawnJournal.saveIfDirty();
         MobTrailJournal.saveIfDirty();
         MobEventJournal.saveIfDirty();
+        MobStateJournal.saveIfDirty();
     }
 
     public static void clear() {
         MobSpawnJournal.clear();
         MobTrailJournal.clear();
         MobEventJournal.clear();
+        MobStateJournal.clear();
     }
 }

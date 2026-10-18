@@ -4,16 +4,16 @@ import com.fl1s.rewritten.fabric.events.LifecycleFabricEvent;
 import com.fl1s.rewritten.fabric.events.PlayConnectionFabricEvent;
 import com.fl1s.rewritten.fabric.events.PlayerFabricEvent;
 import com.fl1s.rewritten.fabric.events.TickFabricEvent;
-import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.commands.LoopCommands;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import com.fl1s.rewritten.timetravel.BlockJournal;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
@@ -21,8 +21,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import com.fl1s.rewritten.timetravel.ChatTimeline;
-import com.fl1s.rewritten.timetravel.MobJournal;
 import com.fl1s.rewritten.timetravel.net.ToggleTimelinePayload;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import com.fl1s.rewritten.timetravel.net.ClearChatPayload;
@@ -34,6 +32,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.gameevent.GameEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +76,9 @@ public class TimeTravelFabric implements ModInitializer {
                 (payload, context) -> TimelineNet.handleToggleRequest(context.player()));
 
         ServerLivingEntityEvents.AFTER_DEATH.register(MobJournal::onEntityDeath);
+
+        ServerEntityEvents.EQUIPMENT_CHANGE.register((livingEntity, equipmentSlot, previousStack, currentStack) -> {
+            if (livingEntity instanceof Mob mob) {MobStateJournal.onChanged(mob);}});
 
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) ->
                 ChatTimeline.onPlayerChat(sender, message.signedContent()));
