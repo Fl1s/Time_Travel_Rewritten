@@ -33,6 +33,7 @@ public final class JournalRegistry {
         register("chat", ChatTimeline::load, ChatTimeline::save, ChatTimeline::saveIfDirty, ChatTimeline::clear, ChatTimeline::rebuildUpcoming, ChatTimeline::tick, ChatTimeline::onJump, ChatTimeline::eraseVisits);
         register("advancements", AdvancementTimeline::load, AdvancementTimeline::save, AdvancementTimeline::saveIfDirty, AdvancementTimeline::clear, AdvancementTimeline::rebuildUpcoming, AdvancementTimeline::tick, AdvancementTimeline::onJump, AdvancementTimeline::eraseVisits);
         register("effects", EffectJournal::load, EffectJournal::save, EffectJournal::saveIfDirty, EffectJournal::clear, EffectJournal::rebuildUpcoming, EffectJournal::tick, EffectJournal::onJump, EffectJournal::eraseVisits);
+        register("weather", WeatherJournal::load, WeatherJournal::save, WeatherJournal::saveIfDirty, WeatherJournal::clear, WeatherJournal::rebuildUpcoming, WeatherJournal::tick, WeatherJournal::onJump, WeatherJournal::eraseVisits);
     }
 
     public void register(String name, Runnable load, Runnable save, Runnable saveIfDirty, Runnable clear, Runnable rebuildUpcoming, Runnable tick, BiConsumer<Long, Long> onJump, Consumer<Set<Integer>> eraseVisits) {
