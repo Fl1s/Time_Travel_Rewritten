@@ -207,13 +207,23 @@ public final class BlockJournal {
         if (old.is(Blocks.MOVING_PISTON)) old = Blocks.AIR.defaultBlockState();
         if (now.is(Blocks.MOVING_PISTON)) now = Blocks.AIR.defaultBlockState();
         if (old.equals(now) || !shouldTrack(old, now)) return;
+
         PlayerData pd = nearestRecorder(level, pos);
-        if (pd == null) return;
+        int visit;
+        if (pd != null && pd.getCurrentVisit() != null) {
+            visit = pd.getCurrentVisit().id;
+        } else {
+            boolean hasRealPlayer = false;
+            for (ServerPlayer p : level.players()) {
+                if (!Ghosts.is(p)) { hasRealPlayer = true; break; }
+            }
+            if (!hasRealPlayer) return;
+            visit = -1;
+        }
 
         String dim = level.dimension().location().toString();
         String oldS = serialize(old);
         String newS = serialize(now);
-        int visit = pd.getCurrentVisit().id;
 
         List<Entry> same = byPos.get(pos.asLong());
         if (same != null) {
@@ -281,8 +291,9 @@ public final class BlockJournal {
     }
 
     public static void tick() {
+        boolean replay = ReplayState.isReplaying();
         STORE.tick(e -> {
-            if (e.root) applyLive(e);
+            if (e.root || replay) applyLive(e);
         });
         flushJukeboxes();
     }
