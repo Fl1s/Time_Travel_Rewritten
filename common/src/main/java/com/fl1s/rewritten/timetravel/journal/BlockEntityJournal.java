@@ -93,7 +93,7 @@ public final class BlockEntityJournal {
     }
 
     private static void recordInitial(ServerLevel level, BlockEntity be, long tick) {
-        String dim = level.dimension().location().toString();
+        String dim = level.dimension().location().toString().intern();
         String nbt = be.saveWithoutMetadata(TimeTravel.server.registryAccess()).toString();
         long key = keyOf(dim, be.getBlockPos());
         if (last.containsKey(key)) return;
@@ -121,7 +121,7 @@ public final class BlockEntityJournal {
         BlockPos pos = be.getBlockPos();
         if (!level.isLoaded(pos)) return;
 
-        String dim = level.dimension().location().toString();
+        String dim = level.dimension().location().toString().intern();
         long key = keyOf(dim, pos);
         if (last.containsKey(key)) return;
 
@@ -152,10 +152,17 @@ public final class BlockEntityJournal {
         BlockPos pos = be.getBlockPos();
         if (!level.isLoaded(pos)) return;
 
-        String dim = level.dimension().location().toString();
+        String dim = level.dimension().location().toString().intern();
         long key = keyOf(dim, pos);
-        String nbt = be.saveWithoutMetadata(TimeTravel.server.registryAccess()).toString();
         Entry prev = last.get(key);
+
+        PlayerData pd = null;
+        if (prev != null) {
+            pd = BlockJournal.nearestRecorder(level, pos);
+            if (pd == null || pd.getCurrentVisit() == null) return;
+        }
+
+        String nbt = be.saveWithoutMetadata(TimeTravel.server.registryAccess()).toString();
 
         if (prev == null) {
             Entry base = new Entry();
@@ -175,9 +182,6 @@ public final class BlockEntityJournal {
         }
 
         if (prev.newNbt.equals(nbt)) return;
-
-        PlayerData pd = BlockJournal.nearestRecorder(level, pos);
-        if (pd == null || pd.getCurrentVisit() == null) return;
 
         Entry e = new Entry();
         e.dim = dim;

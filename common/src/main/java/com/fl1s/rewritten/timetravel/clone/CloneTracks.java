@@ -68,12 +68,19 @@ public final class CloneTracks {
     private static Visit.HealthChange healthAt(Visit visit, long now) {
         List<Visit.HealthChange> list = visit.healths;
         if (list == null || list.isEmpty()) return null;
-        Visit.HealthChange current = list.getFirst();
-        for (Visit.HealthChange change : list) {
-            if (change.tick > now) break;
-            current = change;
+        int lo = 0;
+        int hi = list.size() - 1;
+        int idx = 0;
+        while (lo <= hi) {
+            int mid = (lo + hi) >>> 1;
+            if (list.get(mid).tick <= now) {
+                idx = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
         }
-        return current;
+        return list.get(idx);
     }
 
     public static void snapHealth(Visit visit, ServerPlayer clone, long now) {

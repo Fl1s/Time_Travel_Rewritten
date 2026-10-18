@@ -57,7 +57,7 @@ public final class MobEventJournal {
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = victim.getUUID();
-        e.dim = level.dimension().location().toString();
+        e.dim = level.dimension().location().toString().intern();
         e.explode = explode;
         e.hasPosition = true;
         e.x = victim.getX();

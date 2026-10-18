@@ -22,8 +22,10 @@ import net.minecraft.world.level.block.entity.LidBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class EffectJournal {
     private EffectJournal() {
@@ -48,6 +50,7 @@ public final class EffectJournal {
         transient ResourceLocation cachedLocation;
     }
 
+    private static final Map<ResourceLocation, String> SOUND_IDS = new ConcurrentHashMap<>();
     private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_effects.json", new TypeToken<ArrayList<Entry>>() {
     }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
 
@@ -60,7 +63,7 @@ public final class EffectJournal {
         Optional<ResourceKey<SoundEvent>> key = sound.unwrapKey();
         if (key.isEmpty()) return;
 
-        String id = key.get().location().toString();
+        String id = SOUND_IDS.computeIfAbsent(key.get().location(), ResourceLocation::toString);
         if (isPlayerHurt(id)) return;
         Entry e = create(SOUND, level, pd, x, y, z);
         e.id = id;
@@ -134,7 +137,7 @@ public final class EffectJournal {
     private static Entry create(int kind, ServerLevel level, PlayerData pd, double x, double y, double z) {
         Entry e = new Entry();
         e.kind = kind;
-        e.dim = level.dimension().location().toString();
+        e.dim = level.dimension().location().toString().intern();
         e.x = x;
         e.y = y;
         e.z = z;

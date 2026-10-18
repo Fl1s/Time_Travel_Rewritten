@@ -223,7 +223,7 @@ public final class BlockJournal {
             visit = -1;
         }
 
-        String dim = level.dimension().location().toString();
+        String dim = level.dimension().location().toString().intern();
         String oldS = serialize(old);
         String newS = serialize(now);
 

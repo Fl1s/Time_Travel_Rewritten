@@ -65,11 +65,11 @@ public final class RedstoneJournal {
         if (existing != null && existing.tick + existing.delay > now) return;
 
         Entry e = new Entry();
-        e.dim = level.dimension().location().toString();
+        e.dim = level.dimension().location().toString().intern();
         e.x = pos.getX();
         e.y = pos.getY();
         e.z = pos.getZ();
-        e.block = BuiltInRegistries.BLOCK.getKey(block).toString();
+        e.block = BuiltInRegistries.BLOCK.getKey(block).toString().intern();
         e.delay = delay;
         e.tick = now;
         e.seq = STORE.nextSeq();

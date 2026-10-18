@@ -116,7 +116,7 @@ public final class ItemFlowJournal {
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = "";
-        e.dim = level.dimension().location().toString();
+        e.dim = level.dimension().location().toString().intern();
         e.x = item.getX();
         e.y = item.getY();
         e.z = item.getZ();
@@ -146,8 +146,8 @@ public final class ItemFlowJournal {
         e.tick = TimeTravel.timelineTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
-        e.player = sp.getName().getString();
-        e.dim = level.dimension().location().toString();
+        e.player = sp.getName().getString().intern();
+        e.dim = level.dimension().location().toString().intern();
         e.x = item.getX();
         e.y = item.getY();
         e.z = item.getZ();
