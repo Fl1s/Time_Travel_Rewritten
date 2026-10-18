@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.mixin;
 import com.fl1s.rewritten.timetravel.GhostFx;
 import com.fl1s.rewritten.timetravel.MobBinding;
 import com.fl1s.rewritten.timetravel.MobJournal;
+import com.fl1s.rewritten.timetravel.MobSpawnJournal;
 import com.fl1s.rewritten.timetravel.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
@@ -55,6 +56,15 @@ public abstract class MobHurtMixin {
         LivingEntity self = (LivingEntity) (Object) this;
 
         if (MobJournal.isApplying()) return;
+
+        if (self instanceof Mob om
+                && source.getEntity() != null
+                && Ghosts.is(source.getEntity())
+                && MobSpawnJournal.isOutOfTime(om.getUUID())
+                && !MobTrailJournal.isPuppeted(om)) {
+            cir.setReturnValue(false);
+            return;
+        }
 
         boolean doomed = MobJournal.isDoomed(self);
         boolean replayPuppet = self instanceof Mob mob

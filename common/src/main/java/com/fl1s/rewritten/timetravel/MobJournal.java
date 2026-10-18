@@ -54,7 +54,8 @@ public final class MobJournal {
     private static void recordDeath(LivingEntity entity, boolean explode) {
         if (killing || applying) return;
         if (!TimeTravel.isLooping) return;
-        if (MobTrailJournal.isReplaying()) return;
+        if (MobTrailJournal.isReplaying()
+                && (!MobSpawnJournal.isOutOfTime(entity.getUUID()) || isDoomed(entity))) return;
         if (entity instanceof net.minecraft.world.entity.player.Player) return;
         if (!entity.getType().canSerialize()) return;
         MobEventJournal.recordDeath(entity, explode);
@@ -102,6 +103,9 @@ public final class MobJournal {
         MobSpawnJournal.eraseVisits(visitIds);
         MobTrailJournal.eraseVisits(visitIds);
         MobEventJournal.eraseVisits(visitIds);
+        if (TimeTravel.server != null && TimeTravel.isLooping) {
+            MobSpawnJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
+        }
     }
 
     public static void rebuildUpcoming() {
