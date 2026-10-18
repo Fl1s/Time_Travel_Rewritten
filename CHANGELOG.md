@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.10.4] - 2026-11-18
+
+### Added
+
+ - MobStateJournal that records and rewinds mobs nbt state more precisely (villager trades, enderman blocks, equipment, taming etc)
+
+### Fixed
+
+ - Leaves rewind when cut them with shears
+
 ## [1.21.1-0.10.3] - 2026-11-18
 
 ### Fixed
