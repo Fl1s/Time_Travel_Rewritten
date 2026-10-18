@@ -15,8 +15,10 @@ import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.entity.Mob;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent;
@@ -52,8 +54,10 @@ public class TimeTravelNeoForge {
 
     public static final Logger LOOP_LOGGER = LoggerFactory.getLogger("TimeTravel");
 
-    public TimeTravelNeoForge(IEventBus modEventBus) {
+    public TimeTravelNeoForge(IEventBus modEventBus, ModContainer modContainer) {
         LOOP_LOGGER.info("Initializing TimeTravel mod (NeoForge)");
+
+        modContainer.registerConfig(ModConfig.Type.SERVER, TimeTravelConfigNeoForge.SERVER_SPEC);
 
         ModList modList = ModList.get();
         TimeTravel.voiceChatLoaded = modList.isLoaded("voicechat");
@@ -91,7 +95,8 @@ public class TimeTravelNeoForge {
     @SubscribeEvent
     public void onEquipmentChange(LivingEquipmentChangeEvent event) {
         if (event.getEntity() instanceof Mob mob) {
-            MobStateJournal.onChanged(mob);}
+            MobStateJournal.onChanged(mob);
+        }
     }
 
     @SubscribeEvent
