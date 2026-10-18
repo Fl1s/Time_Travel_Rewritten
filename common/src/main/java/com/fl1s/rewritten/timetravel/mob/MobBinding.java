@@ -2,7 +2,7 @@ package com.fl1s.rewritten.timetravel.mob;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
-import com.fl1s.rewritten.timetravel.data.JsonStore;
+import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;

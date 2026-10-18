@@ -1,4 +1,4 @@
-package com.fl1s.rewritten.timetravel.data;
+package com.fl1s.rewritten.timetravel.util;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.google.gson.Gson;

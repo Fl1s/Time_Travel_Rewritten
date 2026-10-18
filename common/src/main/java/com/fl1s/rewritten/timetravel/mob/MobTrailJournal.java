@@ -7,7 +7,7 @@ import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.mixin.LivingEntityAccessor;
 import com.fl1s.rewritten.timetravel.data.Clones;
-import com.fl1s.rewritten.timetravel.data.JsonStore;
+import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
