@@ -44,6 +44,8 @@ public final class GhostManager {
         final GhostFx fx;
         final Visit visit;
         int pendingSkip;
+        boolean shielded;
+        boolean wasInvulnerable;
 
         Ghost(GhostPlayback root, String playerName, int visitId, GhostFx fx, int pendingSkip, Visit visit) {
             this.root = root;
@@ -153,19 +155,45 @@ public final class GhostManager {
     }
 
     public void tickActive() {
+        long now = TimeTravel.timelineTick;
         for (Ghost ghost : roots) {
+            boolean protect = ghost.pendingSkip > 0 || now < ghost.fx.graceUntil;
+            if (protect) shield(ghost);
+            else if (ghost.shielded) unshield(ghost, now);
+
             if (ghost.pendingSkip > 0) {
                 int step = Math.min(ghost.pendingSkip, GHOST_SKIP_PER_TICK);
                 ghost.root.tick(step);
                 ghost.pendingSkip -= step;
+                if (ghost.pendingSkip <= 0) ghost.fx.graceUntil = now + 20;
                 continue;
             }
             if (!ghost.root.isFinished()) ghost.fx.tick();
         }
         touchOrbs();
-        if (TimeTravel.timelineTick % 100 == 0) {
+        if (now % 100 == 0) {
             roots.removeIf(g -> g.root.isFinished());
         }
+    }
+
+    private static void shield(Ghost g) {
+        if (!(g.fx.entity() instanceof ServerPlayer sp) || sp.isRemoved()) return;
+        if (!g.shielded) {
+            g.wasInvulnerable = sp.isInvulnerable();
+            g.shielded = true;
+        }
+        sp.setInvulnerable(true);
+        sp.fallDistance = 0;
+        sp.setAirSupply(sp.getMaxAirSupply());
+        sp.clearFire();
+    }
+
+    private static void unshield(Ghost g, long now) {
+        g.shielded = false;
+        if (!(g.fx.entity() instanceof ServerPlayer sp) || sp.isRemoved()) return;
+        sp.setInvulnerable(g.wasInvulnerable);
+        sp.fallDistance = 0;
+        if (g.visit != null) GhostTracks.snapHealth(g.visit, sp, now);
     }
 
     private void start(PendingPiece piece, int delayTicks) {
@@ -173,20 +201,23 @@ public final class GhostManager {
         PlayerData pd = scene == null ? null : scene.getRecordingPlayer(piece.playerName());
         if (pd == null) return;
 
-        GhostPlayback playback = MocapAdapter.startPlayback(
-                piece.recording(), pd.getNickname(), pd.getSkin(), delayTicks);
+        GhostPlayback playback = MocapAdapter.startPlayback(piece.recording(), pd.getNickname(), pd.getSkin(), delayTicks);
         if (playback == null) return;
 
-        int pendingSkip = piece.skipTicks();
-        if (pendingSkip > 0) {
-            int syncSkip = Math.min(pendingSkip, GHOST_SYNC_SKIP_LIMIT);
-            playback.tick(syncSkip);
-            pendingSkip -= syncSkip;
+        Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
+        if (ghostEntity == null) {
+            TimeTravel.LOOP_LOGGER.warn("[TT-GHOST] no entity right after startPlayback for {} (visit {}, delay {})", pd.getNickname(), piece.visitId(), delayTicks);
+        } else {
+            for (Ghost g : roots) {
+                if (g.fx.entity() == ghostEntity) {
+                    TimeTravel.LOOP_LOGGER.warn("[TT-GHOST] findNewestGhost returned an already bound ghost (visit {} vs {})", g.visitId, piece.visitId());
+                }
+            }
         }
 
-        Entity ghostEntity = GhostFx.findNewestGhost(pd.getNickname());
         GhostFx fx = new GhostFx(ghostEntity);
-        if (piece.skipTicks() > 0) fx.graceUntil = TimeTravel.timelineTick + 10;
+        fx.graceUntil = TimeTravel.timelineTick + 20;
+
         Visit ghostVisit = null;
         for (Visit v : pd.getVisits()) {
             if (v.id == piece.visitId()) {
@@ -194,10 +225,20 @@ public final class GhostManager {
                 break;
             }
         }
-        roots.add(new Ghost(playback, piece.playerName(), piece.visitId(), fx, pendingSkip, ghostVisit));
+
+        int pendingSkip = piece.skipTicks();
+        int syncSkip = Math.min(pendingSkip, GHOST_SYNC_SKIP_LIMIT);
+        Ghost ghost = new Ghost(playback, piece.playerName(), piece.visitId(), fx, pendingSkip - syncSkip, ghostVisit);
+        roots.add(ghost);
+
+        shield(ghost);
+        if (syncSkip > 0) {
+            playback.tick(syncSkip);
+            fx.graceUntil = TimeTravel.timelineTick + 20;
+        }
+
         if (TimeTravel.trackVoice && TimeTravel.voiceChatLoaded) {
-            VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(),
-                    piece.visitStartTick(), ghostEntity);
+            VoicechatCompat.onGhostStart(pd, piece.visitId(), piece.segment(), piece.visitStartTick(), ghostEntity);
         }
     }
 

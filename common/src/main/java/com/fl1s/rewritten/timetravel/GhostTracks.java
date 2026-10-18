@@ -4,10 +4,8 @@ import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 
@@ -64,14 +62,27 @@ public final class GhostTracks {
         applyAttacks(visit, ghost, now);
     }
 
-    private static void applyHealth(Visit visit, ServerPlayer ghost, long now) {
+    private static Visit.HealthChange healthAt(Visit visit, long now) {
         List<Visit.HealthChange> list = visit.healths;
-        if (list == null || list.isEmpty()) return;
+        if (list == null || list.isEmpty()) return null;
         Visit.HealthChange current = list.getFirst();
         for (Visit.HealthChange change : list) {
             if (change.tick > now) break;
             current = change;
         }
+        return current;
+    }
+
+    public static void snapHealth(Visit visit, ServerPlayer ghost, long now) {
+        Visit.HealthChange current = healthAt(visit, now);
+        if (current == null) return;
+        float wanted = Math.min(current.health, ghost.getMaxHealth());
+        if (wanted > 0.0f && ghost.getHealth() != wanted) ghost.setHealth(wanted);
+    }
+
+    private static void applyHealth(Visit visit, ServerPlayer ghost, long now) {
+        Visit.HealthChange current = healthAt(visit, now);
+        if (current == null) return;
         float wanted = Math.min(current.health, ghost.getMaxHealth());
         if (wanted <= 0.0f) return;
         float actual = ghost.getHealth();
