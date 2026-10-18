@@ -204,7 +204,7 @@ public final class EntityJournal {
                 }
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to replay entity", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to replay entity", ex);
         } finally {
             replaying = false;
         }

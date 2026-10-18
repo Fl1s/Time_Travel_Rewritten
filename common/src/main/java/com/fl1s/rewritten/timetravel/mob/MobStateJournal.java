@@ -246,7 +246,7 @@ public final class MobStateJournal {
             for (String k : cached.getAllKeys()) tag.put(k, cached.get(k).copy());
             mob.load(tag);
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply mob state entry", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply mob state entry", ex);
         } finally {
             applying = false;
         }

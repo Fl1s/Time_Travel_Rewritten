@@ -31,12 +31,12 @@ public class LifecycleEvent {
         TimeTravel.maxJumpTicks = c.maxJumpTicks;
         TimeTravel.cloneLookaheadTicks = c.cloneLookaheadTicks;
 
-        TimeTravel.showLoopInfo = c.showLoopInfo;
+        TimeTravel.showTimelineInfo = c.showTimelineInfo;
         TimeTravel.displayTimeInTicks = c.displayTimeInTicks;
         TimeTravel.trackItems = c.trackItems;
         TimeTravel.entityTrackingDistance = c.entityTrackingDistance;
         TimeTravel.trackChat = c.trackChat;
-        TimeTravel.hurtLoopedPlayers = c.hurtLoopedPlayers;
+        TimeTravel.hurtPastSelves = c.hurtPastSelves;
 
         TimeTravel.voiceInteractionEnabled = c.voiceInteractionEnabled;
         TimeTravel.voiceInteractionThresholdDb = c.voiceInteractionThresholdDb;
@@ -53,7 +53,7 @@ public class LifecycleEvent {
         TimeTravel.JOURNALS.loadAll();
         MobBinding.load();
 
-        MocapAdapter.init(server, TimeTravel.hurtLoopedPlayers, TimeTravel.trackItems, TimeTravel.entityTrackingDistance);
+        MocapAdapter.init(server, TimeTravel.hurtPastSelves, TimeTravel.trackItems, TimeTravel.entityTrackingDistance);
 
         VoicechatInteractionCompat.resolveGameEvent();
         VoicechatCompat.loadAudio();
@@ -65,9 +65,9 @@ public class LifecycleEvent {
             try {
                 VoicechatCompat.saveAudio().get(10, TimeUnit.SECONDS);
             } catch (TimeoutException e) {
-                TimeTravel.LOOP_LOGGER.warn("Timed out saving voice audio on shutdown");
+                TimeTravel.TIMELINE_LOGGER.warn("Timed out saving voice audio on shutdown");
             } catch (Exception e) {
-                TimeTravel.LOOP_LOGGER.error("Failed to save voice audio on shutdown", e);
+                TimeTravel.TIMELINE_LOGGER.error("Failed to save voice audio on shutdown", e);
             }
         }
 

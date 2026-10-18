@@ -49,7 +49,7 @@ public class CommandUtils {
                         trackedItems.add(readableName);
                     }
                 } catch (IllegalAccessException e) {
-                    LoopCommands.LOOP_COMMANDS_LOGGER.error("Failed to access reflection field: " + field.getName(), e);
+                    LoopCommands.TIMELINE_COMMANDS_LOGGER.error("Failed to access reflection field: " + field.getName(), e);
                 }
             }
         }

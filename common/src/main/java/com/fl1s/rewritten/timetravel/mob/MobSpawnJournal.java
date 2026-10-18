@@ -190,7 +190,7 @@ public final class MobSpawnJournal {
             revived.moveTo(at.x, at.y, at.z, revived.getYRot(), revived.getXRot());
             level.addFreshEntity(revived);
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to revive mob {}", e.uuid, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to revive mob {}", e.uuid, ex);
         }
     }
 

@@ -57,7 +57,7 @@ public final class VoicechatInteractionCompat {
     public static void resolveGameEvent() {
         if (!TimeTravel.voiceInteractionLoaded) {
             voiceEvent = null;
-            TimeTravel.LOOP_LOGGER.info("[Compat] voicechat-interaction not installed - voice game events disabled");
+            TimeTravel.TIMELINE_LOGGER.info("[Compat] voicechat-interaction not installed - voice game events disabled");
             return;
         }
 
@@ -66,19 +66,19 @@ public final class VoicechatInteractionCompat {
         var vcHolder = BuiltInRegistries.GAME_EVENT.getHolder(vcLoc);
         if (vcHolder.isPresent()) {
             voiceEvent = vcHolder.get();
-            TimeTravel.LOOP_LOGGER.info("[Compat] Using vcinteraction:voice GameEvent for replay entities");
+            TimeTravel.TIMELINE_LOGGER.info("[Compat] Using vcinteraction:voice GameEvent for replay entities");
             return;
         }
-        TimeTravel.LOOP_LOGGER.warn("[Compat] vcinteraction loaded but its GameEvent not found - falling back to timetravel_rewritten:voice");
+        TimeTravel.TIMELINE_LOGGER.warn("[Compat] vcinteraction loaded but its GameEvent not found - falling back to timetravel_rewritten:voice");
 
         // Fall back to our own
         ResourceLocation tlLoc = ResourceLocation.fromNamespaceAndPath(TimeTravel.MOD_ID, "voice");
         var tlHolder = BuiltInRegistries.GAME_EVENT.getHolder(tlLoc);
         if (tlHolder.isPresent()) {
             voiceEvent = tlHolder.get();
-            TimeTravel.LOOP_LOGGER.info("[Compat] Using timetravel_rewritten:voice GameEvent for replay entities");
+            TimeTravel.TIMELINE_LOGGER.info("[Compat] Using timetravel_rewritten:voice GameEvent for replay entities");
         } else {
-            TimeTravel.LOOP_LOGGER.error("[Compat] timetravel_rewritten:voice GameEvent not found! Voice game events disabled.");
+            TimeTravel.TIMELINE_LOGGER.error("[Compat] timetravel_rewritten:voice GameEvent not found! Voice game events disabled.");
             voiceEvent = null;
         }
     }

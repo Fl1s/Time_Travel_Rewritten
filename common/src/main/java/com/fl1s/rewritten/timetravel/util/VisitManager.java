@@ -64,15 +64,15 @@ public final class VisitManager {
         if (visit.doomed) {
             for (Visit.Piece piece : visit.pieces) MocapAdapter.deleteRecording(piece.recording);
             VoicechatCompat.deleteVisitAudio(pd, visit.id);
-            TimeTravel.LOOP_LOGGER.info("Visit {} of '{}' was doomed by a death chain - erased",
+            TimeTravel.TIMELINE_LOGGER.info("Visit {} of '{}' was doomed by a death chain - erased",
                     visit.id, pd.getName());
         } else if (!visit.pieces.isEmpty() && visit.endTick > visit.startTick) {
             pd.getVisits().add(visit);
             if (TimeTravel.trackVoice) VoicechatCompat.saveVisitAudio(pd, visit.id);
-            TimeTravel.LOOP_LOGGER.info("Visit {} of '{}' saved: ticks {}..{}, {} piece(s)",
+            TimeTravel.TIMELINE_LOGGER.info("Visit {} of '{}' saved: ticks {}..{}, {} piece(s)",
                     visit.id, pd.getName(), visit.startTick, visit.endTick, visit.pieces.size());
         } else {
-            TimeTravel.LOOP_LOGGER.info("Visit {} of '{}' was empty - dropped", visit.id, pd.getName());
+            TimeTravel.TIMELINE_LOGGER.info("Visit {} of '{}' was empty - dropped", visit.id, pd.getName());
         }
     }
 
@@ -107,7 +107,7 @@ public final class VisitManager {
             if (MocapAdapter.save(handle, name)) {
                 visit.pieces.add(new Visit.Piece(name, startTick));
             } else {
-                TimeTravel.LOOP_LOGGER.error("Failed to save recording '{}' for player: {}", name, pd.getName());
+                TimeTravel.TIMELINE_LOGGER.error("Failed to save recording '{}' for player: {}", name, pd.getName());
             }
             i++;
         }

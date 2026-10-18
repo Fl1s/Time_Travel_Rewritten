@@ -337,7 +337,7 @@ public final class BlockJournal {
                 level.scheduleTick(pos, state.getBlock(), state.is(BlockTags.WOODEN_BUTTONS) ? 30 : 20);
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to replay block journal entry at {} {} {}", e.x, e.y, e.z, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to replay block journal entry at {} {} {}", e.x, e.y, e.z, ex);
         }
     }
 
@@ -401,7 +401,7 @@ public final class BlockJournal {
                 markJukebox(level, pos);
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
         } finally {
             applying = false;
         }
@@ -446,7 +446,7 @@ public final class BlockJournal {
                 }
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to refresh block connections", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to refresh block connections", ex);
         } finally {
             applying = false;
             touched.clear();
@@ -467,7 +467,7 @@ public final class BlockJournal {
         try {
             return BlockStateParser.parseForBlock(TimeTravel.server.registryAccess().lookupOrThrow(Registries.BLOCK), s, false).blockState();
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Cannot parse blockstate '{}'", s);
+            TimeTravel.TIMELINE_LOGGER.error("Cannot parse blockstate '{}'", s);
             return null;
         }
     }
@@ -586,7 +586,7 @@ public final class BlockJournal {
             CompoundTag tag = TagParser.parseTag(tagStr);
             ContainerHelper.loadAllItems(tag, list, TimeTravel.server.registryAccess());
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to parse container items", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to parse container items", ex);
         }
         return list;
     }
@@ -622,7 +622,7 @@ public final class BlockJournal {
 
             if (jukebox) markJukebox(level, pos);
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply container journal entry at {} {} {}", e.x, e.y, e.z, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply container journal entry at {} {} {}", e.x, e.y, e.z, ex);
         }
     }
 
@@ -645,7 +645,7 @@ public final class BlockJournal {
                         level.levelEvent(LevelEvent.SOUND_STOP_JUKEBOX_SONG, pos, 0);
                     }
                 } catch (Exception ex) {
-                    TimeTravel.LOOP_LOGGER.error("Failed to sync jukebox at {}", pos, ex);
+                    TimeTravel.TIMELINE_LOGGER.error("Failed to sync jukebox at {}", pos, ex);
                 }
             }
         }

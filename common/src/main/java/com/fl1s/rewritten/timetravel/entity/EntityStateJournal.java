@@ -218,7 +218,7 @@ public final class EntityStateJournal {
                 if (created != null) level.addFreshEntity(created);
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply entity state entry", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply entity state entry", ex);
         } finally {
             applying = false;
         }

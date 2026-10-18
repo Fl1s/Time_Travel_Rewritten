@@ -126,7 +126,7 @@ public final class CloneManager {
             }
         });
         needsRebuild = false;
-        TimeTravel.LOOP_LOGGER.info("Clone queue rebuilt at tick {}: {} piece(s) pending",
+        TimeTravel.TIMELINE_LOGGER.info("Clone queue rebuilt at tick {}: {} piece(s) pending",
                 now, pending.size());
     }
 
@@ -214,11 +214,11 @@ public final class CloneManager {
 
         Entity cloneEntity = CloneFx.findNewestClone(pd.getNickname());
         if (cloneEntity == null) {
-            TimeTravel.LOOP_LOGGER.warn("[TT-GHOST] no entity right after startPlayback for {} (visit {}, delay {})", pd.getNickname(), piece.visitId(), delayTicks);
+            TimeTravel.TIMELINE_LOGGER.warn("[TT-GHOST] no entity right after startPlayback for {} (visit {}, delay {})", pd.getNickname(), piece.visitId(), delayTicks);
         } else {
             for (Clone g : roots) {
                 if (g.fx.entity() == cloneEntity) {
-                    TimeTravel.LOOP_LOGGER.warn("[TT-GHOST] findNewestClone returned an already bound clone (visit {} vs {})", g.visitId, piece.visitId());
+                    TimeTravel.TIMELINE_LOGGER.warn("[TT-GHOST] findNewestClone returned an already bound clone (visit {} vs {})", g.visitId, piece.visitId());
                 }
             }
         }
@@ -255,7 +255,7 @@ public final class CloneManager {
             try {
                 if (!clone.root.isFinished()) clone.root.stop();
             } catch (Exception e) {
-                TimeTravel.LOOP_LOGGER.error("Failed to stop clone playback", e);
+                TimeTravel.TIMELINE_LOGGER.error("Failed to stop clone playback", e);
             }
         }
         roots.clear();
@@ -268,7 +268,7 @@ public final class CloneManager {
             try {
                 if (!g.root.isFinished()) g.root.stop();
             } catch (Exception e) {
-                TimeTravel.LOOP_LOGGER.error("Failed to stop clone of a collapsed chain", e);
+                TimeTravel.TIMELINE_LOGGER.error("Failed to stop clone of a collapsed chain", e);
             }
             return true;
         });
@@ -295,7 +295,7 @@ public final class CloneManager {
                         SoundSource.PLAYERS, 1.4f, 0.5f);
             }
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to play time sound", e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to play time sound", e);
         }
     }
 

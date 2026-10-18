@@ -32,7 +32,7 @@ public class PlayConnectionEvent {
                     player.sendSystemMessage(Component.literal("Use '/timetravel start' to start the timeline (shared server time). '/timetravel help' lists all commands."));
                 }
             } catch (Exception e) {
-                TimeTravel.LOOP_LOGGER.error("Exception: " + e);
+                TimeTravel.TIMELINE_LOGGER.error("Exception: " + e);
             }
         }
 

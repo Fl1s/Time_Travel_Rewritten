@@ -32,7 +32,7 @@ public final class VoicechatImpl {
     private VoicechatImpl() {}
 
     public static VoicechatServerApi serverApi;
-    public static VolumeCategory LOOP_CATEGORY;
+    public static VolumeCategory TIMELINE_CATEGORY;
 
     private static final String CATEGORY_ID = "tt_voice";
     private static volatile boolean categoryWarned = false;
@@ -73,24 +73,24 @@ public final class VoicechatImpl {
 
     public static void initCategory() {
         try {
-            LOOP_CATEGORY = serverApi.volumeCategoryBuilder()
+            TIMELINE_CATEGORY = serverApi.volumeCategoryBuilder()
                     .setId(CATEGORY_ID)
                     .setName("TT Voices")
                     .build();
-            serverApi.registerVolumeCategory(LOOP_CATEGORY);
+            serverApi.registerVolumeCategory(TIMELINE_CATEGORY);
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("[Voice] Failed to register volume category '{}' - "
+            TimeTravel.TIMELINE_LOGGER.error("[Voice] Failed to register volume category '{}' - "
                     + "clone voices will be silent", CATEGORY_ID, e);
-            LOOP_CATEGORY = null;
+            TIMELINE_CATEGORY = null;
         }
     }
 
     private static String safeCategoryId() {
-        VolumeCategory cat = LOOP_CATEGORY;
+        VolumeCategory cat = TIMELINE_CATEGORY;
         if (cat == null) {
             if (!categoryWarned) {
                 categoryWarned = true;
-                TimeTravel.LOOP_LOGGER.warn(
+                TimeTravel.TIMELINE_LOGGER.warn(
                         "[Voice] Volume category unavailable - skipping clone voice playback");
             }
             return null;
@@ -193,7 +193,7 @@ public final class VoicechatImpl {
                 }
             }
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("[Voice] Decode failed", e);
+            TimeTravel.TIMELINE_LOGGER.error("[Voice] Decode failed", e);
         } finally {
             decoder.close();
         }
@@ -291,7 +291,7 @@ public final class VoicechatImpl {
         de.maxhenkel.voicechat.api.Entity svcEntity = serverApi.fromEntity(mcEntity);
         EntityAudioChannel channel = serverApi.createEntityAudioChannel(UUID.randomUUID(), svcEntity);
         if (channel == null) {
-            TimeTravel.LOOP_LOGGER.warn("[Voice] Failed to create EntityAudioChannel for key={}", key);
+            TimeTravel.TIMELINE_LOGGER.warn("[Voice] Failed to create EntityAudioChannel for key={}", key);
             return;
         }
         channel.setCategory(catId);
@@ -420,33 +420,33 @@ public final class VoicechatImpl {
 
     public static CompletableFuture<Void> saveAudio() {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
-        TimeTravel.LOOP_LOGGER.info("[Voice] Saving all audio to disk...");
+        TimeTravel.TIMELINE_LOGGER.info("[Voice] Saving all audio to disk...");
         return AudioPersistence.saveAllAudio().thenRun(() ->
-                TimeTravel.LOOP_LOGGER.info("[Voice] Audio save complete.")
+                TimeTravel.TIMELINE_LOGGER.info("[Voice] Audio save complete.")
         );
     }
 
     public static CompletableFuture<Void> savePlayerAudio(PlayerData playerData) {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
-        TimeTravel.LOOP_LOGGER.info("[Voice] Saving audio for player {}...", playerData.getName());
+        TimeTravel.TIMELINE_LOGGER.info("[Voice] Saving audio for player {}...", playerData.getName());
         return AudioPersistence.savePlayerAudio(playerData).thenRun(() ->
-                TimeTravel.LOOP_LOGGER.info("[Voice] Audio save complete for {}.", playerData.getName())
+                TimeTravel.TIMELINE_LOGGER.info("[Voice] Audio save complete for {}.", playerData.getName())
         );
     }
 
     public static CompletableFuture<Void> loadAudio() {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
-        TimeTravel.LOOP_LOGGER.info("[Voice] Loading audio from disk...");
+        TimeTravel.TIMELINE_LOGGER.info("[Voice] Loading audio from disk...");
         return AudioPersistence.loadAllAudio().thenRun(() ->
-                TimeTravel.LOOP_LOGGER.info("[Voice] Audio load complete.")
+                TimeTravel.TIMELINE_LOGGER.info("[Voice] Audio load complete.")
         );
     }
 
     public static CompletableFuture<Void> deleteAllAudio() {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
-        TimeTravel.LOOP_LOGGER.info("[Voice] Deleting all voice audio...");
+        TimeTravel.TIMELINE_LOGGER.info("[Voice] Deleting all voice audio...");
         return AudioPersistence.deleteAllAudio().thenRun(() ->
-                TimeTravel.LOOP_LOGGER.info("[Voice] All voice audio deleted.")
+                TimeTravel.TIMELINE_LOGGER.info("[Voice] All voice audio deleted.")
         );
     }
 
@@ -456,7 +456,7 @@ public final class VoicechatImpl {
         ExecutorService pool = decodePool;
         if (pool != null) pool.shutdown();
         AudioPersistence.shutdown();
-        TimeTravel.LOOP_LOGGER.info("[Voice] VoicechatImpl shut down.");
+        TimeTravel.TIMELINE_LOGGER.info("[Voice] VoicechatImpl shut down.");
     }
 
     public static void stopPlayback(String player) {

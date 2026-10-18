@@ -58,7 +58,7 @@ public final class TimeTravelConfigFabric {
                 try {
                     option.accept(value);
                 } catch (Exception ex) {
-                    TimeTravel.LOOP_LOGGER.warn(
+                    TimeTravel.TIMELINE_LOGGER.warn(
                             "Invalid config value for {}.{}: {}",
                             option.category(), option.key(), value);
                     option.accept(option.defaultValue());

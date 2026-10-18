@@ -242,7 +242,7 @@ public final class BlockEntityJournal {
 
             if (be instanceof JukeboxBlockEntity) BlockJournal.markJukebox(level, pos);
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply BE journal entry at {} {} {}", e.x, e.y, e.z, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply BE journal entry at {} {} {}", e.x, e.y, e.z, ex);
         } finally {
             applying = false;
         }

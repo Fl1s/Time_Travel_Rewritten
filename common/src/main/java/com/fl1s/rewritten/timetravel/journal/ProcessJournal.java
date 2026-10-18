@@ -299,7 +299,7 @@ public final class ProcessJournal {
             be.setChanged();
             syncBlockState(be);
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to restore block entity state", e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to restore block entity state", e);
         }
     }
 

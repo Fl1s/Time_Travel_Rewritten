@@ -24,11 +24,11 @@ public final class Timeline {
 
     public void start() {
         if (TimeTravel.isLooping) {
-            TimeTravel.LOOP_LOGGER.info("Timeline already running");
+            TimeTravel.TIMELINE_LOGGER.info("Timeline already running");
             return;
         }
         if (!MocapAdapter.isReady()) {
-            TimeTravel.LOOP_LOGGER.error("Mocap controller is not ready yet - cannot start timeline");
+            TimeTravel.TIMELINE_LOGGER.error("Mocap controller is not ready yet - cannot start timeline");
             return;
         }
 
@@ -56,12 +56,12 @@ public final class Timeline {
         ProcessJournal.snapshotOrigins(TimeTravel.server.getPlayerList().getPlayers());
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
-        TimeTravel.LOOP_LOGGER.info("Timeline started at tick {}", TimeTravel.timelineTick);
+        TimeTravel.TIMELINE_LOGGER.info("Timeline started at tick {}", TimeTravel.timelineTick);
     }
 
     public void stop() {
         if (!TimeTravel.isLooping) return;
-        TimeTravel.LOOP_LOGGER.info("Stopping timeline at tick {}", TimeTravel.timelineTick);
+        TimeTravel.TIMELINE_LOGGER.info("Stopping timeline at tick {}", TimeTravel.timelineTick);
 
         TimelineSession s = TimeTravel.session();
         BlockJournal.flushWatches();
@@ -131,7 +131,7 @@ public final class Timeline {
         long from = TimeTravel.timelineTick;
         s.lastJumpOrigin = from;
         int dir = target > from ? 1 : -1;
-        TimeTravel.LOOP_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
+        TimeTravel.TIMELINE_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
         BlockJournal.flushWatches();
         EntityJournal.fastForward(from, target);
@@ -174,7 +174,7 @@ public final class Timeline {
             try {
                 task.run();
             } catch (Exception e) {
-                TimeTravel.LOOP_LOGGER.error("Error executing delayed task", e);
+                TimeTravel.TIMELINE_LOGGER.error("Error executing delayed task", e);
             }
         }
 

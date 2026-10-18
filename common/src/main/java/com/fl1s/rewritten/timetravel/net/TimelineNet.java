@@ -21,7 +21,7 @@ public final class TimelineNet {
         try {
             toPlayerSender.accept(player, payload);
         } catch (Throwable t) {
-            TimeTravel.LOOP_LOGGER.debug("Could not send {} to {}: {}", payload.type().id(), player.getName().getString(), t.toString());
+            TimeTravel.TIMELINE_LOGGER.debug("Could not send {} to {}: {}", payload.type().id(), player.getName().getString(), t.toString());
         }
     }
 

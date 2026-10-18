@@ -13,7 +13,7 @@ public final class ConfigOptions {
     public static final List<ConfigOption> CLIENT = List.of(
             new ConfigOption.Bool("display", "showLoopInfo",
                     "Show the timeline info overlay.",
-                    true, v -> TimeTravel.showLoopInfo = v),
+                    true, v -> TimeTravel.showTimelineInfo = v),
             new ConfigOption.Bool("display", "displayTimeInTicks",
                     "Show time in ticks instead of minutes and seconds.",
                     false, v -> TimeTravel.displayTimeInTicks = v),
@@ -48,9 +48,9 @@ public final class ConfigOptions {
             new ConfigOption.Bool("recording", "trackChat",
                     "Record chat messages on the timeline.",
                     true, v -> TimeTravel.trackChat = v),
-            new ConfigOption.Bool("recording", "hurtLoopedPlayers",
+            new ConfigOption.Bool("recording", "hurtPastSelves",
                     "If true, past selves take damage. Otherwise they are invulnerable and in creative mode during playback.",
-                    false, v -> TimeTravel.hurtLoopedPlayers = v),
+                    false, v -> TimeTravel.hurtPastSelves = v),
 
             new ConfigOption.Int("clones", "cloneLookaheadTicks",
                     "How many ticks ahead of time the playback of a past self is started.",
@@ -84,7 +84,7 @@ public final class ConfigOptions {
 
     public static void afterApply() {
         if (!MocapAdapter.isReady()) return;
-        MocapAdapter.setInvulnerablePlayback(!TimeTravel.hurtLoopedPlayers, !TimeTravel.hurtLoopedPlayers);
+        MocapAdapter.setInvulnerablePlayback(!TimeTravel.hurtPastSelves, !TimeTravel.hurtPastSelves);
         TimeTravel.updateEntitiesToTrack(TimeTravel.trackItems);
     }
 }

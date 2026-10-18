@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class LoopCommands {
-    public static final Logger LOOP_COMMANDS_LOGGER = LoggerFactory.getLogger("LoopCommands");
+    public static final Logger TIMELINE_COMMANDS_LOGGER = LoggerFactory.getLogger("LoopCommands");
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> commandBuilder = Commands.literal("timetravel");

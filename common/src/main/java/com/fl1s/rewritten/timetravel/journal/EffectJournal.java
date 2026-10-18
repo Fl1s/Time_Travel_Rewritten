@@ -201,7 +201,7 @@ public final class EffectJournal {
                 }
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to replay effect at {} {} {}", e.x, e.y, e.z, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to replay effect at {} {} {}", e.x, e.y, e.z, ex);
         } finally {
             replaying = false;
         }

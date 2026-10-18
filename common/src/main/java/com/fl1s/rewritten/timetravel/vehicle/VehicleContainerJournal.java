@@ -139,7 +139,7 @@ public final class VehicleContainerJournal {
             }
             container.setChanged();
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply vehicle container entry for {}", e.uuid, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply vehicle container entry for {}", e.uuid, ex);
         } finally {
             applying = false;
         }

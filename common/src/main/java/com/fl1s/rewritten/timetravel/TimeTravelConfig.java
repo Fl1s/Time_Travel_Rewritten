@@ -30,12 +30,12 @@ public class TimeTravelConfig {
     public long maxJumpTicks = 0;
     public int cloneLookaheadTicks = 0;
 
-    public boolean showLoopInfo = true;
+    public boolean showTimelineInfo = true;
     public boolean displayTimeInTicks = false;
     public boolean trackItems = true;
     public int entityTrackingDistance = 32; // Distance in blocks for mocap entity tracking (items, vehicles)
     public boolean trackChat = true;
-    public boolean hurtLoopedPlayers = true;
+    public boolean hurtPastSelves = true;
 
     /* ------------- Voice (Simple Voice Chat) ------------- */
 
@@ -63,13 +63,13 @@ public class TimeTravelConfig {
             try (Reader reader = Files.newBufferedReader(configPath)) {
                 config = GSON.fromJson(reader, TimeTravelConfig.class);
             } catch (Exception e) {
-                TimeTravel.LOOP_LOGGER.error("Failed to load config file", e);
+                TimeTravel.TIMELINE_LOGGER.error("Failed to load config file", e);
             }
         }
 
         if (config == null) {
             config = new TimeTravelConfig();
-            TimeTravel.LOOP_LOGGER.info("Config file not found or invalid. Using default config.");
+            TimeTravel.TIMELINE_LOGGER.info("Config file not found or invalid. Using default config.");
         }
 
         if (config.recordingPlayers == null) {
@@ -83,7 +83,7 @@ public class TimeTravelConfig {
         }
         if (config.configVersion < 2) {
             config.chainDeath = true;
-            config.hurtLoopedPlayers = true;
+            config.hurtPastSelves = true;
             config.configVersion = 2;
         }
         if (config.maxJumpTicks < 0) config.maxJumpTicks = 0;
@@ -105,13 +105,13 @@ public class TimeTravelConfig {
 
     public void save() {
         if (configPath == null) {
-            TimeTravel.LOOP_LOGGER.error("Cannot save config: configPath is null (load() not called yet)");
+            TimeTravel.TIMELINE_LOGGER.error("Cannot save config: configPath is null (load() not called yet)");
             return;
         }
         try (Writer writer = Files.newBufferedWriter(configPath)) {
             GSON.toJson(this, writer);
         } catch (IOException e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to save config file", e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to save config file", e);
         }
     }
 }

@@ -267,7 +267,7 @@ public final class ItemFlowJournal {
                             level.addFreshEntity(ni);
                         }
                     } catch (Exception ex) {
-                        TimeTravel.LOOP_LOGGER.error("Failed to restore picked item", ex);
+                        TimeTravel.TIMELINE_LOGGER.error("Failed to restore picked item", ex);
                     } finally {
                         applying = false;
                     }
@@ -323,7 +323,7 @@ public final class ItemFlowJournal {
             if (age > 0) ((ItemEntityAccessor) item).tt$setAge(Math.min(age, ITEM_LIFESPAN - 1));
             level.addFreshEntity(item);
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to replay drop", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to replay drop", ex);
         } finally {
             applying = false;
         }

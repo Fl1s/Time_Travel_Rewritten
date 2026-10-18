@@ -32,7 +32,7 @@ public final class JsonStore {
         try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             return GSON.fromJson(r, type);
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to load JSON: {}", file, e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to load JSON: {}", file, e);
             return null;
         }
     }
@@ -52,7 +52,7 @@ public final class JsonStore {
             }
             return true;
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to save JSON: {}", file, e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to save JSON: {}", file, e);
             try {
                 Files.deleteIfExists(tmp);
             } catch (Exception ignored) {

@@ -75,7 +75,7 @@ public final class DeathChain {
             if (!TimeTravel.chainDeath || TimeTravel.timelineTick <= fx.graceUntil) continue;
             if (isRecordedDeath(clone.playerName, clone.visitId)) continue;
 
-            TimeTravel.LOOP_LOGGER.info("Clone of {} (visit {}) was killed during playback!!! Collapsing the chain",
+            TimeTravel.TIMELINE_LOGGER.info("Clone of {} (visit {}) was killed during playback!!! Collapsing the chain",
                     clone.playerName, clone.visitId);
             collapseChain(clone.playerName, clone.visitId);
         }

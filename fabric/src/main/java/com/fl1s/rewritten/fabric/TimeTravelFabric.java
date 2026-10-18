@@ -43,18 +43,18 @@ import org.slf4j.LoggerFactory;
 
 
 public class TimeTravelFabric implements ModInitializer {
-    public static final Logger LOOP_LOGGER = LoggerFactory.getLogger("TimeTravel");
+    public static final Logger TIMELINE_LOGGER = LoggerFactory.getLogger("TimeTravel");
     
     @Override
     public void onInitialize() {
-        LOOP_LOGGER.info("Initializing TimeTravel mod (Fabric)");
+        TIMELINE_LOGGER.info("Initializing TimeTravel mod (Fabric)");
 
         FabricLoader loader = FabricLoader.getInstance();
 
         TimeTravel.voiceChatLoaded = loader.isModLoaded("voicechat");
         TimeTravel.voiceInteractionLoaded = loader.isModLoaded("vcinteraction");
 
-        LOOP_LOGGER.info("Mod detection - voicechat: {}, vcinteraction: {}",
+        TIMELINE_LOGGER.info("Mod detection - voicechat: {}, vcinteraction: {}",
                 TimeTravel.voiceChatLoaded, TimeTravel.voiceInteractionLoaded);
 
         // Register our own voice GameEvent (timetravel_rewritten:voice) only when
@@ -129,7 +129,7 @@ public class TimeTravelFabric implements ModInitializer {
 
         ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD.register(PlayerFabricEvent::dimensionChange);
 
-        LOOP_LOGGER.info("TimeTravel mod initialized successfully (Fabric)");
+        TIMELINE_LOGGER.info("TimeTravel mod initialized successfully (Fabric)");
     }
     
 }

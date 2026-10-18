@@ -141,7 +141,7 @@ public class PlayerData {
                 return compoundTag;
             }
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to parse inventoryTagNbt: " + inventoryTag, e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to parse inventoryTagNbt: " + inventoryTag, e);
         }
         return new CompoundTag();
     }

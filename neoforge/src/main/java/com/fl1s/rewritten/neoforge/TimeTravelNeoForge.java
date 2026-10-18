@@ -52,10 +52,10 @@ import org.slf4j.LoggerFactory;
 @Mod(TimeTravel.MOD_ID)
 public class TimeTravelNeoForge {
 
-    public static final Logger LOOP_LOGGER = LoggerFactory.getLogger("TimeTravel");
+    public static final Logger TIMELINE_LOGGER = LoggerFactory.getLogger("TimeTravel");
 
     public TimeTravelNeoForge(IEventBus modEventBus, ModContainer modContainer) {
-        LOOP_LOGGER.info("Initializing TimeTravel mod (NeoForge)");
+        TIMELINE_LOGGER.info("Initializing TimeTravel mod (NeoForge)");
 
         modContainer.registerConfig(ModConfig.Type.SERVER, TimeTravelConfigNeoForge.SERVER_SPEC);
 
@@ -63,7 +63,7 @@ public class TimeTravelNeoForge {
         TimeTravel.voiceChatLoaded = modList.isLoaded("voicechat");
         TimeTravel.voiceInteractionLoaded = modList.isLoaded("vcinteraction");
 
-        LOOP_LOGGER.info("Mod detection - voicechat: {}, vcinteraction: {}",
+        TIMELINE_LOGGER.info("Mod detection - voicechat: {}, vcinteraction: {}",
                 TimeTravel.voiceChatLoaded, TimeTravel.voiceInteractionLoaded);
 
         // Register our own voice GameEvent (timetravel_rewritten:voice) only when
@@ -84,7 +84,7 @@ public class TimeTravelNeoForge {
         // Register gameplay event listeners to the NeoForge EVENT bus
         NeoForge.EVENT_BUS.register(this);
 
-        LOOP_LOGGER.info("TimeTravel mod initialized successfully (NeoForge)");
+        TIMELINE_LOGGER.info("TimeTravel mod initialized successfully (NeoForge)");
     }
 
     @SubscribeEvent
@@ -146,7 +146,7 @@ public class TimeTravelNeoForge {
     // Command registration handler
     @SubscribeEvent
     public void registerCommands(RegisterCommandsEvent event) {
-        LOOP_LOGGER.info("Registering TimeTravel commands (NeoForge)");
+        TIMELINE_LOGGER.info("Registering TimeTravel commands (NeoForge)");
         LoopCommands.register(event.getDispatcher());
     }
 
@@ -179,7 +179,7 @@ public class TimeTravelNeoForge {
             
             PlayConnectionNeoForgeEvent.onJoin(connection, server);
         } else {
-            LOOP_LOGGER.warn("PlayerLoggedInEvent received a non-ServerPlayer entity?");
+            TIMELINE_LOGGER.warn("PlayerLoggedInEvent received a non-ServerPlayer entity?");
         }
     }
 
@@ -193,7 +193,7 @@ public class TimeTravelNeoForge {
             
             PlayConnectionNeoForgeEvent.onDisconnect(connection);
         } else {
-            LOOP_LOGGER.warn("PlayerLoggedOutEvent received a non-ServerPlayer entity?");
+            TIMELINE_LOGGER.warn("PlayerLoggedOutEvent received a non-ServerPlayer entity?");
         }
     }
 
@@ -215,10 +215,10 @@ public class TimeTravelNeoForge {
                         Field channelField = Connection.class.getDeclaredField("channel");
                         channelField.setAccessible(true);
                         channelField.set(conn, new EmbeddedChannel());
-                        LOOP_LOGGER.debug("Injected EmbeddedChannel into FakePlayer connection to prevent NeoForge crashes.");
+                        TIMELINE_LOGGER.debug("Injected EmbeddedChannel into FakePlayer connection to prevent NeoForge crashes.");
                     }
                 } catch (Exception e) {
-                    LOOP_LOGGER.error("Failed to inject dummy channel into FakePlayer", e);
+                    TIMELINE_LOGGER.error("Failed to inject dummy channel into FakePlayer", e);
                 }
             }
         }
