@@ -179,6 +179,12 @@ public final class MobSpawnJournal {
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived == null) return;
             Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeTravel.timelineTick);
+            if (at == null) {
+                MobEventJournal.Entry death = MobEventJournal.deathOf(e.uuid);
+                if (death != null && death.hasPosition) {
+                    at = new Vec3(death.x, death.y, death.z);
+                }
+            }
             if (at == null) at = new Vec3(e.x, e.y, e.z);
             revived.moveTo(at.x, at.y, at.z, revived.getYRot(), revived.getXRot());
             level.addFreshEntity(revived);

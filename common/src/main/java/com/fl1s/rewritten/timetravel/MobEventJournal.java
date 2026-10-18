@@ -27,6 +27,9 @@ public final class MobEventJournal {
         public UUID uuid;
         public String dim;
         public boolean explode;
+        public boolean hasPosition;
+        public double x, y, z;
+        public float yRot, xRot;
     }
 
     private static final Journal<Entry> STORE = new Journal<>(
@@ -51,6 +54,12 @@ public final class MobEventJournal {
         e.uuid = victim.getUUID();
         e.dim = level.dimension().location().toString();
         e.explode = explode;
+        e.hasPosition = true;
+        e.x = victim.getX();
+        e.y = victim.getY();
+        e.z = victim.getZ();
+        e.yRot = victim.getYRot();
+        e.xRot = victim.getXRot();
         STORE.entries().add(e);
         latestDeath.put(e.uuid, e);
         STORE.markDirty();

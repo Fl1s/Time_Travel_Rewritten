@@ -142,8 +142,8 @@ public final class MobTrailJournal {
                         Track existing = tracks.get(id);
                         if (existing != null && existing.lastTick() >= now) continue;
                     }
-                    if (!sampledThisTick.add(id)) continue;
                     if (p.distanceToSqr(mob) > r2) continue;
+                    if (!sampledThisTick.add(id)) continue;
                     MobSpawnJournal.ensureRegistered(level, mob);
                     Track t = tracks.computeIfAbsent(id, k -> new Track(dim));
                     if (t.end == now) continue;
