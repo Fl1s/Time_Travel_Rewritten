@@ -17,18 +17,12 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.lang.reflect.Type;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Dense per-tick trail of every mob within {@code entityTrackingDistance} of
@@ -36,7 +30,8 @@ import java.util.UUID;
  * loop start.
  */
 public final class MobTrailJournal {
-    private MobTrailJournal() {}
+    private MobTrailJournal() {
+    }
 
     public static final class Sample {
         public long tick;
@@ -57,11 +52,21 @@ public final class MobTrailJournal {
 
     private static final class Track {
         final String dim;
+        ResourceKey<Level> key;
         final List<Sample> samples = new ArrayList<>();
         long end = -1;
-        Track(String dim) { this.dim = dim; }
-        long lastTick() { return Math.max(end, samples.isEmpty() ? -1 : samples.get(samples.size() - 1).tick); }
-        long firstTick() { return samples.isEmpty() ? Long.MAX_VALUE : samples.get(0).tick; }
+
+        Track(String dim) {
+            this.dim = dim;
+        }
+
+        long lastTick() {
+            return Math.max(end, samples.isEmpty() ? -1 : samples.get(samples.size() - 1).tick);
+        }
+
+        long firstTick() {
+            return samples.isEmpty() ? Long.MAX_VALUE : samples.get(0).tick;
+        }
     }
 
     private static final class TrackData {
@@ -70,10 +75,14 @@ public final class MobTrailJournal {
         List<Sample> samples;
     }
 
-    private static final Type TRACKS_TYPE = new TypeToken<HashMap<String, TrackData>>() {}.getType();
+    private static final long GRACE = 200;
+    private static final Type TRACKS_TYPE = new TypeToken<HashMap<String, TrackData>>() {
+    }.getType();
     private static final Map<UUID, Track> tracks = new HashMap<>();
     private static final Set<UUID> sampledThisTick = new HashSet<>();
     private static final Set<UUID> puppets = new HashSet<>();
+    private static final String PUPPET_TAG = "tt_puppet";
+    private static final String ORIG_NOAI_TAG = "tt_orig_noai";
     private static final Map<UUID, Boolean> originalNoAi = new HashMap<>();
     private static boolean wasReplaying = false;
     private static boolean dirty = false;
@@ -86,7 +95,18 @@ public final class MobTrailJournal {
         return puppets.contains(mob.getUUID());
     }
 
+    private static ServerLevel levelOf(Track t) {
+        if (t.key == null) t.key = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim));
+        return TimeTravel.server.getLevel(t.key);
+    }
+
+    private static int visitAt(ServerLevel level, Mob mob) {
+        PlayerData rec = BlockJournal.nearestRecorder(level, mob.blockPosition());
+        return rec != null && rec.getCurrentVisit() != null ? rec.getCurrentVisit().id : -1;
+    }
+
     static void seedFor(Mob mob, String dim, long now) {
+        if (mob.isDeadOrDying()) return;
         Track t = tracks.computeIfAbsent(mob.getUUID(), k -> new Track(dim));
         if (t.samples.isEmpty()) {
             t.samples.add(makeSample(mob, now));
@@ -100,13 +120,8 @@ public final class MobTrailJournal {
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = level.dimension().location().toString();
             for (Entity entity : level.getAllEntities()) {
-                if (!(entity instanceof Mob mob)) continue;
-                if (Ghosts.is(mob)) continue;
-                Track t = tracks.computeIfAbsent(mob.getUUID(), k -> new Track(dim));
-                if (t.samples.isEmpty()) {
-                    t.samples.add(makeSample(mob, now));
-                    t.end = now;
-                }
+                if (!(entity instanceof Mob mob) || Ghosts.is(mob)) continue;
+                seedFor(mob, dim, now);
             }
         }
     }
@@ -133,42 +148,41 @@ public final class MobTrailJournal {
             if (viewers.isEmpty()) continue;
 
             for (ServerPlayer p : viewers) {
-                List<Mob> nearby = level.getEntitiesOfClass(Mob.class, p.getBoundingBox().inflate(r));
-                for (Mob mob : nearby) {
+                for (Mob mob : level.getEntitiesOfClass(Mob.class, p.getBoundingBox().inflate(r))) {
                     if (Ghosts.is(mob)) continue;
+                    if (mob.isDeadOrDying()) continue;
                     UUID id = mob.getUUID();
                     if (onlyOutOfTime) {
-                        if (!MobSpawnJournal.isOutOfTime(id)) continue;
                         Track existing = tracks.get(id);
                         if (existing != null && existing.lastTick() >= now) continue;
                     }
                     if (p.distanceToSqr(mob) > r2) continue;
                     if (!sampledThisTick.add(id)) continue;
+
                     MobSpawnJournal.ensureRegistered(level, mob);
                     Track t = tracks.computeIfAbsent(id, k -> new Track(dim));
                     if (t.end == now) continue;
 
                     List<Sample> list = t.samples;
                     Sample last = list.isEmpty() ? null : list.get(list.size() - 1);
-
+                    if (last != null && last.tick > now) continue;
                     if (last != null && last.tick == now) {
                         t.end = now;
                         continue;
                     }
-                    if (last != null && !mob.isUsingItem() && cheapSameState(last, mob)) {
-                        PlayerData rec = BlockJournal.nearestRecorder(level, mob.blockPosition());
-                        int visit = rec != null && rec.getCurrentVisit() != null ? rec.getCurrentVisit().id : -1;
-                        if (visit == last.visit) {
-                            t.end = now;
-                            continue;
-                        }
+
+                    int visit = visitAt(level, mob);
+                    if (last != null && !mob.isUsingItem() && visit == last.visit && cheapSameState(last, mob)) {
+                        t.end = now;
+                        continue;
                     }
                     Sample s = makeSample(mob, now);
-                    PlayerData rec = BlockJournal.nearestRecorder(level, mob.blockPosition());
-                    s.visit = rec != null && rec.getCurrentVisit() != null ? rec.getCurrentVisit().id : -1;
-                    if (list.isEmpty() || !sameState(list.get(list.size() - 1), s)) list.add(s);
+                    s.visit = visit;
+                    if (last == null || !sameState(last, s)) {
+                        list.add(s);
+                        dirty = true;
+                    }
                     t.end = now;
-                    dirty = true;
                 }
             }
         }
@@ -177,29 +191,11 @@ public final class MobTrailJournal {
     }
 
     private static boolean sameState(Sample a, Sample b) {
-        return a.x == b.x && a.y == b.y && a.z == b.z
-                && a.yRot == b.yRot && a.xRot == b.xRot
-                && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot
-                && a.health == b.health && a.swinging == b.swinging
-                && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive
-                && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining
-                && a.activeHand == b.activeHand
-                && a.swellDir == b.swellDir && a.swell == b.swell;
+        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell;
     }
 
     private static boolean cheapSameState(Sample a, Mob mob) {
-        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ()
-                && a.yRot == mob.getYRot() && a.xRot == mob.getXRot()
-                && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot
-                && a.health == mob.getHealth()
-                && a.swinging == mob.swinging
-                && a.attackAnim == mob.attackAnim
-                && a.aggressive == mob.isAggressive()
-                && a.usingItem == mob.isUsingItem()
-                && a.useItemRemaining == mob.getUseItemRemainingTicks()
-                && a.activeHand == mob.getUsedItemHand().ordinal()
-                && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0)
-                && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0);
+        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0);
     }
 
     private static Sample makeSample(Mob mob, long now) {
@@ -221,9 +217,7 @@ public final class MobTrailJournal {
         s.activeHand = mob.getUsedItemHand().ordinal();
         if (s.usingItem) {
             ItemStack use = mob.getUseItem();
-            if (!use.isEmpty()) {
-                s.useItemNbt = use.save(TimeTravel.server.registryAccess()).toString();
-            }
+            if (!use.isEmpty()) s.useItemNbt = use.save(TimeTravel.server.registryAccess()).toString();
             s.useItemRemaining = mob.getUseItemRemainingTicks();
         }
         if (mob instanceof Creeper creeper) {
@@ -238,30 +232,31 @@ public final class MobTrailJournal {
         long now = TimeTravel.timelineTick;
 
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
+            UUID id = en.getKey();
             Track t = en.getValue();
-            if (t.samples.isEmpty()) continue;
 
-            if (t.lastTick() < now) {
-                releasePuppet(en.getKey());
-                continue;
+            Sample s = null;
+            if (!t.samples.isEmpty() && now >= t.firstTick() && now <= t.lastTick() + GRACE) {
+                s = sampleAt(t.samples, now);
             }
-
-            Sample s = sampleAt(t.samples, now);
             if (s == null) {
-                releasePuppet(en.getKey());
+                releasePuppet(id);
                 continue;
             }
 
-            ServerLevel level = TimeTravel.server.getLevel(
-                    ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim)));
+            ServerLevel level = levelOf(t);
             if (level == null) continue;
 
-            Entity e = findLoaded(level, en.getKey());
+            Entity e = level.getEntity(id);
             if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+            if (mob.isDeadOrDying() && !MobJournal.isDoomed(mob)) continue;
 
-            if (!puppets.contains(en.getKey())) {
-                originalNoAi.put(en.getKey(), mob.isNoAi());
-                puppets.add(en.getKey());
+            if (!puppets.contains(id)) {
+                boolean orig = mob.getTags().contains(PUPPET_TAG) ? mob.getTags().contains(ORIG_NOAI_TAG) : mob.isNoAi();
+                originalNoAi.put(id, orig);
+                puppets.add(id);
+                mob.addTag(PUPPET_TAG);
+                if (orig) mob.addTag(ORIG_NOAI_TAG);
             }
 
             if (!MobJournal.isApplying()) {
@@ -281,31 +276,16 @@ public final class MobTrailJournal {
         mob.setNoAi(true);
         mob.setDeltaMovement(Vec3.ZERO);
         mob.fallDistance = 0;
-        boolean doomed = MobJournal.isDoomed(mob);
-        if (s.health <= 0) {
-            if (doomed && !mob.isDeadOrDying()) {
-                mob.setTarget(null);
-                mob.getNavigation().stop();
-                mob.setHealth(0);
-                ItemFlowJournal.setSuppressDrop(true);
-                try {
-                    mob.die(mob.damageSources().generic());
-                } finally {
-                    ItemFlowJournal.setSuppressDrop(false);
-                }
-            }
-            if (doomed) return;
-        }
-        if (doomed && (mob.isDeadOrDying() || mob.deathTime > 0)) {
+
+        if (s.health <= 0) return;
+
+        if (MobJournal.isDoomed(mob) && (mob.isDeadOrDying() || mob.deathTime > 0)) {
             mob.deathTime = 0;
             mob.hurtTime = 0;
             mob.setPose(Pose.STANDING);
-            mob.setHealth(1.0f);
+            mob.setHealth(Math.min(s.health, mob.getMaxHealth()));
         }
-        float ceiling = s.health;
-        if (mob.getHealth() > ceiling) {
-            mob.setHealth(ceiling);
-        }
+        if (mob.getHealth() > s.health) mob.setHealth(s.health);
 
         mob.setPos(s.x, s.y, s.z);
         mob.setYRot(s.yRot);
@@ -315,7 +295,6 @@ public final class MobTrailJournal {
 
         mob.swinging = s.swinging;
         if (s.swinging && mob.swingTime == 0) mob.swingTime = 1;
-
         mob.setAggressive(s.aggressive);
 
         if (mob instanceof Creeper creeper) {
@@ -327,20 +306,17 @@ public final class MobTrailJournal {
         LivingEntityAccessor acc = (LivingEntityAccessor) (Object) mob;
         acc.tt$setAttackAnim(s.attackAnim);
         acc.tt$setOAttackAnim(s.attackAnim);
-
         applyUseItem(mob, acc, s);
     }
 
     private static void applyUseItem(Mob mob, LivingEntityAccessor acc, Sample s) {
         if (s.usingItem && s.useItemNbt != null) {
             ItemStack current = acc.tt$getUseItem();
-            boolean same = !current.isEmpty()
-                    && current.save(TimeTravel.server.registryAccess()).toString().equals(s.useItemNbt);
+            boolean same = !current.isEmpty() && current.save(TimeTravel.server.registryAccess()).toString().equals(s.useItemNbt);
             if (!same) {
                 try {
                     CompoundTag tag = TagParser.parseTag(s.useItemNbt);
-                    ItemStack stack = ItemStack.parse(TimeTravel.server.registryAccess(), tag)
-                            .orElse(ItemStack.EMPTY);
+                    ItemStack stack = ItemStack.parse(TimeTravel.server.registryAccess(), tag).orElse(ItemStack.EMPTY);
                     if (!stack.isEmpty()) {
                         acc.tt$setUseItem(stack);
                         acc.tt$setUseItemRemaining(Math.max(1, s.useItemRemaining));
@@ -352,17 +328,11 @@ public final class MobTrailJournal {
                 acc.tt$setUseItemRemaining(Math.max(1, s.useItemRemaining));
                 acc.tt$setLivingEntityFlag(1, true);
             }
-        } else {
-            if (!acc.tt$getUseItem().isEmpty()) {
-                acc.tt$setUseItem(ItemStack.EMPTY);
-                acc.tt$setUseItemRemaining(0);
-                acc.tt$setLivingEntityFlag(1, false);
-            }
+        } else if (!acc.tt$getUseItem().isEmpty()) {
+            acc.tt$setUseItem(ItemStack.EMPTY);
+            acc.tt$setUseItemRemaining(0);
+            acc.tt$setLivingEntityFlag(1, false);
         }
-    }
-
-    private static Entity findLoaded(ServerLevel level, UUID uuid) {
-        return level.getEntity(uuid);
     }
 
     private static void releasePuppet(UUID id) {
@@ -370,12 +340,42 @@ public final class MobTrailJournal {
         Boolean orig = originalNoAi.remove(id);
         if (TimeTravel.server == null) return;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            Entity e = findLoaded(level, id);
+            Entity e = level.getEntity(id);
             if (e instanceof Mob mob && !mob.isRemoved()) {
                 mob.setNoAi(orig != null && orig);
+                mob.removeTag(PUPPET_TAG);
+                mob.removeTag(ORIG_NOAI_TAG);
                 return;
             }
         }
+    }
+
+    private static void sweepStrayPuppets(boolean includeTracked) {
+        if (TimeTravel.server == null) return;
+        for (ServerLevel level : TimeTravel.server.getAllLevels()) {
+            for (Entity entity : level.getAllEntities()) {
+                if (!(entity instanceof Mob mob) || Ghosts.is(mob)) continue;
+                UUID id = mob.getUUID();
+                if (puppets.contains(id)) continue;
+                if (mob.getTags().contains(PUPPET_TAG)) {
+                    mob.setNoAi(mob.getTags().contains(ORIG_NOAI_TAG));
+                    mob.removeTag(PUPPET_TAG);
+                    mob.removeTag(ORIG_NOAI_TAG);
+                } else if (includeTracked && mob.isNoAi() && tracks.containsKey(id)) {
+                    mob.setNoAi(false);
+                }
+            }
+        }
+    }
+
+    public static void restoreAi() {
+        releaseAllPuppets();
+        sweepStrayPuppets(true);
+    }
+
+    public static void releaseAll() {
+        releaseAllPuppets();
+        sweepStrayPuppets(false);
     }
 
     private static void releaseAllPuppets() {
@@ -383,8 +383,7 @@ public final class MobTrailJournal {
     }
 
     private static Sample sampleAt(List<Sample> s, long tick) {
-        if (s.isEmpty()) return null;
-        if (tick < s.get(0).tick) return null;
+        if (s.isEmpty() || tick < s.get(0).tick) return null;
         int last = s.size() - 1;
         if (tick >= s.get(last).tick) return s.get(last);
         int lo = 0, hi = last;
@@ -407,8 +406,7 @@ public final class MobTrailJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        boolean replaying = isReplaying();
-        if (replaying) {
+        if (isReplaying()) {
             wasReplaying = true;
             apply();
             sample(true);
@@ -417,31 +415,30 @@ public final class MobTrailJournal {
                 releaseAllPuppets();
                 wasReplaying = false;
             }
+            if (TimeTravel.timelineTick % 100 == 0) sweepStrayPuppets(false);
             sample();
         }
     }
 
     public static void onJump(long from, long to) {
-        if (to < from) {
-            long now = TimeTravel.timelineTick;
-            for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
-                Track t = en.getValue();
-                if (t.samples.isEmpty()) continue;
-                Sample s = sampleAt(t.samples, now);
-                if (s == null) continue;
+        if (TimeTravel.server == null) return;
+        long now = TimeTravel.timelineTick;
+        for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
+            Track t = en.getValue();
+            if (t.samples.isEmpty()) continue;
+            Sample s = sampleAt(t.samples, now);
+            if (s == null || s.health <= 0) continue;
 
-                ServerLevel level = TimeTravel.server.getLevel(
-                        ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim)));
-                if (level == null) continue;
-                Entity e = level.getEntity(en.getKey());
-                if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+            ServerLevel level = levelOf(t);
+            if (level == null) continue;
+            Entity e = level.getEntity(en.getKey());
+            if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
 
-                mob.setHealth(s.health);
-                if (mob.isDeadOrDying() || mob.deathTime > 0) {
-                    mob.deathTime = 0;
-                    mob.hurtTime = 0;
-                    mob.setPose(Pose.STANDING);
-                }
+            mob.setHealth(Math.min(s.health, mob.getMaxHealth()));
+            if (mob.deathTime > 0) {
+                mob.deathTime = 0;
+                mob.hurtTime = 0;
+                mob.setPose(Pose.STANDING);
             }
         }
     }
@@ -456,7 +453,8 @@ public final class MobTrailJournal {
         dirty = true;
     }
 
-    public static void rebuildUpcoming() {}
+    public static void rebuildUpcoming() {
+    }
 
     private static Path file() {
         return TimeTravel.worldFolder.resolve("timetravel_rewritten_mob_trails.json");
@@ -473,6 +471,9 @@ public final class MobTrailJournal {
             if (d == null || d.dim == null || d.samples == null) continue;
             Track t = new Track(d.dim);
             t.samples.addAll(d.samples);
+            t.samples.removeIf(x -> x.health <= 0);
+            t.samples.sort(Comparator.comparingLong(x -> x.tick));
+            if (t.samples.isEmpty()) continue;
             t.end = d.end;
             try {
                 tracks.put(UUID.fromString(en.getKey()), t);
@@ -501,6 +502,7 @@ public final class MobTrailJournal {
     }
 
     public static void clear() {
+        restoreAi();
         tracks.clear();
         sampledThisTick.clear();
         puppets.clear();

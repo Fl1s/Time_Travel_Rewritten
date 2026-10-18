@@ -55,10 +55,12 @@ public final class MobJournal {
     private static void recordDeath(LivingEntity entity, boolean explode) {
         if (killing || applying) return;
         if (!TimeTravel.isLooping) return;
-        if (MobTrailJournal.isReplaying()
-                && (!MobSpawnJournal.isOutOfTime(entity.getUUID()) || isDoomed(entity))) return;
+        if (MobTrailJournal.isReplaying() && isDoomed(entity)) return;
         if (entity instanceof net.minecraft.world.entity.player.Player) return;
         if (!entity.getType().canSerialize()) return;
+        if (entity instanceof Mob deadMob && entity.level() instanceof ServerLevel deadLevel) {
+            MobSpawnJournal.ensureRegistered(deadLevel, deadMob);
+        }
         MobEventJournal.recordDeath(entity, explode);
     }
 

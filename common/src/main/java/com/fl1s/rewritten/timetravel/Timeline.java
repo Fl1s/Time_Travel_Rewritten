@@ -53,6 +53,7 @@ public final class Timeline {
 
         TimelineSession s = TimeTravel.session();
         BlockJournal.flushWatches();
+        MobTrailJournal.releaseAll();
         s.visits.endAllVisits();
         s.ghosts.stopAll();
         s.ghosts.clearPending();

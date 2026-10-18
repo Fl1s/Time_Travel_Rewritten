@@ -117,7 +117,11 @@ public final class MobEventJournal {
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
         STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
-        latestDeath.values().removeIf(e -> visitIds.contains(e.visit));
+        latestDeath.clear();
+        for (Entry e : STORE.entries()) {
+            Entry prev = latestDeath.get(e.uuid);
+            if (prev == null || e.seq > prev.seq) latestDeath.put(e.uuid, e);
+        }
         STORE.markDirty();
         rebuildUpcoming();
     }
@@ -153,7 +157,7 @@ public final class MobEventJournal {
         pendingDeaths.clear();
         long now = TimeTravel.timelineTick;
         for (Entry e : STORE.entries()) {
-            if (e.tick > now) pendingDeaths.add(e);
+            if (e.tick > now && latestDeath.get(e.uuid) == e) pendingDeaths.add(e);
         }
     }
 
