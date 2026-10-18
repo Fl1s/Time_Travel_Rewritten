@@ -1,22 +1,23 @@
 package com.fl1s.rewritten.neoforge;
 
+import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.commands.LoopCommands;
-import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.util.Ghosts;
 import com.fl1s.rewritten.neoforge.events.*;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.entity.Mob;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import com.fl1s.rewritten.timetravel.BlockJournal;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -31,8 +32,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import com.fl1s.rewritten.timetravel.client.TimelineClient;
-import com.fl1s.rewritten.timetravel.ChatTimeline;
-import com.fl1s.rewritten.timetravel.MobJournal;
 import com.fl1s.rewritten.timetravel.net.ToggleTimelinePayload;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import com.fl1s.rewritten.timetravel.net.ClearChatPayload;
@@ -83,6 +82,11 @@ public class TimeTravelNeoForge {
     @SubscribeEvent
     public void onBlockBreak(BlockEvent.BreakEvent event) {
         if (event.getPlayer() instanceof ServerPlayer sp) BlockJournal.watch(sp, event.getPos());
+    }
+
+    @SubscribeEvent
+    public void onEquipmentChange(LivingEquipmentChangeEvent event) {
+        if (event.getEntity() instanceof Mob mob) {MobStateJournal.onChanged(mob);}
     }
 
     @SubscribeEvent
