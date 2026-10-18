@@ -26,6 +26,7 @@ public final class Timeline {
         TimeTravel.config.dayTimeOrigin = TimeTravel.dayTimeOrigin;
 
         MobSpawnJournal.snapshotInitial();
+        MobStateJournal.snapshotInitial();
         MobTrailJournal.seedInitial();
         BlockEntityJournal.snapshotInitial();
         VehicleSpawnJournal.snapshotInitial();

@@ -40,18 +40,18 @@ public final class MobStateJournal {
     }
 
     private static final String[] SHEEP_KEYS = {"Color", "Sheared"};
-    private static final String[] VILLAGER_KEYS = {"VillagerData", "Offers", "Inventory"};
+    private static final String[] VILLAGER_KEYS = {"VillagerData", "Offers", "Inventory", "Gossips", "Xp", "LastGossipDecay", "LastRestock", "RestocksToday", "FoodLevel"};
     private static final String[] ENDERMAN_KEYS = {"carriedBlockState"};
-    private static final String[] INVENTORY_KEYS = {"Inventory"};
-    private static final String[] FOX_KEYS = {"HandItems"};
-    private static final String[] HORSE_KEYS = {"Variant", "ChestedHorse", "Items", "SaddleItem", "ArmorItem", "DecorItem"};
-    private static final String[] PANDA_KEYS = {"MainGene", "HiddenGene"};
-    private static final String[] PET_KEYS = {"variant", "CollarColor"};
-    private static final String[] MOOSHROOM_KEYS = {"Type"};
-    private static final String[] AXOLOTL_KEYS = {"Variant"};
-    private static final String[] BEE_KEYS = {"HasNectar", "HasStung"};
-    private static final String[] GOAT_KEYS = {"IsScreamingGoat"};
-    private static final String[] FROG_KEYS = {"variant"};
+    private static final String[] INVENTORY_KEYS = {"Inventory", "CannotHunt"};
+    private static final String[] FOX_KEYS = {"HandItems", "Type", "Sleeping"};
+    private static final String[] HORSE_KEYS = {"Variant", "ChestedHorse", "Items", "SaddleItem", "ArmorItem", "DecorItem", "Tame", "Owner", "Bred", "EatingHaystack", "Love", "Age", "Attributes"};
+    private static final String[] PANDA_KEYS = {"MainGene", "HiddenGene", "SneezeCounter", "UnhappyCounter"};
+    private static final String[] PET_KEYS = {"variant", "CollarColor", "Tame", "Owner", "Sitting", "Angry"};
+    private static final String[] MOOSHROOM_KEYS = {"Type", "StewEffects"};
+    private static final String[] AXOLOTL_KEYS = {"Variant", "FromBucket"};
+    private static final String[] BEE_KEYS = {"HasNectar", "HasStung", "AngerTime", "HivePos", "FlowerPos"};
+    private static final String[] GOAT_KEYS = {"IsScreamingGoat", "HasLeftHorn", "HasRightHorn"};
+    private static final String[] FROG_KEYS = {"variant", "FromBucket"};
     private static final String[] NO_KEYS = {};
 
     private static final int SAMPLE_STEP = 4;
