@@ -1,6 +1,5 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.ArmorStandJournal;
 import com.fl1s.rewritten.timetravel.EntityStateJournal;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.decoration.ArmorStand;
