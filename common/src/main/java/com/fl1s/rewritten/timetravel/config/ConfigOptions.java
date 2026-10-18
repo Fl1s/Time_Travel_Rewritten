@@ -11,7 +11,7 @@ public final class ConfigOptions {
     }
 
     public static final List<ConfigOption> CLIENT = List.of(
-            new ConfigOption.Bool("display", "showLoopInfo",
+            new ConfigOption.Bool("display", "showTimelineInfo",
                     "Show the timeline info overlay.",
                     true, v -> TimeTravel.showTimelineInfo = v),
             new ConfigOption.Bool("display", "displayTimeInTicks",
