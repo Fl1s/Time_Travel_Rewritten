@@ -1,8 +1,8 @@
 package com.fl1s.rewritten.timetravel.commands;
 
-import com.fl1s.rewritten.timetravel.PlayerData;
-import com.fl1s.rewritten.timetravel.Skin;
-import com.fl1s.rewritten.timetravel.TimeFormat;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.data.Skin;
+import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -67,16 +67,16 @@ public class SettingsCommands {
         settingsNode.then(Commands.literal("preload")
                 .executes(context -> {
                     context.getSource().sendSuccess(() -> Component.literal(
-                            "Ghost preload: " + TimeTravel.ghostLookaheadTicks + " ticks (0 = off)."), false);
+                            "Clone preload: " + TimeTravel.cloneLookaheadTicks + " ticks (0 = off)."), false);
                     return 1;
                 })
                 .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 100))
                         .executes(context -> {
                             int ticks = IntegerArgumentType.getInteger(context, "ticks");
-                            TimeTravel.ghostLookaheadTicks = ticks;
-                            TimeTravel.config.ghostLookaheadTicks = ticks;
+                            TimeTravel.cloneLookaheadTicks = ticks;
+                            TimeTravel.config.cloneLookaheadTicks = ticks;
                             TimeTravel.config.save();
-                            context.getSource().sendSuccess(() -> Component.literal("Ghost preload is set to: " + ticks + " ticks"), true);
+                            context.getSource().sendSuccess(() -> Component.literal("Clone preload is set to: " + ticks + " ticks"), true);
                             return 1;
                         })));
 
@@ -167,7 +167,7 @@ public class SettingsCommands {
                 "showTimer: " + TimeTravel.showLoopInfo,
                 "timerInTicks: " + TimeTravel.displayTimeInTicks,
                 "maxJump: " + (TimeTravel.maxJumpTicks == 0 ? "unlimited" : TimeFormat.clock(TimeTravel.maxJumpTicks)),
-                "preload: " + TimeTravel.ghostLookaheadTicks + " ticks",
+                "preload: " + TimeTravel.cloneLookaheadTicks + " ticks",
                 "jumpCooldown: " + TimeTravel.jumpCooldownTicks + " ticks",
                 "voice (Simple Voice Chat " + (TimeTravel.voiceChatLoaded ? "found" : "not found") + "): trackVoice=" + TimeTravel.trackVoice
                         + ", voiceIcon=" + TimeTravel.showPlayerVoiceIcon + ", voiceInteraction=" + TimeTravel.voiceInteractionEnabled

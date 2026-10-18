@@ -1,6 +1,10 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.*;
+import com.fl1s.rewritten.timetravel.entity.EntityJournal;
+import com.fl1s.rewritten.timetravel.entity.EntityStateJournal;
+import com.fl1s.rewritten.timetravel.journal.*;
+import com.fl1s.rewritten.timetravel.mob.MobJournal;
+import com.fl1s.rewritten.timetravel.vehicle.VehicleJournal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;

@@ -1,6 +1,12 @@
 package com.fl1s.rewritten.timetravel.journal;
 
-import com.fl1s.rewritten.timetravel.*;
+import com.fl1s.rewritten.timetravel.entity.EntityContainerJournal;
+import com.fl1s.rewritten.timetravel.entity.EntityJournal;
+import com.fl1s.rewritten.timetravel.entity.EntityStateJournal;
+import com.fl1s.rewritten.timetravel.mob.MobJournal;
+import com.fl1s.rewritten.timetravel.timeline.AdvancementTimeline;
+import com.fl1s.rewritten.timetravel.timeline.ChatTimeline;
+import com.fl1s.rewritten.timetravel.vehicle.VehicleJournal;
 
 import java.util.ArrayList;
 import java.util.List;

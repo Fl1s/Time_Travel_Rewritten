@@ -2,7 +2,11 @@ package com.fl1s.rewritten.neoforge;
 
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.commands.LoopCommands;
-import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.mob.MobJournal;
+import com.fl1s.rewritten.timetravel.mob.MobStateJournal;
+import com.fl1s.rewritten.timetravel.timeline.ChatTimeline;
+import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.neoforge.events.*;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.server.MinecraftServer;
@@ -86,7 +90,8 @@ public class TimeTravelNeoForge {
 
     @SubscribeEvent
     public void onEquipmentChange(LivingEquipmentChangeEvent event) {
-        if (event.getEntity() instanceof Mob mob) {MobStateJournal.onChanged(mob);}
+        if (event.getEntity() instanceof Mob mob) {
+            MobStateJournal.onChanged(mob);}
     }
 
     @SubscribeEvent
@@ -198,7 +203,7 @@ public class TimeTravelNeoForge {
     @SubscribeEvent
     public void onEntityJoinLevel(EntityJoinLevelEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            if (Ghosts.is(player)) {
+            if (Clones.is(player)) {
                 try {
                     Connection conn = player.connection.getConnection();
                     if (conn.channel() == null) {

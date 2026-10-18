@@ -1,7 +1,7 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.BlockJournal;
-import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.data.Clones;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerPlayerGameMode;
 import net.minecraft.world.InteractionHand;
@@ -27,7 +27,7 @@ public abstract class ServerPlayerGameModeMixin {
 
     @Unique
     private boolean tt$isRealPlayer() {
-        return player != null && !Ghosts.is(player);
+        return player != null && !Clones.is(player);
     }
 
     @Inject(method = "useItemOn", at = @At("HEAD"))
