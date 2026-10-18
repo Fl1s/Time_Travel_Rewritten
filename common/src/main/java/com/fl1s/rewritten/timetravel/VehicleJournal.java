@@ -23,11 +23,12 @@ public final class VehicleJournal {
     public static void tick() {
         VehicleSpawnJournal.tick();
         VehicleTrailJournal.tick();
-//        VehicleContainerJournal.tick();
+        VehicleContainerJournal.tick();
     }
 
     public static void onJump(long from, long to) {
         VehicleSpawnJournal.onJump(from, to);
+        VehicleTrailJournal.onJump(from, to);
         VehicleContainerJournal.onJump(from, to);
     }
 

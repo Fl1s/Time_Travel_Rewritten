@@ -29,6 +29,7 @@ public final class Timeline {
         MobStateJournal.snapshotInitial();
         MobTrailJournal.seedInitial();
         BlockEntityJournal.snapshotInitial();
+        WeatherJournal.snapshotInitial();
         VehicleSpawnJournal.snapshotInitial();
         VehicleTrailJournal.seedInitial();
         RedstoneJournal.rebuildUpcoming();

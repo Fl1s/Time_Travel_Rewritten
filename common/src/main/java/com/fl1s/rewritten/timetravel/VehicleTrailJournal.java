@@ -1,16 +1,17 @@
 package com.fl1s.rewritten.timetravel;
 
 import com.fl1s.rewritten.timetravel.util.Ghosts;
+import com.fl1s.rewritten.timetravel.util.JsonStore;
+import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.vehicle.AbstractMinecart;
-import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.phys.Vec3;
 
+import java.lang.reflect.Type;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,7 +25,8 @@ import java.util.UUID;
  * sample captured at loop start.
  */
 public final class VehicleTrailJournal {
-    private VehicleTrailJournal() {}
+    private VehicleTrailJournal() {
+    }
 
     public static final class Sample {
         public long tick;
@@ -36,12 +38,26 @@ public final class VehicleTrailJournal {
     private static final class Track {
         final String dim;
         final List<Sample> samples = new ArrayList<>();
-        Track(String dim) { this.dim = dim; }
-        long lastTick() { return samples.isEmpty() ? -1 : samples.get(samples.size() - 1).tick; }
+
+        Track(String dim) {
+            this.dim = dim;
+        }
+
+        long lastTick() {
+            return samples.isEmpty() ? -1 : samples.get(samples.size() - 1).tick;
+        }
     }
 
+    private static final class TrackData {
+        String dim;
+        List<Sample> samples;
+    }
+
+    private static final Type TRACKS_TYPE = new TypeToken<HashMap<String, TrackData>>() {
+    }.getType();
     private static final Map<UUID, Track> tracks = new HashMap<>();
     private static final Set<UUID> sampledThisTick = new HashSet<>();
+    private static boolean dirty = false;
 
     private static final double POS_EPS_SQ = 1.0e-4;
     private static final float ROT_EPS = 0.01f;
@@ -49,7 +65,10 @@ public final class VehicleTrailJournal {
 
     static void seedFor(Entity entity, String dim, long now) {
         Track t = tracks.computeIfAbsent(entity.getUUID(), k -> new Track(dim));
-        if (t.samples.isEmpty()) t.samples.add(makeSample(entity, now));
+        if (t.samples.isEmpty()) {
+            t.samples.add(makeSample(entity, now));
+            dirty = true;
+        }
     }
 
     public static void seedInitial() {
@@ -61,7 +80,10 @@ public final class VehicleTrailJournal {
                 if (!VehicleJournal.isTracked(entity)) continue;
                 if (Ghosts.is(entity)) continue;
                 Track t = tracks.computeIfAbsent(entity.getUUID(), k -> new Track(dim));
-                if (t.samples.isEmpty()) t.samples.add(makeSample(entity, now));
+                if (t.samples.isEmpty()) {
+                    t.samples.add(makeSample(entity, now));
+                    dirty = true;
+                }
             }
         }
     }
@@ -73,26 +95,16 @@ public final class VehicleTrailJournal {
     public static void sample() {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
         long now = TimeTravel.timelineTick;
-
         sampledThisTick.clear();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            List<ServerPlayer> players = level.players();
-            if (players.isEmpty()) continue;
             String dim = level.dimension().location().toString();
-            double r = TimeTravel.entityTrackingDistance;
-            double r2 = r * r;
-            for (ServerPlayer p : players) {
-                List<Entity> nearby = level.getEntitiesOfClass(Entity.class, p.getBoundingBox().inflate(r));
-                for (Entity e : nearby) {
-                    if (!VehicleJournal.isTracked(e)) continue;
-                    if (Ghosts.is(e)) continue;
-                    if (p.distanceToSqr(e) > r2) continue;
-                    if (!sampledThisTick.add(e.getUUID())) continue;
-                    record(e, dim, now);
-                }
+            for (Entity e : level.getAllEntities()) {
+                if (!VehicleJournal.isTracked(e)) continue;
+                if (Ghosts.is(e)) continue;
+                if (!sampledThisTick.add(e.getUUID())) continue;
+                record(e, dim, now);
             }
         }
-
         ReplayState.observe(now);
     }
 
@@ -107,22 +119,18 @@ public final class VehicleTrailJournal {
         Sample s = makeSample(e, now);
         if (isSameAsLast(t, s)) return;
         t.samples.add(s);
+        dirty = true;
     }
 
     private static boolean isSameAsLast(Track t, Sample s) {
         if (t.samples.isEmpty()) return false;
         Sample last = t.samples.get(t.samples.size() - 1);
-        double dx = s.x - last.x;
-        double dy = s.y - last.y;
-        double dz = s.z - last.z;
+        double dx = s.x - last.x, dy = s.y - last.y, dz = s.z - last.z;
         if (dx * dx + dy * dy + dz * dz > POS_EPS_SQ) return false;
         if (Math.abs(s.yRot - last.yRot) > ROT_EPS) return false;
         if (Math.abs(s.xRot - last.xRot) > ROT_EPS) return false;
-        double dvx = s.deltaX - last.deltaX;
-        double dvy = s.deltaY - last.deltaY;
-        double dvz = s.deltaZ - last.deltaZ;
-        if (dvx * dvx + dvy * dvy + dvz * dvz > VEL_EPS_SQ) return false;
-        return true;
+        double dvx = s.deltaX - last.deltaX, dvy = s.deltaY - last.deltaY, dvz = s.deltaZ - last.deltaZ;
+        return dvx * dvx + dvy * dvy + dvz * dvz <= VEL_EPS_SQ;
     }
 
     private static Sample makeSample(Entity e, long now) {
@@ -143,31 +151,21 @@ public final class VehicleTrailJournal {
     public static void apply() {
         if (TimeTravel.server == null) return;
         long now = TimeTravel.timelineTick;
-
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             Track t = en.getValue();
             if (t.samples.isEmpty()) continue;
             if (t.samples.get(0).tick > now) continue;
-
             Sample s = sampleAt(t.samples, now);
             if (s == null) continue;
-
-            ServerLevel level = TimeTravel.server.getLevel(
-                    ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim)));
+            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim)));
             if (level == null) continue;
-
-            Entity e = findLoaded(level, en.getKey());
+            Entity e = level.getEntity(en.getKey());
             if (e == null || e.isRemoved()) continue;
             if (!VehicleJournal.isTracked(e)) continue;
-
             e.setDeltaMovement(Vec3.ZERO);
             e.moveTo(s.x, s.y, s.z, s.yRot, s.xRot);
             e.setDeltaMovement(s.deltaX, s.deltaY, s.deltaZ);
         }
-    }
-
-    private static Entity findLoaded(ServerLevel level, UUID uuid) {
-        return level.getEntity(uuid);
     }
 
     private static Sample sampleAt(List<Sample> s, long tick) {
@@ -195,24 +193,63 @@ public final class VehicleTrailJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        if (ReplayState.isReplaying()) {
-            apply();
-        } else {
-            sample();
+        if (ReplayState.isReplaying()) apply();
+        else sample();
+    }
+
+    public static void onJump(long from, long to) {
+    }
+
+    public static void eraseVisits(Set<Integer> visitIds) {
+    }
+
+    public static void rebuildUpcoming() {
+    }
+
+    private static Path file() {
+        return TimeTravel.worldFolder.resolve("timetravel_rewritten_vehicle_trails.json");
+    }
+
+    public static void load() {
+        tracks.clear();
+        dirty = false;
+        if (TimeTravel.worldFolder == null) return;
+        Map<String, TrackData> loaded = JsonStore.load(file(), TRACKS_TYPE);
+        if (loaded == null) return;
+        for (Map.Entry<String, TrackData> en : loaded.entrySet()) {
+            TrackData d = en.getValue();
+            if (d == null || d.dim == null || d.samples == null) continue;
+            Track t = new Track(d.dim);
+            t.samples.addAll(d.samples);
+            try {
+                tracks.put(UUID.fromString(en.getKey()), t);
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+            ReplayState.observe(t.lastTick());
         }
     }
 
-    public static void onJump(long from, long to) {}
+    public static void save() {
+        if (TimeTravel.worldFolder == null) return;
+        Map<String, TrackData> out = new HashMap<>();
+        for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
+            TrackData d = new TrackData();
+            d.dim = en.getValue().dim;
+            d.samples = en.getValue().samples;
+            out.put(en.getKey().toString(), d);
+        }
+        if (JsonStore.save(file(), out, TRACKS_TYPE)) dirty = false;
+    }
 
-    public static void eraseVisits(Set<Integer> visitIds) {}
-
-    public static void rebuildUpcoming() {}
-    public static void load() {}
-    public static void save() {}
-    public static void saveIfDirty() {}
+    public static void saveIfDirty() {
+        if (dirty) save();
+    }
 
     public static void clear() {
         tracks.clear();
         sampledThisTick.clear();
+        dirty = false;
+        save();
     }
 }
