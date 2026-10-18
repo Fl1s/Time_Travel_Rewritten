@@ -8,6 +8,7 @@ import com.fl1s.rewritten.timetravel.compat.voicechat.TimedAudioFrame;
 import de.maxhenkel.voicechat.api.*;
 import de.maxhenkel.voicechat.api.audiochannel.*;
 import de.maxhenkel.voicechat.api.opus.OpusDecoder;
+import de.maxhenkel.voicechat.api.opus.OpusEncoder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
@@ -21,11 +22,10 @@ import java.util.concurrent.*;
  * All methods are static and guard on {@link TimeTravel#voiceChatLoaded}. When SVC
  * is not installed, every public method is a safe no-op.
  * <p>
- * Voice playback decodes Opus frames into PCM, extracts speech regions
- * (contiguous bursts of frames without tick gaps), and schedules per-region
- * {@link AudioPlayer AudioPlayers} so the SVC speaker icon only appears
- * during actual speech. Each burst is decoded into its own buffer; there is
- * no full-visit PCM buffer.
+ * Voice playback decodes Opus frames into PCM and extracts speech regions
+ * (contiguous bursts of frames without tick gaps). Each region is streamed to its
+ * audio channel from the server tick, a fixed amount of samples per tick, so playback
+ * is bound to the timeline clock: when the world is paused, the voices stop with it.
  */
 public final class VoicechatImpl {
 
@@ -34,18 +34,14 @@ public final class VoicechatImpl {
     public static VoicechatServerApi serverApi;
     public static VolumeCategory LOOP_CATEGORY;
 
-    /**
-     * SVC requires volume-category IDs to match [a-z_]{1,16}. "tt_voice" is
-     * short enough; "timetravel_rewritten_voice" (26 chars) is rejected by SVC
-     * and, if left unguarded, produced an NPE on every speech region.
-     */
     private static final String CATEGORY_ID = "tt_voice";
     private static volatile boolean categoryWarned = false;
 
-    /** Active AudioPlayers keyed by "playerName|iter|seg|regionIndex". */
-    private static final Map<String, AudioPlayer> players = new ConcurrentHashMap<>();
-
-    /** Scheduled speech regions waiting to be started at the right tick. */
+    private static final int SAMPLES_PER_TICK = 2400;
+    private static final int FRAME_SIZE = 960;
+    private static final int GAP_MS = 200;
+    private static final int SAMPLES_PER_MS = 48;
+    private static final Map<String, ActiveRegion> players = new ConcurrentHashMap<>();
     private static final List<ScheduledSpeechRegion> scheduledRegions =
             Collections.synchronizedList(new ArrayList<>());
 
@@ -75,8 +71,6 @@ public final class VoicechatImpl {
         return pool;
     }
 
-    /* ------------- INIT ------------- */
-
     public static void initCategory() {
         try {
             LOOP_CATEGORY = serverApi.volumeCategoryBuilder()
@@ -91,11 +85,6 @@ public final class VoicechatImpl {
         }
     }
 
-    /**
-     * Returns the category id, or {@code null} if the category failed to
-     * register. Callers must bail out when this returns {@code null}; otherwise
-     * SVC would throw an NPE on {@code LOOP_CATEGORY.getId()}.
-     */
     private static String safeCategoryId() {
         VolumeCategory cat = LOOP_CATEGORY;
         if (cat == null) {
@@ -108,8 +97,6 @@ public final class VoicechatImpl {
         }
         return cat.getId();
     }
-
-    /* ------------- PLAYBACK ------------- */
 
     private static volatile int generation = 0;
 
@@ -159,8 +146,6 @@ public final class VoicechatImpl {
         }
         return best;
     }
-
-    /* ------------- DECODING ------------- */
 
     private record DecodedRegion(int startTick, short[] pcm, Vec3 position) {}
 
@@ -215,8 +200,6 @@ public final class VoicechatImpl {
         return result;
     }
 
-    /* ------------- VOICE DISTANCE ------------ */
-
     private static float getVoiceDistance() {
         if (serverApi == null) return TimeTravel.voiceAudioDistance;
         try {
@@ -226,12 +209,79 @@ public final class VoicechatImpl {
         }
     }
 
-    /* ------------- CONSTANTS ------------- */
+    private static final class ActiveRegion {
+        final String key;
+        final AudioChannel channel;
+        final OpusEncoder encoder;
+        final short[] pcm;
+        final net.minecraft.world.entity.Entity entity;
+        int cursor;
+        int budget;
+        long sentSamples;
+        long startNanos = -1;
+        long lastPumpNanos;
 
-    private static final int SAMPLES_PER_TICK = 2400;
-    private static final int FRAME_SIZE = 960;
+        ActiveRegion(String key, AudioChannel channel, OpusEncoder encoder, short[] pcm,
+                     net.minecraft.world.entity.Entity entity) {
+            this.key = key;
+            this.channel = channel;
+            this.encoder = encoder;
+            this.pcm = pcm;
+            this.entity = entity;
+        }
 
-    /* ------------- CHANNEL START ------------- */
+        boolean finished() {
+            return cursor + FRAME_SIZE > pcm.length;
+        }
+
+        private void compensateGap(long now) {
+            long gapMs = (now - lastPumpNanos) / 1_000_000L;
+            if (gapMs <= GAP_MS) return;
+            long playedMs = (lastPumpNanos - startNanos) / 1_000_000L;
+            long lead = Math.max(0, sentSamples - playedMs * SAMPLES_PER_MS);
+            long heard = Math.min(lead, gapMs * SAMPLES_PER_MS);
+            int back = (int) (heard / FRAME_SIZE) * FRAME_SIZE;
+            cursor = Math.max(0, cursor - back);
+            budget = 0;
+            sentSamples = 0;
+            startNanos = now;
+        }
+
+        void pump() {
+            long now = System.nanoTime();
+            if (startNanos < 0) {
+                startNanos = now;
+            } else {
+                compensateGap(now);
+            }
+            lastPumpNanos = now;
+
+            budget += SAMPLES_PER_TICK;
+            while (budget >= FRAME_SIZE && !finished()) {
+                short[] out = new short[FRAME_SIZE];
+                System.arraycopy(pcm, cursor, out, 0, FRAME_SIZE);
+                cursor += FRAME_SIZE;
+                budget -= FRAME_SIZE;
+                sentSamples += FRAME_SIZE;
+                if (entity != null && TimeTravel.voiceInteractionEnabled
+                        && AudioUtils.isAboveThreshold(out, TimeTravel.voiceInteractionThresholdDb)) {
+                    VoicechatInteractionCompat.emitVoiceEvent(entity);
+                }
+                channel.send(encoder.encode(out));
+            }
+        }
+
+        void stop() {
+            try {
+                channel.flush();
+            } catch (Exception ignored) {
+            }
+            try {
+                encoder.close();
+            } catch (Exception ignored) {
+            }
+        }
+    }
 
     private static void startRegionEntityChannel(String key, short[] regionPcm,
                                                  net.minecraft.world.entity.Entity mcEntity) {
@@ -239,19 +289,14 @@ public final class VoicechatImpl {
         if (catId == null) return;
 
         de.maxhenkel.voicechat.api.Entity svcEntity = serverApi.fromEntity(mcEntity);
-        EntityAudioChannel channel = serverApi.createEntityAudioChannel(
-                UUID.randomUUID(), svcEntity
-        );
+        EntityAudioChannel channel = serverApi.createEntityAudioChannel(UUID.randomUUID(), svcEntity);
         if (channel == null) {
             TimeTravel.LOOP_LOGGER.warn("[Voice] Failed to create EntityAudioChannel for key={}", key);
             return;
         }
         channel.setCategory(catId);
         channel.setDistance(getVoiceDistance());
-
-        AudioPlayer player = createSimpleAudioPlayer(channel, regionPcm, mcEntity);
-        players.put(key, player);
-        player.startPlaying();
+        register(key, channel, regionPcm, mcEntity);
     }
 
     private static void startRegionLocationalChannel(String key, short[] regionPcm,
@@ -264,10 +309,9 @@ public final class VoicechatImpl {
 
         ServerLevel mcLevel = (boundEntity != null && boundEntity.level() instanceof ServerLevel sl)
                 ? sl : TimeTravel.serverLevel;
-        de.maxhenkel.voicechat.api.ServerLevel level =
-                serverApi.fromServerLevel(mcLevel);
+        de.maxhenkel.voicechat.api.ServerLevel level = serverApi.fromServerLevel(mcLevel);
 
-        double px, py, pz;
+        double px = 0, py = 0, pz = 0;
         if (boundEntity != null) {
             px = boundEntity.getX();
             py = boundEntity.getY();
@@ -276,54 +320,43 @@ public final class VoicechatImpl {
             px = position.x;
             py = position.y;
             pz = position.z;
-        } else {
-            px = 0;
-            py = 0;
-            pz = 0;
         }
 
         LocationalAudioChannel channel = serverApi.createLocationalAudioChannel(
-                UUID.randomUUID(), level, serverApi.createPosition(px, py, pz)
-        );
+                UUID.randomUUID(), level, serverApi.createPosition(px, py, pz));
         channel.setCategory(catId);
         channel.setDistance(getVoiceDistance());
-
-        AudioPlayer player = createSimpleAudioPlayer(channel, regionPcm, boundEntity);
-        players.put(key, player);
-        player.startPlaying();
+        register(key, channel, regionPcm, boundEntity);
     }
 
-    private static AudioPlayer createSimpleAudioPlayer(AudioChannel channel, short[] regionPcm,
-                                                       net.minecraft.world.entity.Entity boundEntity) {
-        final int[] cursor = {0};
-
-        return serverApi.createAudioPlayer(
-                channel,
-                serverApi.createEncoder(),
-                () -> {
-                    if (cursor[0] + FRAME_SIZE > regionPcm.length) return null;
-
-                    short[] out = new short[FRAME_SIZE];
-                    System.arraycopy(regionPcm, cursor[0], out, 0, FRAME_SIZE);
-                    cursor[0] += FRAME_SIZE;
-
-                    if (boundEntity != null && TimeTravel.voiceInteractionEnabled
-                            && AudioUtils.isAboveThreshold(out, TimeTravel.voiceInteractionThresholdDb)) {
-                        TimeTravel.server.execute(() ->
-                                VoicechatInteractionCompat.emitVoiceEvent(boundEntity)
-                        );
-                    }
-
-                    return out;
-                }
-        );
+    private static void register(String key, AudioChannel channel, short[] regionPcm,
+                                 net.minecraft.world.entity.Entity entity) {
+        ActiveRegion region = new ActiveRegion(key, channel, serverApi.createEncoder(), regionPcm, entity);
+        ActiveRegion old = players.put(key, region);
+        if (old != null) old.stop();
+        region.pump();
     }
-
-    /* ------------- TICK UPDATE ------------- */
 
     public static void onTick() {
         if (!TimeTravel.voiceChatLoaded) return;
         processScheduledRegions();
+        pumpActive();
+    }
+
+    private static void pumpActive() {
+        if (players.isEmpty()) return;
+        for (ActiveRegion region : new ArrayList<>(players.values())) {
+            if (region.entity != null && region.entity.isRemoved()) {
+                players.remove(region.key);
+                region.stop();
+                continue;
+            }
+            region.pump();
+            if (region.finished()) {
+                players.remove(region.key);
+                region.stop();
+            }
+        }
     }
 
     private static void processScheduledRegions() {
@@ -361,8 +394,6 @@ public final class VoicechatImpl {
         }
     }
 
-    /* ------------- ENTITY LOOKUP ------------- */
-
     public static List<net.minecraft.world.entity.Entity> findAllMocapEntities(String nickname) {
         List<net.minecraft.world.entity.Entity> result = new ArrayList<>();
         if (nickname == null || TimeTravel.server == null) return result;
@@ -386,8 +417,6 @@ public final class VoicechatImpl {
         result.sort(Comparator.comparingInt(net.minecraft.world.entity.Entity::getId));
         return result;
     }
-
-    /* ------------- PERSISTENCE ------------- */
 
     public static CompletableFuture<Void> saveAudio() {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
@@ -430,19 +459,17 @@ public final class VoicechatImpl {
         TimeTravel.LOOP_LOGGER.info("[Voice] VoicechatImpl shut down.");
     }
 
-    /* ------------- STOP ------------- */
-
     public static void stopPlayback(String player) {
         if (!TimeTravel.voiceChatLoaded) return;
         generation++;
         if (player == null || player.isEmpty()) {
-            players.values().forEach(AudioPlayer::stopPlaying);
+            players.values().forEach(ActiveRegion::stop);
             players.clear();
             scheduledRegions.clear();
             return;
         }
         players.forEach((k, p) -> {
-            if (k.startsWith(player + "|")) p.stopPlaying();
+            if (k.startsWith(player + "|")) p.stop();
         });
         players.keySet().removeIf(k -> k.startsWith(player + "|"));
         scheduledRegions.removeIf(r -> r.data.getName().equals(player));
@@ -461,7 +488,7 @@ public final class VoicechatImpl {
             }
         };
         players.forEach((k, p) -> {
-            if (match.test(k)) p.stopPlaying();
+            if (match.test(k)) p.stop();
         });
         players.keySet().removeIf(match);
         scheduledRegions.removeIf(r -> r.data.getName().equals(player) && r.iter >= fromVisit);
@@ -477,8 +504,6 @@ public final class VoicechatImpl {
         if (!TimeTravel.voiceChatLoaded) return CompletableFuture.completedFuture(null);
         return AudioPersistence.saveVisitAudio(data, visitId);
     }
-
-    /* ------------- KEY / HELPER TYPES ------------- */
 
     private static String key(String p, int i, int s) {
         return p + "|" + i + "|" + s;
