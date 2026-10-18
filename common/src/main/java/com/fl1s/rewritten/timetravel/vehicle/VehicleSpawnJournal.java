@@ -39,6 +39,8 @@ public final class VehicleSpawnJournal {
         public String dim;
         public String nbt;
         public double x, y, z;
+        public long endTick = -1;
+        public int endVisit = -1;
     }
 
     private static final Journal<Entry> STORE = new Journal<>(
@@ -49,6 +51,8 @@ public final class VehicleSpawnJournal {
     private static final Map<UUID, Entry> canon = new HashMap<>();
     private static final PriorityQueue<Entry> pending = new PriorityQueue<>(
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
+    private static final PriorityQueue<Entry> pendingRemovals = new PriorityQueue<>(
+            Comparator.comparingLong((Entry e) -> e.endTick).thenComparingLong(e -> e.seq));
 
     public static void snapshotInitial() {
         if (TimeTravel.server == null) return;
@@ -113,11 +117,42 @@ public final class VehicleSpawnJournal {
         STORE.markDirty();
     }
 
+    private static boolean ended(Entry e, long now) {
+        return e.endTick >= 0 && e.endTick <= now;
+    }
+
+    public static boolean isProtected(UUID id, long now) {
+        Entry e = canon.get(id);
+        return e != null && e.endTick > now;
+    }
+
+    public static void onDestroyed(Entity entity) {
+        if (!TimeTravel.isLooping || Removal.isSilent() || Clones.is(entity)) return;
+        if (!(entity.level() instanceof ServerLevel level)) return;
+        Entry e = canon.get(entity.getUUID());
+        if (e == null) return;
+        long now = TimeTravel.timelineTick;
+        if (ended(e, now)) return;
+
+        PlayerData pd = BlockJournal.nearestRecorder(level, entity.blockPosition());
+        e.endTick = now;
+        e.endVisit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
+        STORE.markDirty();
+    }
+
     public static void tick() {
         if (!TimeTravel.isLooping) return;
         long now = TimeTravel.timelineTick;
+        while (!pendingRemovals.isEmpty() && pendingRemovals.peek().endTick <= now) {
+            Entry e = pendingRemovals.poll();
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
+            if (level == null) continue;
+            Entity current = findLoaded(level, e.uuid);
+            if (current != null && !current.isRemoved()) Removal.discardWithoutDrops(current);
+        }
         while (!pending.isEmpty() && pending.peek().tick <= now) {
             Entry e = pending.poll();
+            if (ended(e, now)) continue;
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
             if (MobEventJournal.hasDeathAtOrBefore(e.uuid, now)) continue;
@@ -134,7 +169,7 @@ public final class VehicleSpawnJournal {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
 
-            boolean shouldExist = e.tick <= now && !MobEventJournal.hasDeathAtOrBefore(e.uuid, now);
+            boolean shouldExist = e.tick <= now && !ended(e, now) && !MobEventJournal.hasDeathAtOrBefore(e.uuid, now);
             Entity current = findLoaded(level, e.uuid);
 
             if (!shouldExist) {
@@ -175,18 +210,27 @@ public final class VehicleSpawnJournal {
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
+        for (Entry e : STORE.entries()) {
+            if (visitIds.contains(e.endVisit)) {
+                e.endTick = -1;
+                e.endVisit = -1;
+            }
+        }
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
         STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
         canon.values().removeIf(e -> visitIds.contains(e.visit));
         STORE.markDirty();
+        rebuildUpcoming();
     }
 
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
         pending.clear();
+        pendingRemovals.clear();
         long now = TimeTravel.timelineTick;
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
+            if (e.endTick > now) pendingRemovals.add(e);
         }
     }
 
@@ -203,6 +247,7 @@ public final class VehicleSpawnJournal {
     public static void clear() {
         canon.clear();
         pending.clear();
+        pendingRemovals.clear();
         STORE.clear();
     }
 }

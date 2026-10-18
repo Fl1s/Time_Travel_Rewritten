@@ -2,6 +2,8 @@ package com.fl1s.rewritten.timetravel.vehicle;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.vehicle.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.Boat;
 
 import java.util.Set;
 
@@ -9,8 +11,8 @@ public final class VehicleJournal {
     private VehicleJournal() {}
 
     public static boolean isTracked(Entity e) {
-        return e instanceof net.minecraft.world.entity.vehicle.AbstractMinecart
-                || e instanceof net.minecraft.world.entity.vehicle.Boat;
+        return e instanceof AbstractMinecart
+                || e instanceof Boat;
     }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
@@ -18,6 +20,23 @@ public final class VehicleJournal {
         VehicleSpawnJournal.onSpawn(level, entity);
         VehicleTrailJournal.onSpawnSeen(entity.getUUID(),
                 level.dimension().location().toString());
+    }
+
+    public static void onRemoved(Entity e, Entity.RemovalReason reason) {
+        if (!isTracked(e) || !reason.shouldDestroy()) return;
+        VehicleSpawnJournal.onDestroyed(e);
+    }
+
+    public static void cosmeticHit(Entity e) {
+        if (e instanceof AbstractMinecart m) {
+            m.setHurtDir(-m.getHurtDir());
+            m.setHurtTime(10);
+            m.setDamage(Math.min(m.getDamage() + 10.0f, 30.0f));
+        } else if (e instanceof Boat b) {
+            b.setHurtDir(-b.getHurtDir());
+            b.setHurtTime(10);
+            b.setDamage(Math.min(b.getDamage() + 10.0f, 30.0f));
+        }
     }
 
     public static void tick() {

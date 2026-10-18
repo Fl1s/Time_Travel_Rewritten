@@ -3,6 +3,8 @@ package com.fl1s.rewritten.timetravel.mixin;
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.vehicle.VehicleJournal;
+import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
 import net.minecraft.server.level.ServerLevel;
@@ -22,19 +24,19 @@ public abstract class PlayerAttackMixin {
     private void tt$handleAttack(Entity target, CallbackInfo ci) {
         if (!((Object) this instanceof ServerPlayer sp)) return;
 
-        boolean vehicle = target instanceof AbstractMinecart || target instanceof Boat;
-        boolean protectedVehicle = vehicle
-                && TimeTravel.isLooping
-                && VehicleTrailJournal.hasFutureSamples(target.getUUID(), TimeTravel.timelineTick);
-
-        if (protectedVehicle) {
-            if (!Clones.is(sp) && target.level() instanceof ServerLevel sl) {
-                DoomedFeedback.tryShowVehicle(sp, sl);
+        if (TimeTravel.isLooping && VehicleJournal.isTracked(target)) {
+            if (Clones.is(sp)) {
+                VehicleJournal.cosmeticHit(target);
+                ci.cancel();
+                return;
             }
-            ci.cancel();
-            return;
+            long now = TimeTravel.timelineTick;
+            if (VehicleSpawnJournal.isProtected(target.getUUID(), now) || VehicleTrailJournal.hasFutureSamples(target.getUUID(), now)) {
+                if (target.level() instanceof ServerLevel sl) DoomedFeedback.tryShowVehicle(sp, sl);
+                ci.cancel();
+                return;
+            }
         }
-
         CloneTracks.onAttack(sp, target);
     }
 }

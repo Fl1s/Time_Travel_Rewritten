@@ -6,13 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.10.7] - 2026-11-18
+
 ### Added
 
  - Dropped items record
 
+### Changed
+
+ - Code structure refactoring (it wont increase the performance but speed up the development!)
+
 ### Fixed
 
- - Past selves get hurt when jumping through time in caves  
+ - Past selves get hurt when jumping through time in caves 
+ - Past selves do not deal enough damage to break carts/boats
+ - Loot duplication on containers destruction
 
 ## [1.21.1-0.10.6] - 2026-11-18
 
