@@ -1,13 +1,11 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
+import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
-import com.fl1s.rewritten.timetravel.data.JsonStore;
+import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -156,10 +154,10 @@ public final class VehicleTrailJournal {
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             Track t = en.getValue();
             if (t.samples.isEmpty()) continue;
-            if (t.samples.get(0).tick > now) continue;
+            if (t.samples.getFirst().tick > now) continue;
             Sample s = sampleAt(t.samples, now);
             if (s == null) continue;
-            ServerLevel level = TimeTravel.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.dim)));
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(t.dim));
             if (level == null) continue;
             Entity e = level.getEntity(en.getKey());
             if (e == null || e.isRemoved()) continue;

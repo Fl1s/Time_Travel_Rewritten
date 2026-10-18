@@ -53,7 +53,7 @@ public final class MocapAdapter {
     private static MocapController controller;
     private static final Map<String, MocapActiveRecording> activeRecordings = new ConcurrentHashMap<>();
 
-    public static void init(MinecraftServer server, boolean hurtLoopedPlayers,
+    public static void init(MinecraftServer server, boolean hurtPastSelves,
                             boolean trackItems, int entityTrackingDistance) {
         MocapAPI.executeAfterInit(() -> {
             controller = new MocapControllerImpl(server, TimeTravel.MOD_ID);
@@ -66,8 +66,8 @@ public final class MocapAdapter {
             controller.setSetting("on_change_dimension", "split_recording");
             controller.setSetting("chat_recording", "false");
             controller.setSetting("chat_playback", "false");
-            controller.setSetting("invulnerable_playback", String.valueOf(!hurtLoopedPlayers));
-            controller.setSetting("use_creative_game_mode", String.valueOf(!hurtLoopedPlayers));
+            controller.setSetting("invulnerable_playback", String.valueOf(!hurtPastSelves));
+            controller.setSetting("use_creative_game_mode", String.valueOf(!hurtPastSelves));
             controller.setSetting("entity_tracking_distance", "1");
             controller.setSetting("hit_range", "0");
             controller.setSetting("block_initialization", "false");
@@ -75,7 +75,7 @@ public final class MocapAdapter {
 
             updateEntitiesToTrack(trackItems, entityTrackingDistance);
 
-            TimeTravel.LOOP_LOGGER.info("Mocap API controller initialized");
+            TimeTravel.TIMELINE_LOGGER.info("Mocap API controller initialized");
         });
     }
 
@@ -103,7 +103,7 @@ public final class MocapAdapter {
 
     public static void startRecording(ServerPlayer player, String playerName) {
         if (controller == null) {
-            TimeTravel.LOOP_LOGGER.error("Mocap controller not ready, cannot record for {}", playerName);
+            TimeTravel.TIMELINE_LOGGER.error("Mocap controller not ready, cannot record for {}", playerName);
             return;
         }
         MocapRecordingConfig recConfig = MocapRecordingConfig.createFromSettings();
@@ -111,7 +111,7 @@ public final class MocapAdapter {
         if (recording != null) {
             activeRecordings.put(playerName, recording);
         } else {
-            TimeTravel.LOOP_LOGGER.error("Failed to start mocap recording for player: {}", playerName);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to start mocap recording for player: {}", playerName);
         }
     }
 
@@ -131,11 +131,11 @@ public final class MocapAdapter {
             if (ctx.state == RecordingContext.State.WAITING_FOR_DECISION) {
                 result.add(new RecordingHandle(primaryRec));
             } else {
-                TimeTravel.LOOP_LOGGER.warn("Primary recording for '{}' failed to stop properly (state: {}). Skipping save.",
+                TimeTravel.TIMELINE_LOGGER.warn("Primary recording for '{}' failed to stop properly (state: {}). Skipping save.",
                         playerName, ctx.state);
             }
         } else {
-            TimeTravel.LOOP_LOGGER.warn("No primary mocap recording found for player: {}", playerName);
+            TimeTravel.TIMELINE_LOGGER.warn("No primary mocap recording found for player: {}", playerName);
         }
 
         List<RecordingContext> splitContexts = new ArrayList<>();
@@ -151,7 +151,7 @@ public final class MocapAdapter {
             if (ctx.state == RecordingContext.State.WAITING_FOR_DECISION) {
                 result.add(new RecordingHandle(ActiveRecording.get(ctx)));
             } else {
-                TimeTravel.LOOP_LOGGER.warn("Split context for {} in unexpected state: {}, skipping", playerName, ctx.state);
+                TimeTravel.TIMELINE_LOGGER.warn("Split context for {} in unexpected state: {}, skipping", playerName, ctx.state);
             }
         }
 
@@ -165,7 +165,7 @@ public final class MocapAdapter {
             MocapRecordingFile file = handle.rec.save(CommandOutput.LOGS, name);
             return file != null;
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to save recording '{}'", name, e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to save recording '{}'", name, e);
             return false;
         }
     }
@@ -196,7 +196,7 @@ public final class MocapAdapter {
             MocapRecordingFile file = MocapRecordingFile.get(CommandOutput.LOGS, name);
             if (file != null && file.exists()) file.remove(CommandOutput.LOGS);
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to delete recording {}", name, e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to delete recording {}", name, e);
         }
     }
 
@@ -208,7 +208,7 @@ public final class MocapAdapter {
             active.ctx.data.actions.removeIf(isWorldAction);
             active.ctx.data.blockActions.removeIf(isWorldAction);
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to strip block actions from a recording", e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to strip block actions from a recording", e);
         }
     }
 
@@ -218,7 +218,7 @@ public final class MocapAdapter {
 
         MocapRecordingFile file = MocapRecordingFile.get(CommandOutput.LOGS, recordingName);
         if (file == null || !file.exists()) {
-            TimeTravel.LOOP_LOGGER.warn("Recording '{}' not found - skipping clone", recordingName);
+            TimeTravel.TIMELINE_LOGGER.warn("Recording '{}' not found - skipping clone", recordingName);
             return null;
         }
 
@@ -239,7 +239,7 @@ public final class MocapAdapter {
             if (root == null) return null;
             return new ClonePlaybackImpl(root);
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to start clone '{}': {}", recordingName, e.getMessage(), e);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to start clone '{}': {}", recordingName, e.getMessage(), e);
             return null;
         }
     }

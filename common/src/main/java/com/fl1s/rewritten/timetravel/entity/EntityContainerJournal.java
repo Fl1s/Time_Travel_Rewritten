@@ -61,7 +61,7 @@ public final class EntityContainerJournal {
     private static final Map<UUID, Snap> snaps = new HashMap<>();
 
     public static void tick() {
-        if (TimeTravel.isLooping && TimeTravel.loopSceneManager != null) poll();
+        if (TimeTravel.isLooping && TimeTravel.timelineSceneManager != null) poll();
         STORE.tick(e -> apply(e.uuid, e.dim, e.newItems));
     }
 

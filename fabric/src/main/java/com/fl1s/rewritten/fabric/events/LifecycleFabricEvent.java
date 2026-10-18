@@ -1,10 +1,12 @@
 package com.fl1s.rewritten.fabric.events;
 
+import com.fl1s.rewritten.fabric.TimeTravelConfigFabric;
 import com.fl1s.rewritten.timetravel.events.LifecycleEvent;
 import net.minecraft.server.MinecraftServer;
 
 public class LifecycleFabricEvent {
     public static void onServerStart(MinecraftServer server) {
+        TimeTravelConfigFabric.loadServer(server);
         LifecycleEvent.onServerStart(server);
     }
 

@@ -91,7 +91,7 @@ public class BaseCommands {
             source.sendFailure(Component.literal("Error: server world or Motion Capture is not ready yet."));
             return 0;
         }
-        TimeTravel.startLoop();
+        TimeTravel.startTimeline();
         source.sendSuccess(() -> Component.literal("Timeline started at " + TimeFormat.clock(TimeTravel.timelineTick)), true);
         return 1;
     }
@@ -102,7 +102,7 @@ public class BaseCommands {
             source.sendFailure(Component.literal("Timeline not running"));
             return 0;
         }
-        TimeTravel.stopLoop();
+        TimeTravel.stopTimeline();
         source.sendSuccess(() -> Component.literal("Timeline stopped at " + TimeFormat.clock(TimeTravel.timelineTick)), true);
         return 1;
     }
@@ -175,7 +175,7 @@ public class BaseCommands {
 
     private static int visits(CommandContext<CommandSourceStack> context, String playerFilter) {
         List<String> lines = new java.util.ArrayList<>();
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> {
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> {
             if (playerFilter != null && !pd.getName().equalsIgnoreCase(playerFilter)) return;
             for (var v : pd.getVisits()) {
                 String how = v.arrivalDir > 0 ? " (came from the past)" : v.arrivalDir < 0 ? " (came from the future)" : "";
@@ -236,7 +236,7 @@ public class BaseCommands {
         String tracking = trackedItems.isEmpty() ? "" : "Tracking " + CommandUtils.formatList(trackedItems) + ".\n";
 
         int[] visits = {0};
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> visits[0] += pd.getVisits().size());
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> visits[0] += pd.getVisits().size());
 
         String voice = "Simple Voice Chat: " + (TimeTravel.voiceChatLoaded ? "Installed" : "Not present")
                 + " (voice of clones: " + (TimeTravel.trackVoice ? "on" : "off") + ").\n";

@@ -15,7 +15,7 @@ public class TimeTravelVoicechatPlugin {
     }
 
     public static void initialize(VoicechatApi api) {
-        TimeTravel.LOOP_LOGGER.info("Initialised VC");
+        TimeTravel.TIMELINE_LOGGER.info("Initialised VC");
     }
 
     public static void registerEvents(EventRegistration reg) {
@@ -40,7 +40,7 @@ public class TimeTravelVoicechatPlugin {
         if (player == null) return;
 
         PlayerData data =
-                TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
+                TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
 
         if (data == null || !data.getActive()) return;
 

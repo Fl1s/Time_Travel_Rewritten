@@ -70,7 +70,7 @@ public final class VehicleContainerJournal {
         if (TimeTravel.timelineTick % POLL_INTERVAL != 0) return;
 
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = level.dimension().location().toString().intern();
             for (Entity e : level.getAllEntities()) {
                 if (!isContainer(e)) continue;
                 if (!(e instanceof Container container)) continue;
@@ -139,7 +139,7 @@ public final class VehicleContainerJournal {
             }
             container.setChanged();
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply vehicle container entry for {}", e.uuid, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply vehicle container entry for {}", e.uuid, ex);
         } finally {
             applying = false;
         }
@@ -150,19 +150,14 @@ public final class VehicleContainerJournal {
     }
 
     private static void rebuildLastIndex() {
-        last.clear();
+        Map<UUID, Entry> latest = new HashMap<>();
         for (Entry e : STORE.entries()) {
-            String prev = last.get(e.uuid);
-            Entry prevEntry = null;
-            for (Entry x : STORE.entries()) {
-                if (x.uuid.equals(e.uuid) && x.tick <= e.tick) {
-                    if (prevEntry == null || x.tick > prevEntry.tick
-                            || (x.tick == prevEntry.tick && x.seq > prevEntry.seq)) {
-                        prevEntry = x;
-                    }
+            Entry p = latest.get(e.uuid);
+            if (p == null || e.tick > p.tick || (e.tick == p.tick && e.seq > p.seq)) latest.put(e.uuid, e);
                 }
-            }
-            if (prevEntry != null) last.put(e.uuid, prevEntry.newItems);
+        last.clear();
+        for (Map.Entry<UUID, Entry> en : latest.entrySet()) {
+            last.put(en.getKey(), en.getValue().newItems);
         }
     }
 

@@ -95,12 +95,12 @@ public final class AudioPersistence {
                     try {
                         Path file = baseDir.resolve(fileName(capturedIter, seg));
                         saveSegment(file, frames);
-                        TimeTravel.LOOP_LOGGER.debug(
+                        TimeTravel.TIMELINE_LOGGER.debug(
                                 "[AudioIO] Saved {} frames for {} iter {} seg {}",
                                 frames.size(), player.getName(), capturedIter, seg
                         );
                     } catch (IOException e) {
-                        TimeTravel.LOOP_LOGGER.error(
+                        TimeTravel.TIMELINE_LOGGER.error(
                                 "[AudioIO] Failed to save audio for {} iter {} seg {}",
                                 player.getName(), capturedIter, seg, e
                         );
@@ -114,7 +114,7 @@ public final class AudioPersistence {
 
     public static CompletableFuture<Void> saveAllAudio() {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(playerData ->
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(playerData ->
                 futures.add(savePlayerAudio(playerData))
         );
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
@@ -125,7 +125,7 @@ public final class AudioPersistence {
 
         return CompletableFuture.runAsync(() -> {
             if (!Files.isDirectory(playerDir)) {
-                TimeTravel.LOOP_LOGGER.debug(
+                TimeTravel.TIMELINE_LOGGER.debug(
                         "[AudioIO] No audio directory for {}", player.getName()
                 );
                 return;
@@ -138,7 +138,7 @@ public final class AudioPersistence {
                 for (Path file : stream) {
                     int[] iterSeg = parseFileName(file.getFileName().toString());
                     if (iterSeg == null) {
-                        TimeTravel.LOOP_LOGGER.warn(
+                        TimeTravel.TIMELINE_LOGGER.warn(
                                 "[AudioIO] Skipping unrecognized file: {}", file
                         );
                         continue;
@@ -150,7 +150,7 @@ public final class AudioPersistence {
                     // Don't overwrite data that's already in memory
                     Map<Integer, List<TimedAudioFrame>> existing = player.getAudio(iter);
                     if (!existing.isEmpty() && existing.containsKey(seg)) {
-                        TimeTravel.LOOP_LOGGER.debug(
+                        TimeTravel.TIMELINE_LOGGER.debug(
                                 "[AudioIO] Skipping {} iter {} seg {} (already in memory)",
                                 player.getName(), iter, seg
                         );
@@ -166,13 +166,13 @@ public final class AudioPersistence {
                     loaded++;
                 }
 
-                TimeTravel.LOOP_LOGGER.info(
+                TimeTravel.TIMELINE_LOGGER.info(
                         "[AudioIO] Loaded {} segment files for {}",
                         loaded, player.getName()
                 );
 
             } catch (IOException e) {
-                TimeTravel.LOOP_LOGGER.error(
+                TimeTravel.TIMELINE_LOGGER.error(
                         "[AudioIO] Failed to load audio for {}", player.getName(), e
                 );
             }
@@ -181,7 +181,7 @@ public final class AudioPersistence {
 
     public static CompletableFuture<Void> loadAllAudio() {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(playerData ->
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(playerData ->
                 futures.add(loadPlayerAudio(playerData))
         );
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
@@ -199,10 +199,10 @@ public final class AudioPersistence {
 
                 for (Path file : stream) {
                     Files.deleteIfExists(file);
-                    TimeTravel.LOOP_LOGGER.debug("[AudioIO] Deleted {}", file);
+                    TimeTravel.TIMELINE_LOGGER.debug("[AudioIO] Deleted {}", file);
                 }
             } catch (IOException e) {
-                TimeTravel.LOOP_LOGGER.error(
+                TimeTravel.TIMELINE_LOGGER.error(
                         "[AudioIO] Failed to delete audio for {} iter {}",
                         playerName, iteration, e
                 );
@@ -212,7 +212,7 @@ public final class AudioPersistence {
 
     public static CompletableFuture<Void> deleteAllAudio() {
         return CompletableFuture.runAsync(() -> {
-            TimeTravel.loopSceneManager.forEachRecordingPlayer(PlayerData::removeAllAudio);
+            TimeTravel.timelineSceneManager.forEachRecordingPlayer(PlayerData::removeAllAudio);
 
             Path baseDir = getBaseDir();
             if (!Files.isDirectory(baseDir)) return;
@@ -223,14 +223,14 @@ public final class AudioPersistence {
                             try {
                                 Files.deleteIfExists(path);
                             } catch (IOException e) {
-                                TimeTravel.LOOP_LOGGER.warn(
+                                TimeTravel.TIMELINE_LOGGER.warn(
                                         "[AudioIO] Failed to delete {}", path, e
                                 );
                             }
                         });
-                TimeTravel.LOOP_LOGGER.info("[AudioIO] Deleted all voice audio");
+                TimeTravel.TIMELINE_LOGGER.info("[AudioIO] Deleted all voice audio");
             } catch (IOException e) {
-                TimeTravel.LOOP_LOGGER.error(
+                TimeTravel.TIMELINE_LOGGER.error(
                         "[AudioIO] Failed to walk audio directory for deletion", e
                 );
             }
@@ -293,13 +293,13 @@ public final class AudioPersistence {
             byte[] magic = new byte[4];
             in.readFully(magic);
             if (!Arrays.equals(magic, MAGIC)) {
-                TimeTravel.LOOP_LOGGER.warn("[AudioIO] Invalid magic in file: {}", file);
+                TimeTravel.TIMELINE_LOGGER.warn("[AudioIO] Invalid magic in file: {}", file);
                 return null;
             }
 
             int version = in.readInt();
             if (version != FORMAT_VERSION) {
-                TimeTravel.LOOP_LOGGER.warn(
+                TimeTravel.TIMELINE_LOGGER.warn(
                         "[AudioIO] Unsupported format version {} in file: {}",
                         version, file
                 );
@@ -324,7 +324,7 @@ public final class AudioPersistence {
             return frames;
 
         } catch (IOException e) {
-            TimeTravel.LOOP_LOGGER.error("[AudioIO] Failed to read file: {}", file, e);
+            TimeTravel.TIMELINE_LOGGER.error("[AudioIO] Failed to read file: {}", file, e);
             return null;
         }
     }

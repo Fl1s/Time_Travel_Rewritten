@@ -163,8 +163,8 @@ public class SettingsCommands {
                 "chainDeath: " + TimeTravel.chainDeath,
                 "trackItems: " + TimeTravel.trackItems,
                 "trackChat: " + TimeTravel.trackChat,
-                "hurtClones: " + TimeTravel.hurtLoopedPlayers,
-                "showTimer: " + TimeTravel.showLoopInfo,
+                "hurtClones: " + TimeTravel.hurtPastSelves,
+                "showTimer: " + TimeTravel.showTimelineInfo,
                 "timerInTicks: " + TimeTravel.displayTimeInTicks,
                 "maxJump: " + (TimeTravel.maxJumpTicks == 0 ? "unlimited" : TimeFormat.clock(TimeTravel.maxJumpTicks)),
                 "preload: " + TimeTravel.cloneLookaheadTicks + " ticks",
@@ -182,7 +182,7 @@ public class SettingsCommands {
         String targetPlayer = StringArgumentType.getString(context, "targetPlayer");
 
         // Validate the target player exists in the loop
-        PlayerData targetData = TimeTravel.loopSceneManager.getRecordingPlayer(targetPlayer);
+        PlayerData targetData = TimeTravel.timelineSceneManager.getRecordingPlayer(targetPlayer);
         if (targetData == null) {
             source.sendFailure(Component.literal("Player '" + targetPlayer + "' is not a recording player."));
             return 0;
@@ -213,7 +213,7 @@ public class SettingsCommands {
             if (host != null && (host.equalsIgnoreCase("mineskin.org") || host.equalsIgnoreCase("minesk.in"))) {
                 finalSkin.value = testUrl.replaceFirst("^[a-zA-Z]+://", "");
                 finalSkin.skinType = SkinTypes.MINESKIN;
-                LoopCommands.LOOP_COMMANDS_LOGGER.info("Detected MineSkin URL {}", finalSkin.value);
+                TimelineCommands.TIMELINE_COMMANDS_LOGGER.info("Detected MineSkin URL {}", finalSkin.value);
             } else {
                 String[] filetypes = {".jpg", ".jpeg", ".png"};
                 boolean foundFile = false;
@@ -225,7 +225,7 @@ public class SettingsCommands {
                     File skinFile = new File(TimeTravel.worldFolder.resolve("mocap_files").resolve("skins").resolve(filename).toString());
 
                     if (skinFile.isFile()) {
-                        LoopCommands.LOOP_COMMANDS_LOGGER.info("Detected skin at {}", skinFile.getPath());
+                        TimelineCommands.TIMELINE_COMMANDS_LOGGER.info("Detected skin at {}", skinFile.getPath());
                         finalSkin.value = rawSkinValue;
                         finalSkin.skinType = SkinTypes.FILE;
                         foundFile = true;
@@ -240,12 +240,12 @@ public class SettingsCommands {
             }
         } catch (URISyntaxException | NullPointerException e) {
             // Not a URL - treat as player name skin (default)
-            LoopCommands.LOOP_COMMANDS_LOGGER.debug("Skin input '{}' is not a URL, using as player name", rawSkinValue);
+            TimelineCommands.TIMELINE_COMMANDS_LOGGER.debug("Skin input '{}' is not a URL, using as player name", rawSkinValue);
         }
 
         TimeTravel.modifyPlayerAttributes(targetPlayer, newName, finalSkin);
         source.sendSuccess(() -> Component.literal("Modified player " + targetPlayer + " -> '" + newName + "'"), true);
-        LoopCommands.LOOP_COMMANDS_LOGGER.info("Modified player {} with name {} and skin {}", targetPlayer, newName, finalSkin.value);
+        TimelineCommands.TIMELINE_COMMANDS_LOGGER.info("Modified player {} with name {} and skin {}", targetPlayer, newName, finalSkin.value);
         return 1;
     }
 }

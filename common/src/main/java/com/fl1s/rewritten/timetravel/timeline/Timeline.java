@@ -24,11 +24,11 @@ public final class Timeline {
 
     public void start() {
         if (TimeTravel.isLooping) {
-            TimeTravel.LOOP_LOGGER.info("Timeline already running");
+            TimeTravel.TIMELINE_LOGGER.info("Timeline already running");
             return;
         }
         if (!MocapAdapter.isReady()) {
-            TimeTravel.LOOP_LOGGER.error("Mocap controller is not ready yet - cannot start timeline");
+            TimeTravel.TIMELINE_LOGGER.error("Mocap controller is not ready yet - cannot start timeline");
             return;
         }
 
@@ -56,12 +56,12 @@ public final class Timeline {
         ProcessJournal.snapshotOrigins(TimeTravel.server.getPlayerList().getPlayers());
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
-        TimeTravel.LOOP_LOGGER.info("Timeline started at tick {}", TimeTravel.timelineTick);
+        TimeTravel.TIMELINE_LOGGER.info("Timeline started at tick {}", TimeTravel.timelineTick);
     }
 
     public void stop() {
         if (!TimeTravel.isLooping) return;
-        TimeTravel.LOOP_LOGGER.info("Stopping timeline at tick {}", TimeTravel.timelineTick);
+        TimeTravel.TIMELINE_LOGGER.info("Stopping timeline at tick {}", TimeTravel.timelineTick);
 
         TimelineSession s = TimeTravel.session();
         BlockJournal.flushWatches();
@@ -75,7 +75,7 @@ public final class Timeline {
         TimeTravel.isLooping = false;
         TimeTravel.config.isLooping = false;
         TimeTravel.config.timelineTick = TimeTravel.timelineTick;
-        TimeTravel.loopSceneManager.saveRecordingPlayers();
+        TimeTravel.timelineSceneManager.saveRecordingPlayers();
         VoicechatInteractionCompat.clearCooldowns();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
@@ -93,12 +93,12 @@ public final class Timeline {
         RedstoneJournal.clear();
         MobBinding.clear();
         VoicechatCompat.deleteAllAudio();
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
         TimeTravel.timelineTick = 0;
         TimeTravel.config.timelineTick = 0;
         TimeTravel.config.nextVisitId = 1;
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
         s.lastJumpOrigin = -1;
         s.clones.markNeedsRebuild();
         TimeTravel.config.save();
@@ -118,7 +118,7 @@ public final class Timeline {
         if (target == TimeTravel.timelineTick) return "Already at " + TimeFormat.clock(target);
 
         TimelineSession s = TimeTravel.session();
-        PlayerData initiatorPd = TimeTravel.loopSceneManager.getRecordingPlayer(initiatorName);
+        PlayerData initiatorPd = TimeTravel.timelineSceneManager.getRecordingPlayer(initiatorName);
         long nowServerTick = TimeTravel.server.getTickCount();
         if (initiatorPd != null) {
             if (TimeTravel.jumpCooldownTicks > 0 && initiatorPd.getLastJumpServerTick() >= 0
@@ -131,7 +131,7 @@ public final class Timeline {
         long from = TimeTravel.timelineTick;
         s.lastJumpOrigin = from;
         int dir = target > from ? 1 : -1;
-        TimeTravel.LOOP_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
+        TimeTravel.TIMELINE_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
         BlockJournal.flushWatches();
         EntityJournal.fastForward(from, target);
@@ -156,7 +156,7 @@ public final class Timeline {
         clones.flushPending();
         clones.flushSounds();
 
-        TimeTravel.loopSceneManager.saveRecordingPlayers();
+        TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
 
@@ -174,7 +174,7 @@ public final class Timeline {
             try {
                 task.run();
             } catch (Exception e) {
-                TimeTravel.LOOP_LOGGER.error("Error executing delayed task", e);
+                TimeTravel.TIMELINE_LOGGER.error("Error executing delayed task", e);
             }
         }
 

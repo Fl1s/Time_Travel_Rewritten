@@ -136,9 +136,9 @@ public final class BlockJournal {
     }
 
     public static void watch(ServerPlayer player, BlockPos center) {
-        if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         if (Clones.is(player)) return;
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
 
         ServerLevel level = player.serverLevel();
@@ -172,7 +172,7 @@ public final class BlockJournal {
         setFrames.pop();
 
         if (!changed || top.notified || applying || !TimeTravel.isLooping
-                || TimeTravel.loopSceneManager == null) return;
+                || TimeTravel.timelineSceneManager == null) return;
 
         BlockState now = level.getBlockState(pos);
         if (!now.equals(top.before)) record(level, pos, top.before, now);
@@ -192,7 +192,7 @@ public final class BlockJournal {
     }
 
     public static void onBlockChanged(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
-        if (applying || !TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (applying || !TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         SetFrame top = setFrames.peek();
         if (top != null && top.pos == pos.asLong() && top.level == level && top.requested == now) top.notified = true;
         for (SetFrame f : setFrames) {
@@ -223,7 +223,7 @@ public final class BlockJournal {
             visit = -1;
         }
 
-        String dim = level.dimension().location().toString();
+        String dim = level.dimension().location().toString().intern();
         String oldS = serialize(old);
         String newS = serialize(now);
 
@@ -273,7 +273,7 @@ public final class BlockJournal {
         for (ServerPlayer p : level.players()) {
             if (Clones.is(p)) continue;
             if (p.distanceToSqr(cx, cy, cz) > TRACK_RANGE_SQ) continue;
-            PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(p.getName().getString());
+            PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(p.getName().getString());
             if (pd != null && pd.getActive() && pd.getCurrentVisit() != null) return pd;
         }
         return null;
@@ -337,7 +337,7 @@ public final class BlockJournal {
                 level.scheduleTick(pos, state.getBlock(), state.is(BlockTags.WOODEN_BUTTONS) ? 30 : 20);
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to replay block journal entry at {} {} {}", e.x, e.y, e.z, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to replay block journal entry at {} {} {}", e.x, e.y, e.z, ex);
         }
     }
 
@@ -401,7 +401,7 @@ public final class BlockJournal {
                 markJukebox(level, pos);
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
         } finally {
             applying = false;
         }
@@ -446,7 +446,7 @@ public final class BlockJournal {
                 }
             }
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to refresh block connections", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to refresh block connections", ex);
         } finally {
             applying = false;
             touched.clear();
@@ -467,7 +467,7 @@ public final class BlockJournal {
         try {
             return BlockStateParser.parseForBlock(TimeTravel.server.registryAccess().lookupOrThrow(Registries.BLOCK), s, false).blockState();
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Cannot parse blockstate '{}'", s);
+            TimeTravel.TIMELINE_LOGGER.error("Cannot parse blockstate '{}'", s);
             return null;
         }
     }
@@ -534,7 +534,7 @@ public final class BlockJournal {
     }
 
     public static void recordContainerChange(ServerLevel level, BlockPos pos, List<ItemStack> before) {
-        if (applying || !TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (applying || !TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         if (!(level.getBlockEntity(pos) instanceof Container container)) return;
         List<ItemStack> now = copyOf(container);
         if (sameItems(before, now)) return;
@@ -586,7 +586,7 @@ public final class BlockJournal {
             CompoundTag tag = TagParser.parseTag(tagStr);
             ContainerHelper.loadAllItems(tag, list, TimeTravel.server.registryAccess());
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to parse container items", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to parse container items", ex);
         }
         return list;
     }
@@ -622,7 +622,7 @@ public final class BlockJournal {
 
             if (jukebox) markJukebox(level, pos);
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply container journal entry at {} {} {}", e.x, e.y, e.z, ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply container journal entry at {} {} {}", e.x, e.y, e.z, ex);
         }
     }
 
@@ -645,7 +645,7 @@ public final class BlockJournal {
                         level.levelEvent(LevelEvent.SOUND_STOP_JUKEBOX_SONG, pos, 0);
                     }
                 } catch (Exception ex) {
-                    TimeTravel.LOOP_LOGGER.error("Failed to sync jukebox at {}", pos, ex);
+                    TimeTravel.TIMELINE_LOGGER.error("Failed to sync jukebox at {}", pos, ex);
                 }
             }
         }

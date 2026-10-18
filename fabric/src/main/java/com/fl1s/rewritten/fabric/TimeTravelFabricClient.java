@@ -15,6 +15,8 @@ import net.minecraft.client.KeyMapping;
 public class TimeTravelFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        TimeTravelConfigFabric.loadClient();
+
         for (KeyMapping key : TimelineClient.ALL_KEYS) {
             KeyBindingHelper.registerKeyBinding(key);
         }

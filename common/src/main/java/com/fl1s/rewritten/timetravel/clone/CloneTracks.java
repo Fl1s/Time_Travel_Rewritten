@@ -49,9 +49,9 @@ public final class CloneTracks {
     }
 
     public static void onAttack(ServerPlayer player, Entity target) {
-        if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         if (Clones.is(player) || target instanceof Player) return;
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
         if (pd == null || !pd.getActive()) return;
         Visit visit = pd.getCurrentVisit();
         if (visit == null) return;
@@ -68,12 +68,19 @@ public final class CloneTracks {
     private static Visit.HealthChange healthAt(Visit visit, long now) {
         List<Visit.HealthChange> list = visit.healths;
         if (list == null || list.isEmpty()) return null;
-        Visit.HealthChange current = list.getFirst();
-        for (Visit.HealthChange change : list) {
-            if (change.tick > now) break;
-            current = change;
+        int lo = 0;
+        int hi = list.size() - 1;
+        int idx = 0;
+        while (lo <= hi) {
+            int mid = (lo + hi) >>> 1;
+            if (list.get(mid).tick <= now) {
+                idx = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
         }
-        return current;
+        return list.get(idx);
     }
 
     public static void snapHealth(Visit visit, ServerPlayer clone, long now) {
@@ -103,9 +110,9 @@ public final class CloneTracks {
     }
 
     public static void applyHealthAll() {
-        if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         long now = TimeTravel.timelineTick;
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> {
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> {
             for (Visit visit : pd.getVisits()) {
                 Entity e = TimeTravel.entityOfVisit(visit.id);
                 if (e instanceof ServerPlayer clone && Clones.is(clone) && !clone.isRemoved()) {

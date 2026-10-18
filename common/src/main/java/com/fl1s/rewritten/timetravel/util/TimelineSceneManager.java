@@ -9,13 +9,13 @@ import net.minecraft.world.phys.Vec3;
 import java.util.*;
 import java.util.function.Consumer;
 
-public class LoopSceneManager {
+public class TimelineSceneManager {
     private final TimeTravelConfig config;
     private final String scenePrefix;
     private Map<String, PlayerData> recordingPlayers;
 
     // Constructor to initialize recordingPlayers map
-    public LoopSceneManager(TimeTravelConfig config) {
+    public TimelineSceneManager(TimeTravelConfig config) {
         this.config = config;
         this.scenePrefix = config.scenePrefix;
         this.recordingPlayers = new HashMap<>();
@@ -24,7 +24,7 @@ public class LoopSceneManager {
     // Method to add a player to the recordingPlayers map
     public void addPlayer(String playerName, Vec3 joinPosition) {
         if (playerName == null || playerName.isEmpty()) {
-            TimeTravel.LOOP_LOGGER.error("Player name is null or empty. Skipping player addition.");
+            TimeTravel.TIMELINE_LOGGER.error("Player name is null or empty. Skipping player addition.");
             return;
         }
 

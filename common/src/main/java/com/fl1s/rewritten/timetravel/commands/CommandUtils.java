@@ -49,7 +49,7 @@ public class CommandUtils {
                         trackedItems.add(readableName);
                     }
                 } catch (IllegalAccessException e) {
-                    LoopCommands.LOOP_COMMANDS_LOGGER.error("Failed to access reflection field: " + field.getName(), e);
+                    TimelineCommands.TIMELINE_COMMANDS_LOGGER.error("Failed to access reflection field: " + field.getName(), e);
                 }
             }
         }
@@ -81,7 +81,7 @@ public class CommandUtils {
     }
 
     public static CompletableFuture<Suggestions> PlayerSuggestion(SuggestionsBuilder builder) {
-        return SharedSuggestionProvider.suggest(TimeTravel.loopSceneManager.getRecordingPlayers().stream().filter(PlayerData::getActive).map(PlayerData::getName), builder);
+        return SharedSuggestionProvider.suggest(TimeTravel.timelineSceneManager.getRecordingPlayers().stream().filter(PlayerData::getActive).map(PlayerData::getName), builder);
     }
 
     public static CompletableFuture<Suggestions> FileSuggestion(SuggestionsBuilder builder, Path path, boolean includeExtension) {

@@ -42,9 +42,9 @@ public class TogglesCommands {
             TimeTravel.config.trackChat = v;
         }));
 
-        togglesNode.then(toggle("hurtClones", () -> TimeTravel.hurtLoopedPlayers, v -> {
-            TimeTravel.hurtLoopedPlayers = v;
-            TimeTravel.config.hurtLoopedPlayers = v;
+        togglesNode.then(toggle("hurtClones", () -> TimeTravel.hurtPastSelves, v -> {
+            TimeTravel.hurtPastSelves = v;
+            TimeTravel.config.hurtPastSelves = v;
             MocapAdapter.setInvulnerablePlayback(!v, !v);
         }));
 
@@ -69,9 +69,9 @@ public class TogglesCommands {
             TimeTravel.broadcastSync();
         }));
 
-        togglesNode.then(toggle("showTimer", () -> TimeTravel.showLoopInfo, v -> {
-            TimeTravel.showLoopInfo = v;
-            TimeTravel.config.showLoopInfo = v;
+        togglesNode.then(toggle("showTimer", () -> TimeTravel.showTimelineInfo, v -> {
+            TimeTravel.showTimelineInfo = v;
+            TimeTravel.config.showTimelineInfo = v;
             TimeTravel.broadcastSync();
         }));
 

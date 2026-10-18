@@ -138,7 +138,7 @@ public final class MobStateJournal {
 
     private static boolean active() {
         if (applying || !TimeTravel.isLooping || ReplayState.SUPPRESS) return false;
-        return TimeTravel.loopSceneManager != null && TimeTravel.server != null;
+        return TimeTravel.timelineSceneManager != null && TimeTravel.server != null;
     }
 
     private static void record(ServerLevel level, Mob mob, long tick, int visit, String nbt) {
@@ -246,7 +246,7 @@ public final class MobStateJournal {
             for (String k : cached.getAllKeys()) tag.put(k, cached.get(k).copy());
             mob.load(tag);
         } catch (Exception ex) {
-            TimeTravel.LOOP_LOGGER.error("Failed to apply mob state entry", ex);
+            TimeTravel.TIMELINE_LOGGER.error("Failed to apply mob state entry", ex);
         } finally {
             applying = false;
         }
