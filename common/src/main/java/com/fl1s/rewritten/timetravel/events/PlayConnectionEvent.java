@@ -13,12 +13,12 @@ public class PlayConnectionEvent {
         ServerPlayer player = handler.player;
         String playerName = player.getName().getString();
 
-        PlayerData existingData = TimeTravel.loopSceneManager.getRecordingPlayer(playerName);
+        PlayerData existingData = TimeTravel.timelineSceneManager.getRecordingPlayer(playerName);
         if (existingData != null) {
             existingData.setActive(true);
         } else {
-            TimeTravel.loopSceneManager.addPlayer(playerName, player.position());
-            existingData = TimeTravel.loopSceneManager.getRecordingPlayer(playerName);
+            TimeTravel.timelineSceneManager.addPlayer(playerName, player.position());
+            existingData = TimeTravel.timelineSceneManager.getRecordingPlayer(playerName);
         }
         final PlayerData playerData = existingData;
 
@@ -43,7 +43,7 @@ public class PlayConnectionEvent {
         ServerPlayer player = handler.player;
         String playerName = player.getName().getString();
 
-        PlayerData playerData = TimeTravel.loopSceneManager.getRecordingPlayer(playerName);
+        PlayerData playerData = TimeTravel.timelineSceneManager.getRecordingPlayer(playerName);
         TimeTravel.onPlayerLeft(playerData);
 
         if (playerData != null) {

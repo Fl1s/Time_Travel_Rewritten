@@ -136,9 +136,9 @@ public final class BlockJournal {
     }
 
     public static void watch(ServerPlayer player, BlockPos center) {
-        if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         if (Clones.is(player)) return;
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
 
         ServerLevel level = player.serverLevel();
@@ -172,7 +172,7 @@ public final class BlockJournal {
         setFrames.pop();
 
         if (!changed || top.notified || applying || !TimeTravel.isLooping
-                || TimeTravel.loopSceneManager == null) return;
+                || TimeTravel.timelineSceneManager == null) return;
 
         BlockState now = level.getBlockState(pos);
         if (!now.equals(top.before)) record(level, pos, top.before, now);
@@ -192,7 +192,7 @@ public final class BlockJournal {
     }
 
     public static void onBlockChanged(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
-        if (applying || !TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (applying || !TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         SetFrame top = setFrames.peek();
         if (top != null && top.pos == pos.asLong() && top.level == level && top.requested == now) top.notified = true;
         for (SetFrame f : setFrames) {
@@ -273,7 +273,7 @@ public final class BlockJournal {
         for (ServerPlayer p : level.players()) {
             if (Clones.is(p)) continue;
             if (p.distanceToSqr(cx, cy, cz) > TRACK_RANGE_SQ) continue;
-            PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(p.getName().getString());
+            PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(p.getName().getString());
             if (pd != null && pd.getActive() && pd.getCurrentVisit() != null) return pd;
         }
         return null;
@@ -534,7 +534,7 @@ public final class BlockJournal {
     }
 
     public static void recordContainerChange(ServerLevel level, BlockPos pos, List<ItemStack> before) {
-        if (applying || !TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (applying || !TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         if (!(level.getBlockEntity(pos) instanceof Container container)) return;
         List<ItemStack> now = copyOf(container);
         if (sameItems(before, now)) return;

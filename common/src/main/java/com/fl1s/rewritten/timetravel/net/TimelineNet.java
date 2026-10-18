@@ -38,27 +38,27 @@ public final class TimelineNet {
         }
 
         if (TimeTravel.isLooping) {
-            TimeTravel.stopLoop();
+            TimeTravel.stopTimeline();
             player.displayClientMessage(Component.translatable("hud.timetravel_rewritten.panel_off"), true);
         } else {
             if (!MocapAdapter.isReady() || TimeTravel.serverLevel == null) {
                 player.displayClientMessage(Component.literal("Motion Capture is not ready yet"), true);
                 return;
             }
-            TimeTravel.startLoop();
+            TimeTravel.startTimeline();
             player.displayClientMessage(Component.translatable("hud.timetravel_rewritten.panel_on"), true);
         }
     }
 
     public static void handleJumpRequest(ServerPlayer player, long targetTick) {
-        if (TimeTravel.config == null || TimeTravel.loopSceneManager == null) return;
+        if (TimeTravel.config == null || TimeTravel.timelineSceneManager == null) return;
 
         if (TimeTravel.jumpRequiresOp && !player.hasPermissions(2)) {
             player.displayClientMessage(Component.translatable("message.timetravel_rewritten.no_permission"), true);
             return;
         }
 
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
 
         String error = TimeTravel.jumpTo(targetTick, player.getName().getString());

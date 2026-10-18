@@ -81,7 +81,7 @@ public final class VisitManager {
     }
 
     public void endAllVisits(int departDir) {
-        for (PlayerData pd : new ArrayList<>(TimeTravel.loopSceneManager.getRecordingPlayers())) {
+        for (PlayerData pd : new ArrayList<>(TimeTravel.timelineSceneManager.getRecordingPlayers())) {
             if (pd.getCurrentVisit() != null) endVisit(pd, departDir);
         }
     }

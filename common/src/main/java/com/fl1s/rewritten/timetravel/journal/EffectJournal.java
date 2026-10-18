@@ -114,7 +114,7 @@ public final class EffectJournal {
     }
 
     private static PlayerData recorder(ServerLevel level, Player except, double x, double y, double z) {
-        if (TimeTravel.loopSceneManager == null) return null;
+        if (TimeTravel.timelineSceneManager == null) return null;
         ServerPlayer sp = null;
         if (except != null) {
             if (!(except instanceof ServerPlayer p) || isClone(p)) return null;
@@ -129,7 +129,7 @@ public final class EffectJournal {
             }
         }
         if (sp == null) return null;
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(sp.getName().getString());
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(sp.getName().getString());
         if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return null;
         return pd;
     }

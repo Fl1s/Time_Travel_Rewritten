@@ -5,7 +5,7 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.data.*;
 import com.fl1s.rewritten.timetravel.mocap.ClonePlayback;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
-import com.fl1s.rewritten.timetravel.util.LoopSceneManager;
+import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -90,7 +90,7 @@ public final class CloneManager {
         pending.clear();
         pendingSounds.clear();
 
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         final long now = TimeTravel.timelineTick;
         if (scene == null) {
             needsRebuild = false;
@@ -205,7 +205,7 @@ public final class CloneManager {
     }
 
     private void start(PendingPiece piece, int delayTicks) {
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         PlayerData pd = scene == null ? null : scene.getRecordingPlayer(piece.playerName());
         if (pd == null) return;
 
@@ -307,7 +307,7 @@ public final class CloneManager {
             }
             return -1;
         }
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         if (scene == null) return -1;
         PlayerData pd = scene.getRecordingPlayer(player.getGameProfile().getName());
         if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return -1;
@@ -338,7 +338,7 @@ public final class CloneManager {
             Entity entity = clone.fx.entity();
             if (entity != null && !entity.isRemoved()) return entity;
         }
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         if (scene == null || TimeTravel.server == null) return null;
         for (ServerPlayer player : TimeTravel.server.getPlayerList().getPlayers()) {
             if (Clones.is(player)) continue;
@@ -351,7 +351,7 @@ public final class CloneManager {
     }
 
     public boolean visitPending(int visitId) {
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         if (scene == null) return false;
         for (PlayerData pd : scene.getRecordingPlayers()) {
             for (Visit v : pd.getVisits()) {
@@ -365,7 +365,7 @@ public final class CloneManager {
     }
 
     public boolean visitKnown(int visitId) {
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         if (scene == null) return false;
         for (PlayerData pd : scene.getRecordingPlayers()) {
             if (pd.getCurrentVisit() != null && pd.getCurrentVisit().id == visitId) return true;

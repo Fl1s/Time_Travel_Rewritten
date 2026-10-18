@@ -114,7 +114,7 @@ public final class AudioPersistence {
 
     public static CompletableFuture<Void> saveAllAudio() {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(playerData ->
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(playerData ->
                 futures.add(savePlayerAudio(playerData))
         );
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
@@ -181,7 +181,7 @@ public final class AudioPersistence {
 
     public static CompletableFuture<Void> loadAllAudio() {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(playerData ->
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(playerData ->
                 futures.add(loadPlayerAudio(playerData))
         );
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
@@ -212,7 +212,7 @@ public final class AudioPersistence {
 
     public static CompletableFuture<Void> deleteAllAudio() {
         return CompletableFuture.runAsync(() -> {
-            TimeTravel.loopSceneManager.forEachRecordingPlayer(PlayerData::removeAllAudio);
+            TimeTravel.timelineSceneManager.forEachRecordingPlayer(PlayerData::removeAllAudio);
 
             Path baseDir = getBaseDir();
             if (!Files.isDirectory(baseDir)) return;

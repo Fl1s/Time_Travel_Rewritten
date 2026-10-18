@@ -9,7 +9,7 @@ import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.timeline.ChatTimeline;
 import com.fl1s.rewritten.timetravel.data.Clones;
-import com.fl1s.rewritten.timetravel.util.LoopSceneManager;
+import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -40,7 +40,7 @@ public final class DeathChain {
     }
 
     private void pollDeaths() {
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         if (scene == null || TimeTravel.server == null) return;
         for (ServerPlayer player : TimeTravel.server.getPlayerList().getPlayers()) {
             if (Clones.is(player)) continue;
@@ -82,7 +82,7 @@ public final class DeathChain {
     }
 
     private boolean isRecordedDeath(String playerName, int visitId) {
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         if (scene == null) return true;
         PlayerData pd = scene.getRecordingPlayer(playerName);
         if (pd == null) return true;
@@ -97,7 +97,7 @@ public final class DeathChain {
     }
 
     private void collapseChain(String playerName, int fromVisitId) {
-        LoopSceneManager scene = TimeTravel.loopSceneManager;
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         if (scene == null || TimeTravel.server == null) return;
         PlayerData pd = scene.getRecordingPlayer(playerName);
         if (pd == null) return;

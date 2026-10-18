@@ -8,8 +8,8 @@ import net.minecraft.commands.Commands;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class LoopCommands {
-    public static final Logger TIMELINE_COMMANDS_LOGGER = LoggerFactory.getLogger("LoopCommands");
+public class TimelineCommands {
+    public static final Logger TIMELINE_COMMANDS_LOGGER = LoggerFactory.getLogger("TimelineCommands");
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> commandBuilder = Commands.literal("timetravel");

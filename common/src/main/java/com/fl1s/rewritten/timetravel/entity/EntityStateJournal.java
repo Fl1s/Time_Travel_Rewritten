@@ -107,7 +107,7 @@ public final class EntityStateJournal {
 
     private static ServerLevel activeLevel(Entity entity) {
         if (applying || !TimeTravel.isLooping || ReplayState.SUPPRESS) return null;
-        if (TimeTravel.loopSceneManager == null || TimeTravel.server == null) return null;
+        if (TimeTravel.timelineSceneManager == null || TimeTravel.server == null) return null;
         return entity.level() instanceof ServerLevel level ? level : null;
     }
 
@@ -138,7 +138,7 @@ public final class EntityStateJournal {
     public static void onSpawn(ServerLevel level, Entity entity) {
         if (!isTracked(entity)) return;
         if (applying || !TimeTravel.isLooping || ReplayState.SUPPRESS) return;
-        if (TimeTravel.loopSceneManager == null) return;
+        if (TimeTravel.timelineSceneManager == null) return;
         if (byUuid.containsKey(entity.getUUID())) return;
         record(level, entity, TimeTravel.timelineTick, visitAt(level, entity.blockPosition()));
     }

@@ -31,7 +31,7 @@ import java.util.*;
 /**
  * Dense per-tick trail of every mob within {@code entityTrackingDistance} of
  * any player (including clones), plus a coarse per-mob seed sample captured at
- * loop start.
+ * timeline start.
  */
 public final class MobTrailJournal {
     private MobTrailJournal() {

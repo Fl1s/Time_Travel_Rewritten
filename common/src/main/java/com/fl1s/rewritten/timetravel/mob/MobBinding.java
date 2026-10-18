@@ -25,7 +25,7 @@ public final class MobBinding {
     private static boolean dirty = false;
 
     public static boolean allows(Mob mob, LivingEntity target) {
-        if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.loopSceneManager == null) return true;
+        if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.timelineSceneManager == null) return true;
         if (MobSpawnJournal.isOutOfTime(mob.getUUID()) && !MobTrailJournal.isPuppeted(mob)) return !Clones.is(target);
         int visit = TimeTravel.visitIdOf(target);
         if (visit < 0) return true;
@@ -43,7 +43,7 @@ public final class MobBinding {
 
     public static void onHurt(Mob mob, Entity attacker) {
         if (MobSpawnJournal.isOutOfTime(mob.getUUID()) && !MobTrailJournal.isPuppeted(mob)) return;
-        if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.timelineSceneManager == null) return;
         if (!(mob.level() instanceof ServerLevel)) return;
         int visit = TimeTravel.visitIdOf(attacker);
         if (visit >= 0) bind(mob, visit);

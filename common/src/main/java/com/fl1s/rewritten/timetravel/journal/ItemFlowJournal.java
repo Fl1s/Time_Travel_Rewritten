@@ -137,8 +137,8 @@ public final class ItemFlowJournal {
         if (!(item.level() instanceof ServerLevel level)) return;
         if (!(player instanceof ServerPlayer sp)) return;
         if (Clones.is(sp)) return;
-        if (TimeTravel.loopSceneManager == null) return;
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(sp.getName().getString());
+        if (TimeTravel.timelineSceneManager == null) return;
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(sp.getName().getString());
         if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return;
 
         Entry e = new Entry();

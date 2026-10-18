@@ -49,9 +49,9 @@ public final class CloneTracks {
     }
 
     public static void onAttack(ServerPlayer player, Entity target) {
-        if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         if (Clones.is(player) || target instanceof Player) return;
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
         if (pd == null || !pd.getActive()) return;
         Visit visit = pd.getCurrentVisit();
         if (visit == null) return;
@@ -110,9 +110,9 @@ public final class CloneTracks {
     }
 
     public static void applyHealthAll() {
-        if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         long now = TimeTravel.timelineTick;
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> {
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> {
             for (Visit visit : pd.getVisits()) {
                 Entity e = TimeTravel.entityOfVisit(visit.id);
                 if (e instanceof ServerPlayer clone && Clones.is(clone) && !clone.isRemoved()) {

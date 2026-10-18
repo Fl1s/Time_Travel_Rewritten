@@ -5,7 +5,7 @@ import com.fl1s.rewritten.fabric.events.PlayConnectionFabricEvent;
 import com.fl1s.rewritten.fabric.events.PlayerFabricEvent;
 import com.fl1s.rewritten.fabric.events.TickFabricEvent;
 import com.fl1s.rewritten.timetravel.*;
-import com.fl1s.rewritten.timetravel.commands.LoopCommands;
+import com.fl1s.rewritten.timetravel.commands.TimelineCommands;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.mob.MobStateJournal;
@@ -100,7 +100,7 @@ public class TimeTravelFabric implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             // Only register commands on the logical server
             if (environment.includeDedicated || environment.includeIntegrated) {
-                LoopCommands.register(dispatcher);
+                TimelineCommands.register(dispatcher);
             }
         });
 

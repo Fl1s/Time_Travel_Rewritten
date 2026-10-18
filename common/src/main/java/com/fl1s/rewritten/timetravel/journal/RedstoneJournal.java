@@ -53,7 +53,7 @@ public final class RedstoneJournal {
         if (restoring) return;
         if (!TimeTravel.isLooping) return;
         if (!(level instanceof ServerLevel serverLevel)) return;
-        if (TimeTravel.loopSceneManager == null) return;
+        if (TimeTravel.timelineSceneManager == null) return;
 
         PlayerData pd = BlockJournal.nearestRecorder(serverLevel, pos);
         if (pd == null || pd.getCurrentVisit() == null) return;

@@ -36,11 +36,11 @@ public final class AdvancementTimeline {
     }
 
     public static void onAwarded(ServerPlayer player, AdvancementHolder holder) {
-        if (!TimeTravel.isLooping || !TimeTravel.trackChat || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || !TimeTravel.trackChat || TimeTravel.timelineSceneManager == null) return;
         if (isClone(player)) return;
         DisplayInfo display = holder.value().display().orElse(null);
         if (display == null || !display.shouldAnnounceChat()) return;
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return;
 
         Entry e = new Entry();

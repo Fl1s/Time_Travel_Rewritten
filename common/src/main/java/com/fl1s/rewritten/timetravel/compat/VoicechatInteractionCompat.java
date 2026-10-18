@@ -108,7 +108,7 @@ public final class VoicechatInteractionCompat {
         entity.gameEvent(voiceEvent);
     }
 
-    /** Clears all per-entity cooldowns. Call on loop stop or server shutdown. */
+    /** Clears all per-entity cooldowns. Call on /tt stop or server shutdown. */
     public static void clearCooldowns() {
         cooldowns.clear();
     }

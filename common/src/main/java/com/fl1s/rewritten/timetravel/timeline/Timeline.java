@@ -75,7 +75,7 @@ public final class Timeline {
         TimeTravel.isLooping = false;
         TimeTravel.config.isLooping = false;
         TimeTravel.config.timelineTick = TimeTravel.timelineTick;
-        TimeTravel.loopSceneManager.saveRecordingPlayers();
+        TimeTravel.timelineSceneManager.saveRecordingPlayers();
         VoicechatInteractionCompat.clearCooldowns();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
@@ -93,12 +93,12 @@ public final class Timeline {
         RedstoneJournal.clear();
         MobBinding.clear();
         VoicechatCompat.deleteAllAudio();
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
         TimeTravel.timelineTick = 0;
         TimeTravel.config.timelineTick = 0;
         TimeTravel.config.nextVisitId = 1;
-        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
         s.lastJumpOrigin = -1;
         s.clones.markNeedsRebuild();
         TimeTravel.config.save();
@@ -118,7 +118,7 @@ public final class Timeline {
         if (target == TimeTravel.timelineTick) return "Already at " + TimeFormat.clock(target);
 
         TimelineSession s = TimeTravel.session();
-        PlayerData initiatorPd = TimeTravel.loopSceneManager.getRecordingPlayer(initiatorName);
+        PlayerData initiatorPd = TimeTravel.timelineSceneManager.getRecordingPlayer(initiatorName);
         long nowServerTick = TimeTravel.server.getTickCount();
         if (initiatorPd != null) {
             if (TimeTravel.jumpCooldownTicks > 0 && initiatorPd.getLastJumpServerTick() >= 0
@@ -156,7 +156,7 @@ public final class Timeline {
         clones.flushPending();
         clones.flushSounds();
 
-        TimeTravel.loopSceneManager.saveRecordingPlayers();
+        TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
 

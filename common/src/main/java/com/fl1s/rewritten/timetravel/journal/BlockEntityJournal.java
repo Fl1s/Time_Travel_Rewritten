@@ -147,7 +147,7 @@ public final class BlockEntityJournal {
         if (!TimeTravel.isLooping) return;
         if (!(be.getLevel() instanceof ServerLevel level)) return;
         if (!isTracked(be)) return;
-        if (TimeTravel.loopSceneManager == null) return;
+        if (TimeTravel.timelineSceneManager == null) return;
 
         BlockPos pos = be.getBlockPos();
         if (!level.isLoaded(pos)) return;

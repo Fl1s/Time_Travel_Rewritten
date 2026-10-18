@@ -89,7 +89,7 @@ public final class EntityJournal {
     }
 
     public static void onSpawn(ServerLevel level, Entity entity) {
-        if (!TimeTravel.isLooping || replaying || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || replaying || TimeTravel.timelineSceneManager == null) return;
         boolean orb = entity instanceof ExperienceOrb;
         if (ItemFlowJournal.isApplying()) return;
         if (ItemFlowJournal.isCapturingDeath() && !orb) return;

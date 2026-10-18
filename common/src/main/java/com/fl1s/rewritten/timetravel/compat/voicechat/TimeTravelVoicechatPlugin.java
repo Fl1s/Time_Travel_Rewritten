@@ -40,7 +40,7 @@ public class TimeTravelVoicechatPlugin {
         if (player == null) return;
 
         PlayerData data =
-                TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
+                TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
 
         if (data == null || !data.getActive()) return;
 

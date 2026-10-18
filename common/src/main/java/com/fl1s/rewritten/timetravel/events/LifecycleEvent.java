@@ -6,7 +6,7 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.journal.ProcessJournal;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
-import com.fl1s.rewritten.timetravel.util.LoopSceneManager;
+import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -18,7 +18,7 @@ public class LifecycleEvent {
         ProcessJournal.clear();
         TimeTravel.worldFolder = server.getWorldPath(LevelResource.ROOT);
         TimeTravel.config = TimeTravelConfig.load(TimeTravel.worldFolder);
-        TimeTravel.loopSceneManager = new LoopSceneManager(TimeTravel.config);
+        TimeTravel.timelineSceneManager = new TimelineSceneManager(TimeTravel.config);
 
         TimeTravelConfig c = TimeTravel.config;
         TimeTravel.isLooping = c.isLooping;
@@ -45,7 +45,7 @@ public class LifecycleEvent {
         TimeTravel.showPlayerVoiceIcon = c.showPlayerVoiceIcon;
         TimeTravel.trackVoice = c.trackVoice;
 
-        TimeTravel.loopSceneManager.setRecordingPlayers(c.recordingPlayers);
+        TimeTravel.timelineSceneManager.setRecordingPlayers(c.recordingPlayers);
 
         TimeTravel.server = server;
         TimeTravel.serverLevel = server.overworld();

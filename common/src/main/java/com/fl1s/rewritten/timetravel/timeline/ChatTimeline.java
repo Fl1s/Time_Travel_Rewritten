@@ -36,9 +36,9 @@ public final class ChatTimeline {
     }
 
     public static void onPlayerChat(ServerPlayer player, String text) {
-        if (!TimeTravel.isLooping || !TimeTravel.trackChat || TimeTravel.loopSceneManager == null) return;
+        if (!TimeTravel.isLooping || !TimeTravel.trackChat || TimeTravel.timelineSceneManager == null) return;
         if (Clones.is(player)) return;
-        PlayerData pd = TimeTravel.loopSceneManager.getRecordingPlayer(player.getName().getString());
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
         Entry e = new Entry();
         e.tick = TimeTravel.timelineTick;

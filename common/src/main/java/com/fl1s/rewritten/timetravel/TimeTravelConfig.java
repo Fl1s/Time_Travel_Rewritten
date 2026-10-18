@@ -14,7 +14,7 @@ import java.util.Map;
 
 public class TimeTravelConfig {
 
-    public String scenePrefix = "loop_scene";
+    public String scenePrefix = "timeline_scene";
     public boolean firstStart = true;
     public boolean isLooping = false;
     public long timelineTick = 0;

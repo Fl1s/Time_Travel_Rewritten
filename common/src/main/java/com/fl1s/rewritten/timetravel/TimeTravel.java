@@ -14,7 +14,7 @@ import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Skin;
-import com.fl1s.rewritten.timetravel.util.LoopSceneManager;
+import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -65,7 +65,7 @@ public class TimeTravel {
 	public static boolean trackVoice;
 
 	public static TimeTravelConfig config;
-	public static LoopSceneManager loopSceneManager;
+	public static TimelineSceneManager timelineSceneManager;
 	public static Path worldFolder;
 
 	public static int cloneLookaheadTicks = 0;
@@ -102,11 +102,11 @@ public class TimeTravel {
 	}
 
 	//timeline contol
-	public static void startLoop() {
+	public static void startTimeline() {
 		session().timeline.start();
 	}
 
-	public static void stopLoop() {
+	public static void stopTimeline() {
 		session().timeline.stop();
 	}
 
@@ -125,7 +125,7 @@ public class TimeTravel {
 	public static void handlePlayerDimensionChange(ServerPlayer player) {
 		if (!isLooping) return;
 
-		PlayerData pd = loopSceneManager.getRecordingPlayer(player.getName().getString());
+		PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getName().getString());
 		if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return;
 
 		ResourceKey<Level> currentDimension = player.level().dimension();
@@ -156,7 +156,7 @@ public class TimeTravel {
 	public static void onPlayerLeft(PlayerData pd) {
 		if (isLooping && pd != null && pd.getCurrentVisit() != null) {
 			session().visits.endVisit(pd);
-			loopSceneManager.saveRecordingPlayers();
+			timelineSceneManager.saveRecordingPlayers();
 			config.save();
 		}
 	}
@@ -166,7 +166,7 @@ public class TimeTravel {
 			MobTrailJournal.releaseAll();
 			session().visits.endAllVisits();
 			session().clones.stopAll();
-			loopSceneManager.saveRecordingPlayers();
+			timelineSceneManager.saveRecordingPlayers();
 			config.isLooping = true;
 			config.timelineTick = timelineTick;
 		}
@@ -180,7 +180,7 @@ public class TimeTravel {
 	public static void forEachOnlineRecorded(BiConsumer<ServerPlayer, PlayerData> action) {
 		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
 			if (isClone(player)) continue;
-			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getName().getString());
+			PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getName().getString());
 			if (pd == null || !pd.getActive()) continue;
 			action.accept(player, pd);
 		}
@@ -190,7 +190,7 @@ public class TimeTravel {
 		int count = 0;
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			if (isClone(player)) continue;
-			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+			PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
 			if (pd != null && pd.getActive()) count++;
 		}
 		return count;
@@ -244,7 +244,7 @@ public class TimeTravel {
 	}
 
 	public static void modifyPlayerAttributes(String targetPlayerName, String newPlayerNickname, Skin newSkin) {
-		PlayerData targetPlayer = loopSceneManager.getRecordingPlayer(targetPlayerName);
+		PlayerData targetPlayer = timelineSceneManager.getRecordingPlayer(targetPlayerName);
 		if (targetPlayer == null) {
 			TIMELINE_LOGGER.error("Cannot modify attributes: player '{}' not found in recording players", targetPlayerName);
 			return;
@@ -264,7 +264,7 @@ public class TimeTravel {
 		if (!Files.isDirectory(recordingsDir)) return;
 
 		Set<String> prefixes = new HashSet<>();
-		loopSceneManager.forEachRecordingPlayer(pd -> {
+		timelineSceneManager.forEachRecordingPlayer(pd -> {
 			prefixes.add(pd.getName().toLowerCase() + "_v");
 			prefixes.add(pd.getName().toLowerCase() + "_loop");
 		});
