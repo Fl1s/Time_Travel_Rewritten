@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Added
+
+ - Mod config
+
+### Changed
+
+ - More accurate variable and method namings
+ - Optimized past selves, blocks, items, redstone, mobs, vehicle tracks
+
+### Fixed
+
+ - Items restoration when jumping forward after an item destruction event
+
 ## [1.21.1-0.10.7] - 2026-11-18
 
 ### Added

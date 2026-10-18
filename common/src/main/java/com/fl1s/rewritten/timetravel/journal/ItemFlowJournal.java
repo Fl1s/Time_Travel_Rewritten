@@ -32,6 +32,7 @@ public final class ItemFlowJournal {
 
     public static final int KIND_PICKUP = 0;
     public static final int KIND_DROP = 1;
+    public static final int KIND_DESTROY = 2;
     private static final int ITEM_LIFESPAN = 6000;
     public static final class Entry {
         public int kind;
@@ -129,6 +130,41 @@ public final class ItemFlowJournal {
         e.itemUuid = item.getUUID();
         STORE.entries().add(e);
         tracked.add(e.itemUuid);
+        STORE.markDirty();
+    }
+
+    public static void recordDestroy(ItemEntity item) {
+        if (!TimeTravel.isLooping || applying || ReplayState.SUPPRESS) return;
+        if (!(item.level() instanceof ServerLevel level)) return;
+        UUID id = item.getUUID();
+        if (!tracked.contains(id)) return;
+
+        Entry drop = null;
+        for (Entry e : STORE.entries()) {
+            if (e.kind == KIND_DROP && id.equals(e.itemUuid)) {
+                if (drop == null || e.tick < drop.tick) drop = e;
+            }
+        }
+        if (drop == null) return;
+
+        for (Entry e : STORE.entries()) {
+            if (e.kind == KIND_PICKUP && id.equals(e.itemUuid)) return;
+            if (e.kind == KIND_DESTROY && id.equals(e.itemUuid)) return;
+        }
+
+        Entry e = new Entry();
+        e.kind = KIND_DESTROY;
+        e.tick = TimeTravel.timelineTick;
+        e.seq = STORE.nextSeq();
+        e.visit = drop.visit;
+        e.player = "";
+        e.dim = drop.dim;
+        e.x = item.getX();
+        e.y = item.getY();
+        e.z = item.getZ();
+        e.stack = drop.stack;
+        e.itemUuid = id;
+        STORE.entries().add(e);
         STORE.markDirty();
     }
 
@@ -235,12 +271,11 @@ public final class ItemFlowJournal {
         return Long.MIN_VALUE;
     }
 
-    public static void onJump(long from, long to) {
+    public static void onJump(long from, long target) {
         if (TimeTravel.server == null) { rebuildUpcoming(); return; }
         toDiscard.clear();
 
-        if (to < from) {
-            long target = to;
+        if (target < from) {
             for (Entry e : STORE.entries()) {
                 if (e.tick <= target) continue;
                 ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -271,22 +306,55 @@ public final class ItemFlowJournal {
                     } finally {
                         applying = false;
                     }
+                } else if (e.kind == KIND_DESTROY) {
+                    Entry drop = null;
+                    for (Entry d : STORE.entries()) {
+                        if (d.kind == KIND_DROP && e.itemUuid.equals(d.itemUuid) && d.tick <= target) {
+                            if (drop == null || d.tick < drop.tick) drop = d;
+                        }
+                    }
+                    if (drop == null) continue;
+                    long age = target - drop.tick;
+                    if (age < 0 || age >= ITEM_LIFESPAN) continue;
+                    Entity item = findLoaded(level, e.itemUuid);
+                    if (item != null && !item.isRemoved()) continue;
+                    applying = true;
+                    try {
+                        ItemStack stack = parseStack(drop.stack);
+                        if (!stack.isEmpty()) {
+                            ItemEntity ni = new ItemEntity(level, drop.x, drop.y, drop.z, stack);
+                            ni.setUUID(drop.itemUuid);
+                            ni.setDeltaMovement(Vec3.ZERO);
+                            ni.setPickUpDelay(10);
+                            ((ItemEntityAccessor) ni).tt$setAge((int) age);
+                            level.addFreshEntity(ni);
+                        }
+                    } catch (Exception ex) {
+                        TimeTravel.TIMELINE_LOGGER.error("Failed to restore destroyed item", ex);
+                    } finally {
+                        applying = false;
+                    }
                 }
             }
-        } else if (to > from) {
+        } else if (target > from) {
             Map<UUID, Entry> earliestDrop = new HashMap<>();
             Map<UUID, Long> earliestPickup = new HashMap<>();
+            Map<UUID, Long> earliestDestroy = new HashMap<>();
             for (Entry e : STORE.entries()) {
-                if (e.tick > to) continue;
+                if (e.tick > target) continue;
                 if (e.kind == KIND_DROP) {
                     earliestDrop.merge(e.itemUuid, e, (a, b) -> a.tick <= b.tick ? a : b);
                 } else if (e.kind == KIND_PICKUP) {
                     earliestPickup.merge(e.itemUuid, e.tick, Math::min);
+                } else if (e.kind == KIND_DESTROY) {
+                    earliestDestroy.merge(e.itemUuid, e.tick, Math::min);
                 }
             }
             for (Entry drop : earliestDrop.values()) {
                 if (earliestPickup.containsKey(drop.itemUuid)) continue;
-                long age = to - drop.tick;
+                Long destroyTick = earliestDestroy.get(drop.itemUuid);
+                if (destroyTick != null && destroyTick <= target) continue;
+                long age = target - drop.tick;
                 if (age >= ITEM_LIFESPAN) continue;
                 ServerLevel level = TimeTravel.server.getLevel(Levels.key(drop.dim));
                 if (level == null) continue;
@@ -294,11 +362,18 @@ public final class ItemFlowJournal {
                 replayDrop(level, drop, (int) age);
             }
             for (Entry e : STORE.entries()) {
-                if (e.kind != KIND_PICKUP || e.tick > to) continue;
+                if (e.kind != KIND_PICKUP || e.tick > target) continue;
                 ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
                 if (level == null) continue;
                 Entity item = findLoaded(level, e.itemUuid);
                 if (item == null || item.isRemoved()) item = findNearby(level, e);
+                if (item != null && !item.isRemoved()) item.discard();
+            }
+            for (Entry e : STORE.entries()) {
+                if (e.kind != KIND_DESTROY || e.tick > target) continue;
+                ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
+                if (level == null) continue;
+                Entity item = findLoaded(level, e.itemUuid);
                 if (item != null && !item.isRemoved()) item.discard();
             }
         }
