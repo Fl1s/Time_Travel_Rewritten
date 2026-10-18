@@ -244,6 +244,14 @@ public final class ItemFlowJournal {
                 if (findLoaded(level, drop.itemUuid) != null) continue;
                 replayDrop(level, drop, (int) age);
             }
+            for (Entry e : STORE.entries()) {
+                if (e.kind != KIND_PICKUP || e.tick <= from || e.tick > to) continue;
+                ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
+                if (level == null) continue;
+                Entity item = findLoaded(level, e.itemUuid);
+                if (item == null || item.isRemoved()) item = findNearby(level, e);
+                if (item != null && !item.isRemoved()) item.discard();
+            }
         }
         rebuildUpcoming();
     }

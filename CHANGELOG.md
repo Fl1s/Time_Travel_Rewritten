@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.10.6] - 2026-11-18
+
+### Added
+
+ - Past selves now tracking player's hp
+
+### Fixed
+
+ - Mobs loot did not disappear if the player skipped the moment in time at which they were picked up
+ - Creeper's explosion ignores past selves shields
+ - Reduced chance of time desync of mobTrailJournal
+
 ## [1.21.1-0.10.5] - 2026-11-18
 
 ### Added

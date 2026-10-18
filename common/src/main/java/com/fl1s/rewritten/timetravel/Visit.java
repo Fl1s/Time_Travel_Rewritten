@@ -24,6 +24,8 @@ public class Visit {
     public transient int lastMode = -1;
     public transient boolean lastFlying;
     public transient String lastVehicle;
+    public List<HealthChange> healths = new ArrayList<>();
+    public float lastHealth = -1.0f;
 
     public Visit() {}
 
@@ -41,6 +43,16 @@ public class Visit {
         public Piece(String recording, long startTick) {
             this.recording = recording;
             this.startTick = startTick;
+        }
+    }
+
+    public static final class HealthChange {
+        public long tick;
+        public float health;
+
+        public HealthChange(long tick, float health) {
+            this.tick = tick;
+            this.health = health;
         }
     }
 

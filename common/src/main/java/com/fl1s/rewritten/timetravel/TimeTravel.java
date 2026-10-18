@@ -156,6 +156,7 @@ public class TimeTravel {
 
 	public static void onServerStopping() {
 		if (isLooping) {
+			MobTrailJournal.releaseAll();
 			session().visits.endAllVisits();
 			session().ghosts.stopAll();
 			loopSceneManager.saveRecordingPlayers();

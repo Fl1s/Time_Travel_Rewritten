@@ -53,6 +53,7 @@ public final class Timeline {
 
         TimelineSession s = TimeTravel.session();
         BlockJournal.flushWatches();
+        MobTrailJournal.releaseAll();
         s.visits.endAllVisits();
         s.ghosts.stopAll();
         s.ghosts.clearPending();
@@ -193,6 +194,7 @@ public final class Timeline {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.timelineTick);
         }
         ghosts.tickActive();
+        GhostTracks.applyHealthAll();
         if (TimeTravel.trackVoice) VoicechatCompat.onTick();
         s.deathChain.tick();
 

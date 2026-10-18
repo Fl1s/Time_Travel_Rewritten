@@ -27,6 +27,9 @@ public final class MobEventJournal {
         public UUID uuid;
         public String dim;
         public boolean explode;
+        public boolean hasPosition;
+        public double x, y, z;
+        public float yRot, xRot;
     }
 
     private static final Journal<Entry> STORE = new Journal<>(
@@ -51,6 +54,12 @@ public final class MobEventJournal {
         e.uuid = victim.getUUID();
         e.dim = level.dimension().location().toString();
         e.explode = explode;
+        e.hasPosition = true;
+        e.x = victim.getX();
+        e.y = victim.getY();
+        e.z = victim.getZ();
+        e.yRot = victim.getYRot();
+        e.xRot = victim.getXRot();
         STORE.entries().add(e);
         latestDeath.put(e.uuid, e);
         STORE.markDirty();
@@ -108,7 +117,11 @@ public final class MobEventJournal {
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
         STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
-        latestDeath.values().removeIf(e -> visitIds.contains(e.visit));
+        latestDeath.clear();
+        for (Entry e : STORE.entries()) {
+            Entry prev = latestDeath.get(e.uuid);
+            if (prev == null || e.seq > prev.seq) latestDeath.put(e.uuid, e);
+        }
         STORE.markDirty();
         rebuildUpcoming();
     }
@@ -144,7 +157,7 @@ public final class MobEventJournal {
         pendingDeaths.clear();
         long now = TimeTravel.timelineTick;
         for (Entry e : STORE.entries()) {
-            if (e.tick > now) pendingDeaths.add(e);
+            if (e.tick > now && latestDeath.get(e.uuid) == e) pendingDeaths.add(e);
         }
     }
 

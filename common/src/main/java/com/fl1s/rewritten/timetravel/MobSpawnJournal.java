@@ -48,6 +48,7 @@ public final class MobSpawnJournal {
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
 
     static void registerInitial(ServerLevel level, Mob mob, CompoundTag tag, long tick) {
+        sanitize(tag);
         if (canon.containsKey(mob.getUUID())) return;
         if (!TimeTravel.isLooping) return;
 
@@ -91,6 +92,7 @@ public final class MobSpawnJournal {
 
         CompoundTag tag = new CompoundTag();
         if (!mob.save(tag)) return;
+        sanitize(tag);
 
         PlayerData pd = BlockJournal.nearestRecorder(level, mob.blockPosition());
 
@@ -176,6 +178,7 @@ public final class MobSpawnJournal {
             if (stale != null && !stale.isRemoved()) stale.discard();
 
             CompoundTag tag = TagParser.parseTag(e.nbt);
+            sanitize(tag);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived == null) return;
             Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeTravel.timelineTick);
@@ -185,6 +188,14 @@ public final class MobSpawnJournal {
         } catch (Exception ex) {
             TimeTravel.LOOP_LOGGER.error("Failed to revive mob {}", e.uuid, ex);
         }
+    }
+
+    private static void sanitize(CompoundTag tag) {
+        if (tag.contains("Health") && tag.getFloat("Health") <= 0) tag.remove("Health");
+        tag.putShort("DeathTime", (short) 0);
+        tag.putShort("HurtTime", (short) 0);
+        tag.remove("DeathLootTable");
+        tag.remove("DeathLootTableSeed");
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
