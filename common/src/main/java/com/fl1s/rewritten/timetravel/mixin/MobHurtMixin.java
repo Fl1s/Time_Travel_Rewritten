@@ -55,6 +55,11 @@ public abstract class MobHurtMixin {
     private void tt$hurt(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
 
+        if (tt$cloneBlocks(self, source)) {
+            cir.setReturnValue(false);
+            return;
+        }
+
         if (MobJournal.isApplying()) return;
 
         if (self instanceof Mob om
@@ -76,11 +81,6 @@ public abstract class MobHurtMixin {
                     && self.level() instanceof ServerLevel sl) {
                 DoomedFeedback.tryShow(sp, sl, doomed);
             }
-        }
-
-        if (tt$cloneBlocks(self, source)) {
-            cir.setReturnValue(false);
-            return;
         }
 
         if (self instanceof ServerPlayer sp && Ghosts.is(sp) && MobJournal.isDoomed(source.getEntity())) {
