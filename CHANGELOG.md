@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Fixed desync when killing an out-of-time mob while other clones are replaying
+ - Fixed desync when killing an out-of-time mob while other clones are replaying
 
 ## [1.21.1-0.10.2] - 2026-11-17
 
