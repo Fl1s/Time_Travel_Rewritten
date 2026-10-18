@@ -4,12 +4,12 @@ import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.phys.Vec3;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 public final class GhostTracks {
     private GhostTracks() {
@@ -34,6 +34,13 @@ public final class GhostTracks {
             visit.rides.add(new Visit.RideChange(tick, vehicleId));
             visit.lastVehicle = vehicleId;
         }
+
+        if (visit.healths == null) visit.healths = new ArrayList<>();
+        float health = player.getHealth();
+        if (visit.lastHealth != health) {
+            visit.healths.add(new Visit.HealthChange(tick, health));
+            visit.lastHealth = health;
+        }
     }
 
     public static void pollAll() {
@@ -55,6 +62,35 @@ public final class GhostTracks {
         applyMode(visit, ghost, now);
         applyRide(visit, ghost, now);
         applyAttacks(visit, ghost, now);
+    }
+
+    private static void applyHealth(Visit visit, ServerPlayer ghost, long now) {
+        List<Visit.HealthChange> list = visit.healths;
+        if (list == null || list.isEmpty()) return;
+        Visit.HealthChange current = list.getFirst();
+        for (Visit.HealthChange change : list) {
+            if (change.tick > now) break;
+            current = change;
+        }
+        float wanted = Math.min(current.health, ghost.getMaxHealth());
+        if (wanted <= 0.0f) return;
+        float actual = ghost.getHealth();
+        if (actual > wanted || (current.tick == now && actual != wanted)) {
+            ghost.setHealth(wanted);
+        }
+    }
+
+    public static void applyHealthAll() {
+        if (!TimeTravel.isLooping || TimeTravel.loopSceneManager == null) return;
+        long now = TimeTravel.timelineTick;
+        TimeTravel.loopSceneManager.forEachRecordingPlayer(pd -> {
+            for (Visit visit : pd.getVisits()) {
+                Entity e = TimeTravel.entityOfVisit(visit.id);
+                if (e instanceof ServerPlayer ghost && Ghosts.is(ghost) && !ghost.isRemoved()) {
+                    applyHealth(visit, ghost, now);
+                }
+            }
+        });
     }
 
     private static void applyMode(Visit visit, ServerPlayer ghost, long now) {
@@ -118,6 +154,8 @@ public final class GhostTracks {
             }
             Entity target = level.getEntity(id);
             if (target == null || target.isRemoved()) continue;
+            double d2 = ghost.distanceToSqr(target);
+            if (d2 > 36.0) continue;
             ghost.attack(target);
         }
     }

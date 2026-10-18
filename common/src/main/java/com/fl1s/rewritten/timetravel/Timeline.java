@@ -193,6 +193,7 @@ public final class Timeline {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.timelineTick);
         }
         ghosts.tickActive();
+        GhostTracks.applyHealthAll();
         if (TimeTravel.trackVoice) VoicechatCompat.onTick();
         s.deathChain.tick();
 
