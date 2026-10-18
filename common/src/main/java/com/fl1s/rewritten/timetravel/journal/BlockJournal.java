@@ -314,7 +314,7 @@ public final class BlockJournal {
 
             replayingLive = true;
             try {
-                level.setBlock(pos, state, Block.UPDATE_ALL);
+                level.setBlock(pos, state, SET_FLAGS);
                 if (state.getBlock() instanceof BaseRailBlock) {
                     BlockPos ip = pos.immutable();
                     BlockState after = level.getBlockState(ip);
