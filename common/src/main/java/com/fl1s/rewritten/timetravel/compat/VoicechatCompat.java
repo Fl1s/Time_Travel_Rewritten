@@ -1,6 +1,6 @@
 package com.fl1s.rewritten.timetravel.compat;
 
-import com.fl1s.rewritten.timetravel.PlayerData;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import net.minecraft.world.entity.Entity;
 
@@ -17,14 +17,14 @@ public final class VoicechatCompat {
 
     private VoicechatCompat() {}
 
-    public static void onGhostStart(PlayerData data, int visitId, int segment, long visitStartTick, Entity entity) {
+    public static void onCloneStart(PlayerData data, int visitId, int segment, long visitStartTick, Entity entity) {
         if (!TimeTravel.voiceChatLoaded) return;
-        VoicechatImpl.onGhostStart(data, visitId, segment, visitStartTick, entity);
+        VoicechatImpl.onCloneStart(data, visitId, segment, visitStartTick, entity);
     }
 
-    public static Entity findNewestGhost(String nickname) {
+    public static Entity findNewestClone(String nickname) {
         if (!TimeTravel.voiceChatLoaded) return null;
-        return VoicechatImpl.findNewestGhost(nickname);
+        return VoicechatImpl.findNewestClone(nickname);
     }
 
     public static void stopPlaybackFrom(String player, int fromVisit) {

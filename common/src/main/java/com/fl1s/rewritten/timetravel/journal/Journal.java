@@ -1,7 +1,7 @@
 package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
-import com.fl1s.rewritten.timetravel.util.JsonStore;
+import com.fl1s.rewritten.timetravel.data.JsonStore;
 
 import java.lang.reflect.Type;
 import java.nio.file.Path;

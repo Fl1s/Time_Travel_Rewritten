@@ -6,6 +6,10 @@ import com.fl1s.rewritten.fabric.events.PlayerFabricEvent;
 import com.fl1s.rewritten.fabric.events.TickFabricEvent;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.commands.LoopCommands;
+import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.mob.MobJournal;
+import com.fl1s.rewritten.timetravel.mob.MobStateJournal;
+import com.fl1s.rewritten.timetravel.timeline.ChatTimeline;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
@@ -78,7 +82,8 @@ public class TimeTravelFabric implements ModInitializer {
         ServerLivingEntityEvents.AFTER_DEATH.register(MobJournal::onEntityDeath);
 
         ServerEntityEvents.EQUIPMENT_CHANGE.register((livingEntity, equipmentSlot, previousStack, currentStack) -> {
-            if (livingEntity instanceof Mob mob) {MobStateJournal.onChanged(mob);}});
+            if (livingEntity instanceof Mob mob) {
+                MobStateJournal.onChanged(mob);}});
 
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) ->
                 ChatTimeline.onPlayerChat(sender, message.signedContent()));

@@ -1,6 +1,6 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.MobStateJournal;
+import com.fl1s.rewritten.timetravel.mob.MobStateJournal;
 import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;

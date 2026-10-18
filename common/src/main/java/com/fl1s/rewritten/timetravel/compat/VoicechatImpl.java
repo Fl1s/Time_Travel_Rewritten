@@ -1,6 +1,6 @@
 package com.fl1s.rewritten.timetravel.compat;
 
-import com.fl1s.rewritten.timetravel.PlayerData;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.compat.voicechat.AudioPersistence;
 import com.fl1s.rewritten.timetravel.compat.voicechat.AudioUtils;
@@ -80,7 +80,7 @@ public final class VoicechatImpl {
             serverApi.registerVolumeCategory(LOOP_CATEGORY);
         } catch (Exception e) {
             TimeTravel.LOOP_LOGGER.error("[Voice] Failed to register volume category '{}' - "
-                    + "ghost voices will be silent", CATEGORY_ID, e);
+                    + "clone voices will be silent", CATEGORY_ID, e);
             LOOP_CATEGORY = null;
         }
     }
@@ -91,7 +91,7 @@ public final class VoicechatImpl {
             if (!categoryWarned) {
                 categoryWarned = true;
                 TimeTravel.LOOP_LOGGER.warn(
-                        "[Voice] Volume category unavailable - skipping ghost voice playback");
+                        "[Voice] Volume category unavailable - skipping clone voice playback");
             }
             return null;
         }
@@ -100,7 +100,7 @@ public final class VoicechatImpl {
 
     private static volatile int generation = 0;
 
-    public static void onGhostStart(PlayerData data, int visitId, int segment, long visitStartTick,
+    public static void onCloneStart(PlayerData data, int visitId, int segment, long visitStartTick,
                                     net.minecraft.world.entity.Entity entity) {
         if (!TimeTravel.voiceChatLoaded || serverApi == null) return;
 
@@ -128,7 +128,7 @@ public final class VoicechatImpl {
         });
     }
 
-    public static net.minecraft.world.entity.Entity findNewestGhost(String nickname) {
+    public static net.minecraft.world.entity.Entity findNewestClone(String nickname) {
         if (nickname == null || TimeTravel.server == null) return null;
 
         Set<UUID> realPlayerUUIDs = new HashSet<>();

@@ -1,6 +1,6 @@
 package com.fl1s.rewritten.timetravel.compat.voicechat;
 
-import com.fl1s.rewritten.timetravel.PlayerData;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import net.minecraft.world.phys.Vec3;
 

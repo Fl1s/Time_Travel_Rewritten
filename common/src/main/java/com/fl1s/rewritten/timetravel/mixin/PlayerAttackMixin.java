@@ -1,10 +1,10 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.GhostTracks;
+import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.TimeTravel;
-import com.fl1s.rewritten.timetravel.VehicleTrailJournal;
+import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
-import com.fl1s.rewritten.timetravel.util.Ghosts;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -28,13 +28,13 @@ public abstract class PlayerAttackMixin {
                 && VehicleTrailJournal.hasFutureSamples(target.getUUID(), TimeTravel.timelineTick);
 
         if (protectedVehicle) {
-            if (!Ghosts.is(sp) && target.level() instanceof ServerLevel sl) {
+            if (!Clones.is(sp) && target.level() instanceof ServerLevel sl) {
                 DoomedFeedback.tryShowVehicle(sp, sl);
             }
             ci.cancel();
             return;
         }
 
-        GhostTracks.onAttack(sp, target);
+        CloneTracks.onAttack(sp, target);
     }
 }

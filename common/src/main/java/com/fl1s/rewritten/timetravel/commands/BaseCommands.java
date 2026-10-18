@@ -3,7 +3,7 @@ package com.fl1s.rewritten.timetravel.commands;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
-import com.fl1s.rewritten.timetravel.TimeFormat;
+import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -243,7 +243,7 @@ public class BaseCommands {
 
         String status = (TimeTravel.isLooping ? "Timeline is running.\n" : "Timeline is not running.\n")
                 + "Server time: " + TimeFormat.clock(TimeTravel.timelineTick) + " (tick " + TimeTravel.timelineTick + ").\n"
-                + "Recorded visits: " + visits[0] + ", past selves queued: " + TimeTravel.countPendingGhosts() + ".\n"
+                + "Recorded visits: " + visits[0] + ", past selves queued: " + TimeTravel.countPendingClones() + ".\n"
                 + "Sync day time: " + TimeTravel.syncDayTime + ".\n"
                 + tracking + voice;
 

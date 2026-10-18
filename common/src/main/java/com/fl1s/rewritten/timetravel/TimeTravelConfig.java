@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel;
 
+import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -27,7 +28,7 @@ public class TimeTravelConfig {
     public int jumpCooldownTicks = 20;
     public Map<String, Long> marks = new java.util.LinkedHashMap<>();
     public long maxJumpTicks = 0;
-    public int ghostLookaheadTicks = 0;
+    public int cloneLookaheadTicks = 0;
 
     public boolean showLoopInfo = true;
     public boolean displayTimeInTicks = false;
@@ -88,7 +89,7 @@ public class TimeTravelConfig {
         if (config.maxJumpTicks < 0) config.maxJumpTicks = 0;
         if (config.jumpCooldownTicks < 0) config.jumpCooldownTicks = 20;
         if (config.marks == null) config.marks = new java.util.LinkedHashMap<>();
-        if (config.ghostLookaheadTicks < 0 || config.ghostLookaheadTicks > 100) config.ghostLookaheadTicks = 0;
+        if (config.cloneLookaheadTicks < 0 || config.cloneLookaheadTicks > 100) config.cloneLookaheadTicks = 0;
         if (config.timelineTick < 0) config.timelineTick = 0;
         if (config.nextVisitId < 1) config.nextVisitId = 1;
         if (config.entityTrackingDistance < 1) config.entityTrackingDistance = 32;

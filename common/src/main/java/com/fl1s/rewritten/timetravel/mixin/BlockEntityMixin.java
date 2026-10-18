@@ -1,6 +1,6 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.BlockEntityJournal;
+import com.fl1s.rewritten.timetravel.journal.BlockEntityJournal;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;

@@ -1,7 +1,7 @@
 package com.fl1s.rewritten.timetravel.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.fl1s.rewritten.timetravel.TimeFormat;
+import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.net.JumpRequestPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.ToggleTimelinePayload;

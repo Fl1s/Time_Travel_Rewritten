@@ -3,7 +3,10 @@ package com.fl1s.rewritten.timetravel.events;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
+import com.fl1s.rewritten.timetravel.journal.ProcessJournal;
+import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.util.LoopSceneManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -26,7 +29,7 @@ public class LifecycleEvent {
         TimeTravel.chainDeath = c.chainDeath;
         TimeTravel.jumpCooldownTicks = c.jumpCooldownTicks;
         TimeTravel.maxJumpTicks = c.maxJumpTicks;
-        TimeTravel.ghostLookaheadTicks = c.ghostLookaheadTicks;
+        TimeTravel.cloneLookaheadTicks = c.cloneLookaheadTicks;
 
         TimeTravel.showLoopInfo = c.showLoopInfo;
         TimeTravel.displayTimeInTicks = c.displayTimeInTicks;

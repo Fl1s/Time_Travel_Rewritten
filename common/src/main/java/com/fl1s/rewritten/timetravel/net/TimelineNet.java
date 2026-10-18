@@ -1,7 +1,7 @@
 package com.fl1s.rewritten.timetravel.net;
 
-import com.fl1s.rewritten.timetravel.PlayerData;
-import com.fl1s.rewritten.timetravel.TimeFormat;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.network.chat.Component;

@@ -1,13 +1,20 @@
 package com.fl1s.rewritten.timetravel;
 
-import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
+import com.fl1s.rewritten.timetravel.clone.CloneFx;
+import com.fl1s.rewritten.timetravel.clone.CloneManager;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.data.TimelineSession;
+import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.JournalRegistry;
+import com.fl1s.rewritten.timetravel.mob.MobBinding;
+import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
-import com.fl1s.rewritten.timetravel.util.Ghosts;
-import net.minecraft.network.chat.Component;
+import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Skin;
+import com.fl1s.rewritten.timetravel.util.LoopSceneManager;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -61,7 +68,7 @@ public class TimeTravel {
 	public static LoopSceneManager loopSceneManager;
 	public static Path worldFolder;
 
-	public static int ghostLookaheadTicks = 0;
+	public static int cloneLookaheadTicks = 0;
 
 	public static final JournalRegistry JOURNALS = new JournalRegistry();
 
@@ -72,7 +79,7 @@ public class TimeTravel {
 		MocapAdapter.reset();
 	}
 
-	static TimelineSession session() {
+	public static TimelineSession session() {
 		TimelineSession s = session;
 		if (s == null) {
 			throw new IllegalStateException("TimelineSession not initialized (onServerStart not called?)");
@@ -137,10 +144,10 @@ public class TimeTravel {
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
 			TimelineSession s = session();
 			s.visits.beginVisit(player, pd);
-			GhostManager ghosts = s.ghosts;
-			if (ghosts.isIdle()) {
-				ghosts.setIdle(false);
-				ghosts.markNeedsRebuild();
+			CloneManager clones = s.clones;
+			if (clones.isIdle()) {
+				clones.setIdle(false);
+				clones.markNeedsRebuild();
 			}
 		}
 		sendSync(player);
@@ -158,7 +165,7 @@ public class TimeTravel {
 		if (isLooping) {
 			MobTrailJournal.releaseAll();
 			session().visits.endAllVisits();
-			session().ghosts.stopAll();
+			session().clones.stopAll();
 			loopSceneManager.saveRecordingPlayers();
 			config.isLooping = true;
 			config.timelineTick = timelineTick;
@@ -170,9 +177,9 @@ public class TimeTravel {
 		VoicechatInteractionCompat.clearCooldowns();
 	}
 
-	static void forEachOnlineRecorded(BiConsumer<ServerPlayer, PlayerData> action) {
+	public static void forEachOnlineRecorded(BiConsumer<ServerPlayer, PlayerData> action) {
 		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
-			if (isGhost(player)) continue;
+			if (isClone(player)) continue;
 			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getName().getString());
 			if (pd == null || !pd.getActive()) continue;
 			action.accept(player, pd);
@@ -182,45 +189,45 @@ public class TimeTravel {
 	public static int countOnlineRecorded() {
 		int count = 0;
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-			if (isGhost(player)) continue;
+			if (isClone(player)) continue;
 			PlayerData pd = loopSceneManager.getRecordingPlayer(player.getGameProfile().getName());
 			if (pd != null && pd.getActive()) count++;
 		}
 		return count;
 	}
 
-	static boolean isGhost(ServerPlayer player) {
-		return Ghosts.is(player);
+	static boolean isClone(ServerPlayer player) {
+		return Clones.is(player);
 	}
 
 	public static int visitIdOf(Entity e) {
 		TimelineSession s = session;
-		return s == null ? -1 : s.ghosts.visitIdOf(e);
+		return s == null ? -1 : s.clones.visitIdOf(e);
 	}
 
-	public static GhostFx fxOf(Entity e) {
+	public static CloneFx fxOf(Entity e) {
 		TimelineSession s = session;
-		return s == null ? null : s.ghosts.fxOf(e);
+		return s == null ? null : s.clones.fxOf(e);
 	}
 
 	public static Entity entityOfVisit(int visitId) {
 		TimelineSession s = session;
-		return s == null ? null : s.ghosts.entityOfVisit(visitId);
+		return s == null ? null : s.clones.entityOfVisit(visitId);
 	}
 
 	public static boolean visitPending(int visitId) {
 		TimelineSession s = session;
-		return s != null && s.ghosts.visitPending(visitId);
+		return s != null && s.clones.visitPending(visitId);
 	}
 
 	public static boolean visitKnown(int visitId) {
 		TimelineSession s = session;
-		return s != null && s.ghosts.visitKnown(visitId);
+		return s != null && s.clones.visitKnown(visitId);
 	}
 
-	public static int countPendingGhosts() {
+	public static int countPendingClones() {
 		TimelineSession s = session;
-		return s == null ? 0 : s.ghosts.countPending();
+		return s == null ? 0 : s.clones.countPending();
 	}
 
 	public static void sendSync(ServerPlayer player) {
@@ -231,7 +238,7 @@ public class TimeTravel {
 		if (server == null) return;
 		TimelineSyncPayload payload = new TimelineSyncPayload(timelineTick, isLooping, displayTimeInTicks, showLoopInfo);
 		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
-			if (isGhost(player)) continue;
+			if (isClone(player)) continue;
 			TimelineNet.sendToPlayer(player, payload);
 		}
 	}

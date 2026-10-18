@@ -1,7 +1,7 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.BlockJournal;
-import com.fl1s.rewritten.timetravel.RedstoneJournal;
+import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.journal.RedstoneJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;

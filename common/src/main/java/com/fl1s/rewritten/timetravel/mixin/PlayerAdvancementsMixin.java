@@ -1,6 +1,6 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
-import com.fl1s.rewritten.timetravel.AdvancementTimeline;
+import com.fl1s.rewritten.timetravel.timeline.AdvancementTimeline;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.server.PlayerAdvancements;
 import net.minecraft.server.level.ServerPlayer;
@@ -16,8 +16,8 @@ public abstract class PlayerAdvancementsMixin {
     @Shadow public abstract net.minecraft.advancements.AdvancementProgress getOrStartProgress(AdvancementHolder holder);
 
     @Inject(method = "award", at = @At("HEAD"), cancellable = true)
-    private void tt$blockGhost(AdvancementHolder holder, String criterion, CallbackInfoReturnable<Boolean> cir) {
-        if (AdvancementTimeline.isGhost(player)) cir.setReturnValue(false);
+    private void tt$blockClone(AdvancementHolder holder, String criterion, CallbackInfoReturnable<Boolean> cir) {
+        if (AdvancementTimeline.isClone(player)) cir.setReturnValue(false);
     }
 
     @Inject(method = "award", at = @At("RETURN"))

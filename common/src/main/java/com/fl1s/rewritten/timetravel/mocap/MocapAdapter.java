@@ -1,7 +1,9 @@
 package com.fl1s.rewritten.timetravel.mocap;
 
-import com.fl1s.rewritten.timetravel.Skin;
+import com.fl1s.rewritten.timetravel.data.Skin;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.entity.EntityJournal;
+import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.mt1006.mocap.api.impl.controller.MocapControllerImpl;
@@ -40,8 +42,8 @@ import java.util.function.Predicate;
  * <p>
  * Motion Capture records vehicles, projectiles and items but does not play them
  * back: playback of every tracked entity is delegated to the mod's own journals
- * ({@link com.fl1s.rewritten.timetravel.EntityJournal},
- * {@link com.fl1s.rewritten.timetravel.VehicleSpawnJournal}), so a backward
+ * ({@link EntityJournal},
+ * {@link VehicleSpawnJournal}), so a backward
  * time jump can discard TNT, arrows and loot that mocap would otherwise leave
  * orphaned in the world.
  */
@@ -210,13 +212,13 @@ public final class MocapAdapter {
         }
     }
 
-    public static GhostPlayback startPlayback(String recordingName, String nickname, Skin skin,
+    public static ClonePlayback startPlayback(String recordingName, String nickname, Skin skin,
                                               int delayTicks) {
         if (controller == null) return null;
 
         MocapRecordingFile file = MocapRecordingFile.get(CommandOutput.LOGS, recordingName);
         if (file == null || !file.exists()) {
-            TimeTravel.LOOP_LOGGER.warn("Recording '{}' not found - skipping ghost", recordingName);
+            TimeTravel.LOOP_LOGGER.warn("Recording '{}' not found - skipping clone", recordingName);
             return null;
         }
 
@@ -235,16 +237,16 @@ public final class MocapAdapter {
         try {
             MocapPlaybackRoot root = file.startPlayback(controller.getCommandInfo(), modifiers);
             if (root == null) return null;
-            return new GhostPlaybackImpl(root);
+            return new ClonePlaybackImpl(root);
         } catch (Exception e) {
-            TimeTravel.LOOP_LOGGER.error("Failed to start ghost '{}': {}", recordingName, e.getMessage(), e);
+            TimeTravel.LOOP_LOGGER.error("Failed to start clone '{}': {}", recordingName, e.getMessage(), e);
             return null;
         }
     }
 
-    private static final class GhostPlaybackImpl implements GhostPlayback {
+    private static final class ClonePlaybackImpl implements ClonePlayback {
         private final MocapPlaybackRoot root;
-        GhostPlaybackImpl(MocapPlaybackRoot root) { this.root = root; }
+        ClonePlaybackImpl(MocapPlaybackRoot root) { this.root = root; }
         @Override public boolean isFinished() { return root.isFinished(); }
         @Override public void stop() { root.stop(); }
 
