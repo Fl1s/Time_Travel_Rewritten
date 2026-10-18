@@ -116,6 +116,10 @@ public final class MobTrailJournal {
     }
 
     public static void sample() {
+        sample(false);
+    }
+
+    private static void sample(boolean onlyOutOfTime) {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
         long now = TimeTravel.timelineTick;
 
@@ -133,6 +137,11 @@ public final class MobTrailJournal {
                 for (Mob mob : nearby) {
                     if (Ghosts.is(mob)) continue;
                     UUID id = mob.getUUID();
+                    if (onlyOutOfTime) {
+                        if (!MobSpawnJournal.isOutOfTime(id)) continue;
+                        Track existing = tracks.get(id);
+                        if (existing != null && existing.lastTick() >= now) continue;
+                    }
                     if (!sampledThisTick.add(id)) continue;
                     if (p.distanceToSqr(mob) > r2) continue;
                     MobSpawnJournal.ensureRegistered(level, mob);
@@ -164,7 +173,7 @@ public final class MobTrailJournal {
             }
         }
 
-        ReplayState.observe(now);
+        if (!onlyOutOfTime) ReplayState.observe(now);
     }
 
     private static boolean sameState(Sample a, Sample b) {
@@ -402,6 +411,7 @@ public final class MobTrailJournal {
         if (replaying) {
             wasReplaying = true;
             apply();
+            sample(true);
         } else {
             if (wasReplaying) {
                 releaseAllPuppets();

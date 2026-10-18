@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.10.3] - 2026-11-18
+
+### Fixed
+
+ - Fixed desync when killing an out-of-time mob while other clones are replaying
+
 ## [1.21.1-0.10.2] - 2026-11-17
 
 ### Added
