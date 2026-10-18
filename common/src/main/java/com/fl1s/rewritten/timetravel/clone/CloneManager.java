@@ -23,7 +23,7 @@ import java.util.PriorityQueue;
  * Runtime manager for past-self ("clone") playback: queued pieces, active
  * playback roots, skip budget, and queued time-jump sounds.
  * <p>
- * Owned by {@link TimelineSession}; every instance is discarded when the
+ * Owned by {@link com.fl1s.rewritten.timetravel.data.TimelineSession}; every instance is discarded when the
  * world unloads, so no clone state leaks between worlds.
  */
 public final class CloneManager {
@@ -187,6 +187,10 @@ public final class CloneManager {
         sp.fallDistance = 0;
         sp.setAirSupply(sp.getMaxAirSupply());
         sp.clearFire();
+        sp.hurtTime = 0;
+        sp.hurtDuration = 0;
+        sp.hurtMarked = false;
+        sp.invulnerableTime = 5;
     }
 
     private static void unshield(Clone g, long now) {
@@ -195,6 +199,9 @@ public final class CloneManager {
         sp.setInvulnerable(g.wasInvulnerable);
         sp.fallDistance = 0;
         if (g.visit != null) CloneTracks.snapHealth(g.visit, sp, now);
+        sp.hurtTime = 0;
+        sp.hurtDuration = 0;
+        sp.hurtMarked = false;
     }
 
     private void start(PendingPiece piece, int delayTicks) {

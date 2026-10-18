@@ -80,7 +80,12 @@ public final class CloneTracks {
         Visit.HealthChange current = healthAt(visit, now);
         if (current == null) return;
         float wanted = Math.min(current.health, clone.getMaxHealth());
-        if (wanted > 0.0f && clone.getHealth() != wanted) clone.setHealth(wanted);
+        if (wanted > 0.0f && clone.getHealth() != wanted) {
+            clone.setHealth(wanted);
+            clone.hurtTime = 0;
+            clone.hurtDuration = 0;
+            clone.hurtMarked = false;
+        }
     }
 
     private static void applyHealth(Visit visit, ServerPlayer clone, long now) {
@@ -91,6 +96,9 @@ public final class CloneTracks {
         float actual = clone.getHealth();
         if (actual > wanted || (current.tick == now && actual != wanted)) {
             clone.setHealth(wanted);
+            clone.hurtTime = 0;
+            clone.hurtDuration = 0;
+            clone.hurtMarked = false;
         }
     }
 
