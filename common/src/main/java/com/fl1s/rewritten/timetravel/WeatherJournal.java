@@ -40,6 +40,9 @@ public final class WeatherJournal {
             e -> e.tick, e -> e.seq, e -> e.visit);
 
     private static final Map<String, Entry> current = new HashMap<>();
+    private static final Map<String, List<Entry>> byDim = new HashMap<>();
+    private static final Map<String, Long> maxTickByDim = new HashMap<>();
+    private static final Map<String, Entry> earliestByDim = new HashMap<>();
     private static boolean applying = false;
 
     private static String key(ServerLevel level) {
@@ -78,11 +81,8 @@ public final class WeatherJournal {
     }
 
     private static boolean hasFuture(String dim) {
-        long now = TimeTravel.timelineTick;
-        for (Entry e : STORE.entries()) {
-            if (dim.equals(e.dim) && e.tick > now) return true;
-        }
-        return false;
+        Long max = maxTickByDim.get(dim);
+        return max != null && max > TimeTravel.timelineTick;
     }
 
     public static boolean isProtected(ServerLevel level) {
@@ -90,16 +90,19 @@ public final class WeatherJournal {
     }
 
     private static boolean hasEntries(String dim) {
-        for (Entry e : STORE.entries()) {
-            if (dim.equals(e.dim)) return true;
-        }
-        return false;
+        return byDim.containsKey(dim);
+    }
+
+    private static Entry earliest(String dim) {
+        return earliestByDim.get(dim);
     }
 
     private static Entry findAt(String dim, long tick) {
+        List<Entry> list = byDim.get(dim);
+        if (list == null) return null;
         Entry best = null;
-        for (Entry e : STORE.entries()) {
-            if (!dim.equals(e.dim) || e.tick > tick) continue;
+        for (Entry e : list) {
+            if (e.tick > tick) continue;
             if (best == null || e.tick > best.tick || (e.tick == best.tick && e.seq > best.seq)) {
                 best = e;
             }
@@ -107,13 +110,22 @@ public final class WeatherJournal {
         return best;
     }
 
-    private static Entry earliest(String dim) {
-        Entry best = null;
-        for (Entry e : STORE.entries()) {
-            if (!dim.equals(e.dim)) continue;
-            if (best == null || e.tick < best.tick || (e.tick == best.tick && e.seq < best.seq)) best = e;
+    private static void index(Entry e) {
+        byDim.computeIfAbsent(e.dim, k -> new ArrayList<>()).add(e);
+        Long max = maxTickByDim.get(e.dim);
+        if (max == null || e.tick > max) maxTickByDim.put(e.dim, e.tick);
+        Entry earliest = earliestByDim.get(e.dim);
+        if (earliest == null || e.tick < earliest.tick
+                || (e.tick == earliest.tick && e.seq < earliest.seq)) {
+            earliestByDim.put(e.dim, e);
         }
-        return best;
+    }
+
+    private static void rebuildIndex() {
+        byDim.clear();
+        maxTickByDim.clear();
+        earliestByDim.clear();
+        for (Entry e : STORE.entries()) index(e);
     }
 
     private static void rebuildCurrent() {
@@ -156,6 +168,7 @@ public final class WeatherJournal {
         e.thunderTime = d.getThunderTime();
         e.thundering = d.isThundering();
         STORE.entries().add(e);
+        index(e);
         current.put(dim, e);
         STORE.markDirty();
     }
@@ -203,6 +216,7 @@ public final class WeatherJournal {
             players.broadcastAll(new ClientboundGameEventPacket(ClientboundGameEventPacket.THUNDER_LEVEL_CHANGE, thunder), dim);
         }
     }
+
     private static void syncFollowers(boolean instant) {
         if (TimeTravel.server == null) return;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
@@ -283,11 +297,13 @@ public final class WeatherJournal {
 
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.eraseVisits(visitIds);
+        rebuildIndex();
         rebuildCurrent();
     }
 
     public static void load() {
         STORE.load();
+        rebuildIndex();
         rebuildCurrent();
     }
 
@@ -301,6 +317,9 @@ public final class WeatherJournal {
 
     public static void clear() {
         current.clear();
+        byDim.clear();
+        maxTickByDim.clear();
+        earliestByDim.clear();
         STORE.clear();
     }
 }
