@@ -35,6 +35,13 @@ public final class DoomedFeedback {
             "message.timetravel_rewritten.replay.6",
     };
 
+    private static final String[] VEHICLE_MESSAGES = {
+            "message.timetravel_rewritten.vehicle.1",
+            "message.timetravel_rewritten.vehicle.2",
+            "message.timetravel_rewritten.vehicle.3",
+            "message.timetravel_rewritten.vehicle.4",
+    };
+
     private static final long COOLDOWN_TICKS = 40;
     private static final Map<UUID, Long> lastShown = new HashMap<>();
 
@@ -46,6 +53,16 @@ public final class DoomedFeedback {
 
         String[] pool = doomed ? DOOMED_MESSAGES : REPLAY_MESSAGES;
         String key = pool[level.getRandom().nextInt(pool.length)];
+        player.displayClientMessage(Component.translatable(key), true);
+    }
+
+    public static void tryShowVehicle(ServerPlayer player, ServerLevel level) {
+        long now = level.getGameTime();
+        Long last = lastShown.get(player.getUUID());
+        if (last != null && now - last < COOLDOWN_TICKS) return;
+        lastShown.put(player.getUUID(), now);
+
+        String key = VEHICLE_MESSAGES[level.getRandom().nextInt(VEHICLE_MESSAGES.length)];
         player.displayClientMessage(Component.translatable(key), true);
     }
 
