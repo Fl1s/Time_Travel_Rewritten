@@ -35,6 +35,7 @@ public final class MobSpawnJournal {
         public String dim;
         public String nbt;
         public double x, y, z;
+        public boolean outOfTime;
     }
 
     private static final Journal<Entry> STORE = new Journal<>(
@@ -103,6 +104,7 @@ public final class MobSpawnJournal {
         e.x = mob.getX();
         e.y = mob.getY();
         e.z = mob.getZ();
+        e.outOfTime = ReplayState.isReplaying();
         STORE.entries().add(e);
         canon.put(e.uuid, e);
         STORE.markDirty();
@@ -111,6 +113,11 @@ public final class MobSpawnJournal {
     public static long spawnTick(UUID id) {
         Entry e = canon.get(id);
         return e == null ? -1 : e.tick;
+    }
+
+    public static boolean isOutOfTime(UUID id) {
+        Entry e = canon.get(id);
+        return e != null && e.outOfTime;
     }
 
     public static void tick() {
@@ -181,6 +188,15 @@ public final class MobSpawnJournal {
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
+        if (TimeTravel.server != null) {
+            for (Entry e : STORE.entries()) {
+                if (!e.outOfTime || !visitIds.contains(e.visit)) continue;
+                ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
+                if (level == null) continue;
+                Entity current = findLoaded(level, e.uuid);
+                if (current != null && !current.isRemoved()) current.discard();
+            }
+        }
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
         STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
         canon.values().removeIf(e -> visitIds.contains(e.visit));
