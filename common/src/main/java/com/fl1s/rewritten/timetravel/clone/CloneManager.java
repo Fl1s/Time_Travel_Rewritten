@@ -29,8 +29,8 @@ import java.util.PriorityQueue;
 public final class CloneManager {
 
     public static final long PENDING_VISIT_WINDOW = 1200;
-    public static final int GHOST_SYNC_SKIP_LIMIT = 8000;
-    public static final int GHOST_SKIP_PER_TICK = 40;
+    public static final int CLONE_SYNC_SKIP_LIMIT = 8000;
+    public static final int CLONE_SKIP_PER_TICK = 40;
 
     public record PendingPiece(long startTick, String recording, String playerName, int skipTicks,
                                int visitId, int segment, long visitStartTick) {}
@@ -163,7 +163,7 @@ public final class CloneManager {
             else if (clone.shielded) unshield(clone, now);
 
             if (clone.pendingSkip > 0) {
-                int step = Math.min(clone.pendingSkip, GHOST_SKIP_PER_TICK);
+                int step = Math.min(clone.pendingSkip, CLONE_SKIP_PER_TICK);
                 clone.root.tick(step);
                 clone.pendingSkip -= step;
                 if (clone.pendingSkip <= 0) clone.fx.graceUntil = now + 20;
@@ -214,11 +214,11 @@ public final class CloneManager {
 
         Entity cloneEntity = CloneFx.findNewestClone(pd.getNickname());
         if (cloneEntity == null) {
-            TimeTravel.TIMELINE_LOGGER.warn("[TT-GHOST] no entity right after startPlayback for {} (visit {}, delay {})", pd.getNickname(), piece.visitId(), delayTicks);
+            TimeTravel.TIMELINE_LOGGER.warn("[TT-CLONE] no entity right after startPlayback for {} (visit {}, delay {})", pd.getNickname(), piece.visitId(), delayTicks);
         } else {
             for (Clone g : roots) {
                 if (g.fx.entity() == cloneEntity) {
-                    TimeTravel.TIMELINE_LOGGER.warn("[TT-GHOST] findNewestClone returned an already bound clone (visit {} vs {})", g.visitId, piece.visitId());
+                    TimeTravel.TIMELINE_LOGGER.warn("[TT-CLONE] findNewestClone returned an already bound clone (visit {} vs {})", g.visitId, piece.visitId());
                 }
             }
         }
@@ -235,7 +235,7 @@ public final class CloneManager {
         }
 
         int pendingSkip = piece.skipTicks();
-        int syncSkip = Math.min(pendingSkip, GHOST_SYNC_SKIP_LIMIT);
+        int syncSkip = Math.min(pendingSkip, CLONE_SYNC_SKIP_LIMIT);
         Clone clone = new Clone(playback, piece.playerName(), piece.visitId(), fx, pendingSkip - syncSkip, cloneVisit);
         roots.add(clone);
 
