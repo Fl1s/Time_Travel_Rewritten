@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.11.0] - 2026-11-19
+
+### Added
+
+- Weather and End Dragon bossfights support
+
 ## [1.21.1-0.10.8] - 2026-11-19
 
 ### Added

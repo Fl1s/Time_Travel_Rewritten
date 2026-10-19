@@ -20,6 +20,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.item.ItemStack;
@@ -55,6 +56,7 @@ public final class MobTrailJournal {
         public int swellDir;
         public int swell;
         public int invul;
+        public int phase = -1;
     }
 
     private static final class Track {
@@ -106,6 +108,19 @@ public final class MobTrailJournal {
 
     public static boolean isBoss(Entity entity) {
         return entity instanceof EnderDragon || entity instanceof WitherBoss;
+    }
+
+    private static int phaseOf(Mob mob) {
+        return mob instanceof EnderDragon dragon ? dragon.getPhaseManager().getCurrentPhase().getPhase().getId() : -1;
+    }
+
+    private static void applyBossState(Mob mob, Sample s) {
+        if (mob instanceof WitherBoss wither && wither.getInvulnerableTicks() != s.invul) {
+            wither.setInvulnerableTicks(s.invul);
+        }
+        if (mob instanceof EnderDragon dragon && s.phase >= 0 && phaseOf(dragon) != s.phase) {
+            dragon.getPhaseManager().setPhase(EnderDragonPhase.getById(s.phase));
+        }
     }
 
     private static void discoverBosses() {
@@ -224,11 +239,11 @@ public final class MobTrailJournal {
     }
 
     private static boolean sameState(Sample a, Sample b) {
-        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell && a.invul == b.invul;
+        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell && a.invul == b.invul && a.phase == b.phase;
     }
 
     private static boolean cheapSameState(Sample a, Mob mob) {
-        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0) && a.invul == (mob instanceof WitherBoss w ? w.getInvulnerableTicks() : 0);
+        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0) && a.invul == (mob instanceof WitherBoss w ? w.getInvulnerableTicks() : 0) && a.phase == phaseOf(mob);
     }
 
     private static Sample makeSample(Mob mob, long now) {
@@ -258,6 +273,7 @@ public final class MobTrailJournal {
             s.swell = ((CreeperAccessor) creeper).tt$getSwell();
         }
         if (mob instanceof WitherBoss wither) s.invul = wither.getInvulnerableTicks();
+        s.phase = phaseOf(mob);
         return s;
     }
 
@@ -283,7 +299,6 @@ public final class MobTrailJournal {
 
             Entity e = level.getEntity(id);
             if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
-            if (mob instanceof EnderDragon) continue;
             if (mob.isDeadOrDying() && !MobJournal.isDoomed(mob)) continue;
 
             if (!puppets.contains(id)) {
@@ -308,7 +323,7 @@ public final class MobTrailJournal {
     }
 
     private static void applySample(Mob mob, Sample s) {
-        mob.setNoAi(true);
+        mob.setNoAi(!(mob instanceof EnderDragon));
         mob.setDeltaMovement(Vec3.ZERO);
         mob.fallDistance = 0;
 
@@ -320,7 +335,7 @@ public final class MobTrailJournal {
             mob.setPose(Pose.STANDING);
             mob.setHealth(Math.min(s.health, mob.getMaxHealth()));
         }
-        if (isBoss(mob)) {
+        if (mob instanceof WitherBoss) {
             Float prev = lastBossHealth.put(mob.getUUID(), s.health);
             if (prev != null && s.health > prev && mob.getHealth() < s.health) {
                 mob.setHealth(Math.min(s.health, mob.getHealth() + (s.health - prev)));
@@ -338,9 +353,7 @@ public final class MobTrailJournal {
         if (s.swinging && mob.swingTime == 0) mob.swingTime = 1;
         mob.setAggressive(s.aggressive);
 
-        if (mob instanceof WitherBoss wither && wither.getInvulnerableTicks() != s.invul) {
-            wither.setInvulnerableTicks(s.invul);
-        }
+        applyBossState(mob, s);
 
         if (mob instanceof Creeper creeper) {
             if (creeper.getSwellDir() != s.swellDir) creeper.setSwellDir(s.swellDir);
@@ -482,7 +495,7 @@ public final class MobTrailJournal {
             if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
 
             mob.setHealth(Math.min(s.health, mob.getMaxHealth()));
-            if (mob instanceof WitherBoss wither) wither.setInvulnerableTicks(s.invul);
+            applyBossState(mob, s);
             if (mob.deathTime > 0) {
                 mob.deathTime = 0;
                 mob.hurtTime = 0;
