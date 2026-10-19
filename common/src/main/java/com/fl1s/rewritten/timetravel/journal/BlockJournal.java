@@ -74,6 +74,7 @@ public final class BlockJournal {
         long seq;
         int visit = -1;
         boolean root;
+        boolean build;
         String oldItems;
         String newItems;
         transient BlockState oldParsed;
@@ -114,6 +115,7 @@ public final class BlockJournal {
     private static final ArrayDeque<SetFrame> setFrames = new ArrayDeque<>();
     private static final Map<ServerLevel, Set<BlockPos>> jukeboxes = new HashMap<>();
     private static int actionDepth = 0;
+    private static int buildDepth = 0;
 
     public static boolean isApplying() {
         return applying;
@@ -129,6 +131,30 @@ public final class BlockJournal {
 
     public static void exitAction() {
         if (actionDepth > 0) actionDepth--;
+    }
+
+    public static void enterBuild() {
+        buildDepth++;
+    }
+
+    public static void exitBuild() {
+        if (buildDepth > 0) buildDepth--;
+    }
+
+    public static boolean isLocked(ServerLevel level, BlockPos pos, BlockState requested) {
+        if (!TimeTravel.isLooping || applying || replayingLive || buildDepth > 0) return false;
+        List<Entry> list = byPos.get(pos.asLong());
+        if (list == null) return false;
+        BlockState current = level.getBlockState(pos);
+        if (current.is(requested.getBlock())) return false;
+        String dim = level.dimension().location().toString();
+        long now = TimeTravel.timelineTick;
+        for (Entry e : list) {
+            if (!e.build || e.tick <= now || !e.dim.equals(dim)) continue;
+            BlockState old = oldState(e);
+            if (old != null && old.is(current.getBlock())) return true;
+        }
+        return false;
     }
 
     private static String serialize(BlockState state) {
@@ -180,6 +206,7 @@ public final class BlockJournal {
 
     public static void flushWatches() {
         actionDepth = 0;
+        buildDepth = 0;
         setFrames.clear();
         pollContainers();
         if (watches.isEmpty()) return;
@@ -194,7 +221,9 @@ public final class BlockJournal {
     public static void onBlockChanged(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
         if (applying || !TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         SetFrame top = setFrames.peek();
-        if (top != null && top.pos == pos.asLong() && top.level == level && top.requested == now) top.notified = true;
+        if (top != null && top.pos == pos.asLong() && top.level == level && top.requested.equals(now)) {
+            top.notified = true;
+        }
         for (SetFrame f : setFrames) {
             if (!f.notified && f.pos == pos.asLong() && f.level == level
                     && f.requested.equals(old) && !f.before.equals(old)) {
@@ -230,10 +259,10 @@ public final class BlockJournal {
         List<Entry> same = byPos.get(pos.asLong());
         if (same != null) {
             for (Entry e : same) {
-                if (e.visit != visit && e.dim.equals(dim)
-                        && Math.abs(e.tick - TimeTravel.timelineTick) <= DEDUP_TICKS
-                        && oldS.equals(e.oldState) && newS.equals(e.newState))
-                    return;
+                if (!e.dim.equals(dim)) continue;
+                if (Math.abs(e.tick - TimeTravel.timelineTick) > DEDUP_TICKS) continue;
+                if (!oldS.equals(e.oldState) || !newS.equals(e.newState)) continue;
+                return;
             }
         }
 
@@ -251,6 +280,7 @@ public final class BlockJournal {
         entry.visit = visit;
         entry.root = actionDepth > 0
                 && !(old.getBlock() instanceof RedStoneWireBlock && now.getBlock() instanceof RedStoneWireBlock);
+        entry.build = buildDepth > 0;
         STORE.entries().add(entry);
         index(entry);
         STORE.markDirty();
@@ -295,7 +325,7 @@ public final class BlockJournal {
     public static void tick() {
         boolean replay = ReplayState.isReplaying();
         STORE.tick(e -> {
-            if (e.root || replay) applyLive(e);
+            if (e.root || e.build || replay) applyLive(e);
         });
         flushJukeboxes();
     }

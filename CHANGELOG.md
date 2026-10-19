@@ -10,7 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Weather and End Dragon bossfights support
+ - Weather and End Dragon bossfights support
+
+### Fixed
+
+ - Golems duplicated spawn and flying pumpkin that kills them
 
 ## [1.21.1-0.10.8] - 2026-11-19
 
