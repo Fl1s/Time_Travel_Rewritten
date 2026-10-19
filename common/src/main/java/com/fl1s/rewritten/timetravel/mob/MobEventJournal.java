@@ -13,6 +13,7 @@ import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.monster.Creeper;
 
 import java.util.*;
@@ -94,6 +95,13 @@ public final class MobEventJournal {
                     MobJournal.enterApplying();
                     try {
                         ((CreeperAccessor) creeper).tt$explode();
+                    } finally {
+                        MobJournal.exitApplying();
+                    }
+                } else if (living instanceof EnderDragon) {
+                    MobJournal.enterApplying();
+                    try {
+                        living.discard();
                     } finally {
                         MobJournal.exitApplying();
                     }
