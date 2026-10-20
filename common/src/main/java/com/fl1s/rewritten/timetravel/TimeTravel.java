@@ -17,6 +17,8 @@ import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Skin;
+import com.fl1s.rewritten.timetravel.time.EraLevels;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.network.protocol.game.ClientboundStopSoundPacket;
@@ -95,6 +97,7 @@ public class TimeTravel {
 
 	public static void resetSession() {
 		session = new TimelineSession();
+		TimeContext.reset();
 		MocapAdapter.reset();
 	}
 
@@ -208,6 +211,7 @@ public class TimeTravel {
 			config.isLooping = true;
 			config.timelineTick = sharedTick;
 		}
+		EraLevels.releaseAll();
 		BlockJournal.flushWatches();
 		JOURNALS.saveAll();
 		MobBinding.save();
