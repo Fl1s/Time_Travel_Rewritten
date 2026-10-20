@@ -805,7 +805,7 @@ public final class BlockJournal {
         finishBatch();
         flushFluids();
         STORE.entries().removeAll(mine);
-        STORE.upcoming().removeAll(mine);
+        STORE.removeUpcoming(mine::contains);
         rebuildIndex();
         STORE.markDirty();
     }
