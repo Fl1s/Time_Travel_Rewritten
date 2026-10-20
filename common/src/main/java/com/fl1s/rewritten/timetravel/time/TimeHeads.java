@@ -73,6 +73,10 @@ public final class TimeHeads {
         prune();
     }
 
+    public List<TimeHead> all() {
+        return new ArrayList<>(heads.values());
+    }
+
     public List<TimeHead> occupied() {
         List<TimeHead> out = new ArrayList<>();
         for (TimeHead head : heads.values()) {

@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.config;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.time.EraLevels;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +46,7 @@ public final class ConfigOptions {
                     "Each player carries their own time offset instead of the whole server sharing one clock.",
                     false, v -> {
                         TimeTravel.internalTime = v;
-                        if (!v && TimeTravel.heads() != null) TimeTravel.heads().collapseToShared();
+                        if (!v && TimeTravel.heads() != null) { TimeTravel.heads().collapseToShared(); EraLevels.releaseAll(); }
                     }),
             new ConfigOption.Bool("timeline", "jumpRequiresOp",
                     "Only operators may jump in time.",

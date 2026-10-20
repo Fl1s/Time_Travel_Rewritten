@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.commands;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.time.EraLevels;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -24,7 +25,10 @@ public class TogglesCommands {
         togglesNode.then(toggle("internalTime", () -> TimeTravel.internalTime, v -> {
             TimeTravel.internalTime = v;
             TimeTravel.config.internalTime = v;
-            if (!v && TimeTravel.heads() != null) TimeTravel.heads().collapseToShared();
+            if (!v && TimeTravel.heads() != null) {
+                TimeTravel.heads().collapseToShared();
+                EraLevels.releaseAll();
+            }
             TimeTravel.broadcastSync();
         }));
 

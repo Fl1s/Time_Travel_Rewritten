@@ -13,11 +13,14 @@ import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.journal.*;
 import com.fl1s.rewritten.timetravel.mob.*;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.time.EraLevels;
+import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameRules;
 
@@ -89,6 +92,7 @@ public final class Timeline {
         TimeTravel.config.timelineTick = TimeTravel.sharedTick;
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         VoicechatInteractionCompat.clearCooldowns();
+        EraLevels.releaseAll();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
         TimelineEventBus.fireStop();
@@ -142,12 +146,28 @@ public final class Timeline {
         }
         pd.setLastJumpServerTick(nowServerTick);
 
+        long previousOffset = pd.getTimeOffset();
         pd.setLastJumpOrigin(from);
         s.heads.move(pd, TimeTravel.presentTick - target);
+
+        TimeHead head = s.heads.headOf(pd);
+        ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
+        ServerLevel destination = TimeTravel.serverLevel;
+        if (!head.isPresent()) {
+            destination = EraLevels.getOrCreate(head);
+            if (destination == null) {
+                s.heads.move(pd, previousOffset);
+                pd.setLastJumpServerTick(-1);
+                return "Could not open that era - see the server log";
+            }
+        }
+        if (player != null && player.level() != destination) {
+            player.teleportTo(destination, player.getX(), player.getY(), player.getZ(),
+                    player.getYRot(), player.getXRot());
+        }
+
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
-
-        ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
         if (player != null) TimeTravel.sendSync(player);
 
         TimeTravel.TIMELINE_LOGGER.info("Internal time jump by {}: {} -> {} (offset {})",
@@ -266,6 +286,8 @@ public final class Timeline {
         CloneTracks.applyHealthAll();
         if (TimeTravel.trackVoice) VoicechatCompat.onTick();
         s.deathChain.tick();
+
+        EraLevels.sweep();
 
         if (TimeTravel.sharedTick % 20 == 0) TimeTravel.broadcastSync();
         if (TimeTravel.sharedTick % 1200 == 0) TimeTravel.config.save();
