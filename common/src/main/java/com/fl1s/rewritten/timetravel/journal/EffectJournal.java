@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.mob.WardenEventJournal;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -57,7 +58,7 @@ public final class EffectJournal {
     private static boolean replaying = false;
 
     public static void recordSound(ServerLevel level, Player except, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch) {
-        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || WardenEventJournal.suppressesEffects()) return;
         PlayerData pd = recorder(level, except, x, y, z);
         if (pd == null) return;
         Optional<ResourceKey<SoundEvent>> key = sound.unwrapKey();

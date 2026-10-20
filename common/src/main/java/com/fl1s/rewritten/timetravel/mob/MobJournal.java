@@ -118,6 +118,8 @@ public final class MobJournal {
         MobTrailJournal.tick();
         MobEventJournal.tick();
         MobStateJournal.tick();
+        WardenEventJournal.tick();
+        WardenWarningJournal.tick();
     }
 
     public static void onJump(long from, long to) {
@@ -125,6 +127,8 @@ public final class MobJournal {
         MobTrailJournal.onJump(from, to);
         MobEventJournal.onJump(from, to);
         MobStateJournal.onJump(from, to);
+        WardenEventJournal.onJump(from, to);
+        WardenWarningJournal.onJump(from, to);
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
@@ -132,6 +136,8 @@ public final class MobJournal {
         MobTrailJournal.eraseVisits(visitIds);
         MobEventJournal.eraseVisits(visitIds);
         MobStateJournal.eraseVisits(visitIds);
+        WardenEventJournal.eraseVisits(visitIds);
+        WardenWarningJournal.eraseVisits(visitIds);
         if (TimeTravel.server != null && TimeTravel.isLooping) {
             MobSpawnJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
             MobStateJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
@@ -143,6 +149,8 @@ public final class MobJournal {
         MobTrailJournal.rebuildUpcoming();
         MobEventJournal.rebuildUpcoming();
         MobStateJournal.rebuildUpcoming();
+        WardenEventJournal.rebuildUpcoming();
+        WardenWarningJournal.rebuildUpcoming();
     }
 
     public static void load() {
@@ -150,6 +158,8 @@ public final class MobJournal {
         MobTrailJournal.load();
         MobEventJournal.load();
         MobStateJournal.load();
+        WardenEventJournal.load();
+        WardenWarningJournal.load();
     }
 
     public static void save() {
@@ -157,6 +167,8 @@ public final class MobJournal {
         MobTrailJournal.save();
         MobEventJournal.save();
         MobStateJournal.save();
+        WardenEventJournal.save();
+        WardenWarningJournal.save();
     }
 
     public static void saveIfDirty() {
@@ -164,6 +176,8 @@ public final class MobJournal {
         MobTrailJournal.saveIfDirty();
         MobEventJournal.saveIfDirty();
         MobStateJournal.saveIfDirty();
+        WardenEventJournal.saveIfDirty();
+        WardenWarningJournal.saveIfDirty();
     }
 
     public static void clear() {
@@ -171,5 +185,7 @@ public final class MobJournal {
         MobTrailJournal.clear();
         MobEventJournal.clear();
         MobStateJournal.clear();
+        WardenEventJournal.clear();
+        WardenWarningJournal.clear();
     }
 }

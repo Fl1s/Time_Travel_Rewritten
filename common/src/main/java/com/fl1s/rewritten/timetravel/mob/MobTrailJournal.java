@@ -465,6 +465,11 @@ public final class MobTrailJournal {
         return s.get(Math.max(0, lo - 1));
     }
 
+    static List<Sample> samplesOf(UUID id) {
+        Track t = tracks.get(id);
+        return t == null ? null : t.samples;
+    }
+
     public static Vec3 positionAt(UUID id, long tick) {
         Track t = tracks.get(id);
         if (t == null || t.samples.isEmpty()) return null;
