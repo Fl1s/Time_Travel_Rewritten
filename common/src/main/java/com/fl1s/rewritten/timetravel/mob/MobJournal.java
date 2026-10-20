@@ -8,6 +8,8 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.monster.warden.Warden;
 
 import java.util.Set;
 import java.util.UUID;
@@ -22,12 +24,26 @@ public final class MobJournal {
 
     private static boolean killing = false;
     private static boolean applying = false;
+    private static boolean dragonFinishing = false;
 
     public static boolean isKilling() { return killing; }
     public static boolean isApplying() { return applying; }
     public static void enterApplying() { applying = true; }
     public static void exitApplying() { applying = false; }
     public static void setKilling(boolean value) { killing = value; }
+
+    public static void onDragonKilled(EnderDragon dragon) {
+        dragonFinishing = true;
+        try {
+            recordDeath(dragon, false);
+        } finally {
+            dragonFinishing = false;
+        }
+    }
+
+    public static void onWardenDug(Warden warden) {
+        recordDeath(warden, false, true);
+    }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
         MobSpawnJournal.onSpawn(level, entity);
@@ -55,15 +71,20 @@ public final class MobJournal {
     }
 
     private static void recordDeath(LivingEntity entity, boolean explode) {
+        recordDeath(entity, explode, false);
+    }
+
+    private static void recordDeath(LivingEntity entity, boolean explode, boolean dig) {
         if (killing || applying) return;
         if (!TimeTravel.isLooping) return;
         if (MobTrailJournal.isReplaying() && isDoomed(entity)) return;
         if (entity instanceof net.minecraft.world.entity.player.Player) return;
+        if (entity instanceof EnderDragon && !dragonFinishing) return;
         if (!entity.getType().canSerialize()) return;
         if (entity instanceof Mob deadMob && entity.level() instanceof ServerLevel deadLevel) {
             MobSpawnJournal.ensureRegistered(deadLevel, deadMob);
         }
-        MobEventJournal.recordDeath(entity, explode);
+        MobEventJournal.recordDeath(entity, explode, dig);
     }
 
     private static boolean isReplayEntity(Entity e) {
@@ -97,6 +118,8 @@ public final class MobJournal {
         MobTrailJournal.tick();
         MobEventJournal.tick();
         MobStateJournal.tick();
+        WardenEventJournal.tick();
+        WardenWarningJournal.tick();
     }
 
     public static void onJump(long from, long to) {
@@ -104,6 +127,8 @@ public final class MobJournal {
         MobTrailJournal.onJump(from, to);
         MobEventJournal.onJump(from, to);
         MobStateJournal.onJump(from, to);
+        WardenEventJournal.onJump(from, to);
+        WardenWarningJournal.onJump(from, to);
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
@@ -111,6 +136,8 @@ public final class MobJournal {
         MobTrailJournal.eraseVisits(visitIds);
         MobEventJournal.eraseVisits(visitIds);
         MobStateJournal.eraseVisits(visitIds);
+        WardenEventJournal.eraseVisits(visitIds);
+        WardenWarningJournal.eraseVisits(visitIds);
         if (TimeTravel.server != null && TimeTravel.isLooping) {
             MobSpawnJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
             MobStateJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
@@ -122,6 +149,8 @@ public final class MobJournal {
         MobTrailJournal.rebuildUpcoming();
         MobEventJournal.rebuildUpcoming();
         MobStateJournal.rebuildUpcoming();
+        WardenEventJournal.rebuildUpcoming();
+        WardenWarningJournal.rebuildUpcoming();
     }
 
     public static void load() {
@@ -129,6 +158,8 @@ public final class MobJournal {
         MobTrailJournal.load();
         MobEventJournal.load();
         MobStateJournal.load();
+        WardenEventJournal.load();
+        WardenWarningJournal.load();
     }
 
     public static void save() {
@@ -136,6 +167,8 @@ public final class MobJournal {
         MobTrailJournal.save();
         MobEventJournal.save();
         MobStateJournal.save();
+        WardenEventJournal.save();
+        WardenWarningJournal.save();
     }
 
     public static void saveIfDirty() {
@@ -143,6 +176,8 @@ public final class MobJournal {
         MobTrailJournal.saveIfDirty();
         MobEventJournal.saveIfDirty();
         MobStateJournal.saveIfDirty();
+        WardenEventJournal.saveIfDirty();
+        WardenWarningJournal.saveIfDirty();
     }
 
     public static void clear() {
@@ -150,5 +185,7 @@ public final class MobJournal {
         MobTrailJournal.clear();
         MobEventJournal.clear();
         MobStateJournal.clear();
+        WardenEventJournal.clear();
+        WardenWarningJournal.clear();
     }
 }

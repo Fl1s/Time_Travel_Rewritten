@@ -42,27 +42,37 @@ public final class DoomedFeedback {
             "message.timetravel_rewritten.vehicle.4",
     };
 
+    private static final String[] BLOCK_MESSAGES = {
+            "message.timetravel_rewritten.block.1",
+            "message.timetravel_rewritten.block.2",
+            "message.timetravel_rewritten.block.3",
+            "message.timetravel_rewritten.block.4",
+            "message.timetravel_rewritten.block.5",
+            "message.timetravel_rewritten.block.6",
+    };
+
     private static final long COOLDOWN_TICKS = 40;
     private static final Map<UUID, Long> lastShown = new HashMap<>();
 
     public static void tryShow(ServerPlayer player, ServerLevel level, boolean doomed) {
-        long now = level.getGameTime();
-        Long last = lastShown.get(player.getUUID());
-        if (last != null && now - last < COOLDOWN_TICKS) return;
-        lastShown.put(player.getUUID(), now);
-
-        String[] pool = doomed ? DOOMED_MESSAGES : REPLAY_MESSAGES;
-        String key = pool[level.getRandom().nextInt(pool.length)];
-        player.displayClientMessage(Component.translatable(key), true);
+        show(player, level, doomed ? DOOMED_MESSAGES : REPLAY_MESSAGES);
     }
 
     public static void tryShowVehicle(ServerPlayer player, ServerLevel level) {
+        show(player, level, VEHICLE_MESSAGES);
+    }
+
+    public static void tryShowBlock(ServerPlayer player, ServerLevel level) {
+        show(player, level, BLOCK_MESSAGES);
+    }
+
+    private static void show(ServerPlayer player, ServerLevel level, String[] pool) {
         long now = level.getGameTime();
         Long last = lastShown.get(player.getUUID());
         if (last != null && now - last < COOLDOWN_TICKS) return;
         lastShown.put(player.getUUID(), now);
 
-        String key = VEHICLE_MESSAGES[level.getRandom().nextInt(VEHICLE_MESSAGES.length)];
+        String key = pool[level.getRandom().nextInt(pool.length)];
         player.displayClientMessage(Component.translatable(key), true);
     }
 

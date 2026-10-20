@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.11.0] - 2026-11-20
+
+### Added
+
+ - Weather bossfight support
+ - End Dragon (huge wip) and Warden (mid wip) bossfights support
+
+### Fixed
+
+ - Golems duplicated spawn and flying pumpkin that kills them
+
 ## [1.21.1-0.10.8] - 2026-11-19
 
 ### Added
