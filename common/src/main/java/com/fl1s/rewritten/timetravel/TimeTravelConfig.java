@@ -18,11 +18,13 @@ public class TimeTravelConfig {
     public boolean firstStart = true;
     public boolean isLooping = false;
     public long timelineTick = 0;
+    public long presentTick = 0;
     public long dayTimeOrigin = 0;
     public int nextVisitId = 1;
     public int configVersion = 0;
 
     public boolean syncDayTime = true;
+    public boolean internalTime = false;
     public boolean jumpRequiresOp = false;
     public boolean chainDeath = true;
     public int jumpCooldownTicks = 20;
@@ -96,6 +98,7 @@ public class TimeTravelConfig {
         if (config.marks == null) config.marks = new java.util.LinkedHashMap<>();
         if (config.cloneLookaheadTicks < 0 || config.cloneLookaheadTicks > 100) config.cloneLookaheadTicks = 0;
         if (config.timelineTick < 0) config.timelineTick = 0;
+        if (config.presentTick < config.timelineTick) config.presentTick = config.timelineTick;
         if (config.nextVisitId < 1) config.nextVisitId = 1;
         if (config.entityTrackingDistance < 1) config.entityTrackingDistance = 32;
         if (config.voiceInteractionThresholdDb < -127 || config.voiceInteractionThresholdDb > 0) {

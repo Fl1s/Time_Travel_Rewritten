@@ -23,8 +23,10 @@ public class LifecycleEvent {
         TimeTravelConfig c = TimeTravel.config;
         TimeTravel.isLooping = c.isLooping;
         TimeTravel.sharedTick = c.timelineTick;
+        TimeTravel.presentTick = Math.max(c.presentTick, c.timelineTick);
         TimeTravel.dayTimeOrigin = c.dayTimeOrigin;
         TimeTravel.syncDayTime = c.syncDayTime;
+        TimeTravel.internalTime = c.internalTime;
         TimeTravel.jumpRequiresOp = c.jumpRequiresOp;
         TimeTravel.chainDeath = c.chainDeath;
         TimeTravel.jumpCooldownTicks = c.jumpCooldownTicks;

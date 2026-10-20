@@ -13,16 +13,25 @@ import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.journal.*;
 import com.fl1s.rewritten.timetravel.mob.*;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameRules;
 
 /**
  * Core timeline: shared clock, jump orchestration, and per-server-tick work.
  */
 public final class Timeline {
+
+    private static void advancePresent(long tick) {
+        if (tick > TimeTravel.presentTick) {
+            TimeTravel.presentTick = tick;
+            TimeTravel.config.presentTick = tick;
+        }
+    }
 
     public void start() {
         if (TimeTravel.isLooping) {
@@ -101,6 +110,9 @@ public final class Timeline {
 
         TimeTravel.sharedTick = 0;
         TimeTravel.config.timelineTick = 0;
+        TimeTravel.presentTick = 0;
+        TimeTravel.config.presentTick = 0;
+        s.heads.resetAll();
         TimeTravel.config.nextVisitId = 1;
         TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
         s.lastJumpOrigin = -1;
@@ -109,11 +121,46 @@ public final class Timeline {
         TimeTravel.broadcastSync();
     }
 
+    private String jumpHead(long target, String initiatorName) {
+        TimelineSession s = TimeTravel.session();
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(initiatorName);
+        if (pd == null) return "Only recorded players can travel while internalTime is on";
+
+        long from = s.heads.positionOf(pd);
+        target = Math.min(target, TimeTravel.presentTick);
+        if (TimeTravel.maxJumpTicks > 0) {
+            long min = Math.max(0, from - TimeTravel.maxJumpTicks);
+            long max = Math.min(TimeTravel.presentTick, from + TimeTravel.maxJumpTicks);
+            target = Math.min(max, Math.max(min, target));
+        }
+        if (target == from) return "Already at " + TimeFormat.clock(target);
+
+        long nowServerTick = TimeTravel.server.getTickCount();
+        if (TimeTravel.jumpCooldownTicks > 0 && pd.getLastJumpServerTick() >= 0
+                && nowServerTick - pd.getLastJumpServerTick() < TimeTravel.jumpCooldownTicks) {
+            return "Time jump cooldown - wait a moment";
+        }
+        pd.setLastJumpServerTick(nowServerTick);
+
+        pd.setLastJumpOrigin(from);
+        s.heads.move(pd, TimeTravel.presentTick - target);
+        TimeTravel.timelineSceneManager.saveRecordingPlayers();
+        TimeTravel.config.save();
+
+        ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
+        if (player != null) TimeTravel.sendSync(player);
+
+        TimeTravel.TIMELINE_LOGGER.info("Internal time jump by {}: {} -> {} (offset {})",
+                initiatorName, from, target, pd.getTimeOffset());
+        return null;
+    }
+
     public String jumpTo(long target, String initiatorName) {
         if (!TimeTravel.isLooping) return "Timeline is not running (use /timetravel start)";
         if (!MocapAdapter.isReady()) return "Mocap is not ready yet";
 
         target = Math.max(0, target);
+        if (TimeTravel.internalTime) return jumpHead(target, initiatorName);
         if (TimeTravel.maxJumpTicks > 0) {
             long min = Math.max(0, TimeTravel.sharedTick - TimeTravel.maxJumpTicks);
             long max = TimeTravel.sharedTick + TimeTravel.maxJumpTicks;
@@ -134,6 +181,7 @@ public final class Timeline {
 
         long from = TimeTravel.sharedTick;
         s.lastJumpOrigin = from;
+        if (initiatorPd != null) initiatorPd.setLastJumpOrigin(from);
         int dir = target > from ? 1 : -1;
         TimeTravel.TIMELINE_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
@@ -148,6 +196,8 @@ public final class Timeline {
         CloneManager clones = s.clones;
         clones.stopAll();
 
+        advancePresent(target);
+        s.heads.moveAll(TimeTravel.presentTick - target);
         TimeTravel.sharedTick = target;
         TimeTravel.config.timelineTick = target;
         if (TimeTravel.syncDayTime && TimeTravel.serverLevel.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
@@ -208,7 +258,9 @@ public final class Timeline {
         clones.flushPending();
         clones.flushSounds();
 
-        TimeTravel.sharedTick++;
+        TimeTravel.presentTick++;
+        TimeTravel.config.presentTick = TimeTravel.presentTick;
+        TimeTravel.sharedTick = s.heads.sharedPosition();
         TimeTravel.config.timelineTick = TimeTravel.sharedTick;
         CloneTracks.pollAll();
         clones.replayEvents();
