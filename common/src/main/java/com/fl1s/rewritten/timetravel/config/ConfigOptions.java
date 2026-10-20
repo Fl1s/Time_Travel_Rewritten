@@ -17,6 +17,10 @@ public final class ConfigOptions {
             new ConfigOption.Bool("display", "displayTimeInTicks",
                     "Show time in ticks instead of minutes and seconds.",
                     false, v -> TimeTravel.displayTimeInTicks = v),
+            new ConfigOption.Bool("display", "cloneVanishEffect",
+                    "Show the 2d visual effects when a past self vanishes. GO READ HOMESTUCK!!! >:[",
+                    true, v -> TimeTravel.cloneVanishEffect = v),
+
             new ConfigOption.Bool("voice", "showPlayerVoiceIcon",
                     "Show the voice chat icon above players.",
                     true, v -> TimeTravel.showPlayerVoiceIcon = v)

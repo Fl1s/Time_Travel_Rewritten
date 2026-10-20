@@ -5,6 +5,8 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.data.*;
 import com.fl1s.rewritten.timetravel.mocap.ClonePlayback;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.net.CloneVanishPayload;
+import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -31,6 +33,8 @@ public final class CloneManager {
     public static final long PENDING_VISIT_WINDOW = 1200;
     public static final int CLONE_SYNC_SKIP_LIMIT = 8000;
     public static final int CLONE_SKIP_PER_TICK = 40;
+    public static final int VANISH_LEAD_TICKS = 32;
+    public static final int VANISH_SOUND_LEAD_TICKS = 3;
 
     public record PendingPiece(long startTick, String recording, String playerName, int skipTicks,
                                int visitId, int segment, long visitStartTick) {}
@@ -47,6 +51,8 @@ public final class CloneManager {
         int pendingSkip;
         boolean shielded;
         boolean wasInvulnerable;
+        long endTick = -1;
+        boolean vanishSent;
 
         Clone(ClonePlayback root, String playerName, int visitId, CloneFx fx, int pendingSkip, Visit visit) {
             this.root = root;
@@ -106,7 +112,9 @@ public final class CloneManager {
                             visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id));
                 }
                 if (visit.departDir != 0 && visit.endDim != null && visit.endTick > now) {
-                    pendingSounds.add(new PendingSound(visit.endTick, visit.endDim,
+                    long soundTick = visit.endTick - VANISH_SOUND_LEAD_TICKS;
+                    if (soundTick < now) soundTick = now;
+                    pendingSounds.add(new PendingSound(soundTick, visit.endDim,
                             visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id));
                 }
 
@@ -161,6 +169,7 @@ public final class CloneManager {
             boolean protect = clone.pendingSkip > 0 || now < clone.fx.graceUntil;
             if (protect) shield(clone);
             else if (clone.shielded) unshield(clone, now);
+            announceVanish(clone, now);
 
             if (clone.pendingSkip > 0) {
                 int step = Math.min(clone.pendingSkip, CLONE_SKIP_PER_TICK);
@@ -237,6 +246,7 @@ public final class CloneManager {
         int pendingSkip = piece.skipTicks();
         int syncSkip = Math.min(pendingSkip, CLONE_SYNC_SKIP_LIMIT);
         Clone clone = new Clone(playback, piece.playerName(), piece.visitId(), fx, pendingSkip - syncSkip, cloneVisit);
+        clone.endTick = endTickOf(cloneVisit, piece.recording());
         roots.add(clone);
 
         shield(clone);
@@ -247,6 +257,31 @@ public final class CloneManager {
 
         if (TimeTravel.trackVoice && TimeTravel.voiceChatLoaded) {
             VoicechatCompat.onCloneStart(pd, piece.visitId(), piece.segment(), piece.visitStartTick(), cloneEntity);
+        }
+    }
+
+    private static long endTickOf(Visit visit, String recording) {
+        if (visit == null) return -1;
+        for (int i = 0; i < visit.pieces.size(); i++) {
+            if (!visit.pieces.get(i).recording.equals(recording)) continue;
+            long end = i + 1 < visit.pieces.size() ? visit.pieces.get(i + 1).startTick : visit.endTick;
+            return end > 0 ? end : -1;
+        }
+        return -1;
+    }
+
+    private static void announceVanish(Clone g, long now) {
+        if (g.vanishSent || g.endTick < 0 || g.pendingSkip > 0) return;
+        long remaining = g.endTick - now;
+        if (remaining > VANISH_LEAD_TICKS) return;
+        g.vanishSent = true;
+        if (remaining <= 0) return;
+        Entity entity = g.fx.entity();
+        if (entity == null || entity.isRemoved() || !(entity.level() instanceof ServerLevel level)) return;
+        CloneVanishPayload payload = new CloneVanishPayload(entity.getId(), (int) remaining);
+        for (ServerPlayer p : new ArrayList<>(level.players())) {
+            if (Clones.is(p)) continue;
+            TimelineNet.sendToPlayer(p, payload);
         }
     }
 

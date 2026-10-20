@@ -49,6 +49,7 @@ public class TimeTravel {
 	public static boolean chainDeath;
 
 	public static boolean showTimelineInfo;
+	public static boolean cloneVanishEffect;
 	public static boolean displayTimeInTicks;
 	public static boolean trackItems;
 	public static int entityTrackingDistance;

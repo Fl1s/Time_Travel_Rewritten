@@ -6,9 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Added
+
+ - Past self time jump animation
+
 ### Fixed
 
- - Time travel mode ignores doDaylightCycle gamerule
+ - doDaylightCycle=false gamerule does nothing
 
 ## [1.21.1-0.11.0] - 2026-11-20
 
