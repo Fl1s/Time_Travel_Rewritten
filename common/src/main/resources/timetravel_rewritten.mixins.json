@@ -52,10 +52,12 @@
     "ElytraLayerMixin",
     "CapeLayerMixin",
     "PlayerModelMixin",
-    "BlockEntityWithoutLevelRendererMixin",
-    "EntityRenderDispatcherMixin"
+    "EntityRenderDispatcherMixin",
+    "ItemInHandRendererMixin",
+    "ItemRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "refmap": "timetravel_rewritten-common.refmap.json"
 }

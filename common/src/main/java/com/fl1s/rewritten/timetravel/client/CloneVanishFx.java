@@ -162,7 +162,7 @@ public final class CloneVanishFx {
         int g = (original >> 8) & 255;
         int b = original & 255;
         a = Math.round(a * bodyAlpha);
-        if (TimeTravel.cloneVanishEffect) {
+        if (TimeTravel.knightOfTimeMode) {
             g = Math.round(g * tintGb);
             b = Math.round(b * tintGb);
         } else {
@@ -170,6 +170,11 @@ public final class CloneVanishFx {
             r = Math.round(r * black);
             g = Math.round(g * black);
             b = Math.round(b * black);
+        }
+        if (flash > 0.0F) {
+            r = Math.min(255, Math.round(r + (255 - r) * flash * 0.7F));
+            g = Math.min(255, Math.round(g + (230 - g) * flash * 0.7F));
+            b = Math.min(255, Math.round(b + (230 - b) * flash * 0.7F));
         }
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
@@ -187,7 +192,7 @@ public final class CloneVanishFx {
             effects.clear();
             return;
         }
-        boolean spritesEnabled = TimeTravel.cloneVanishEffect && poseStack != null;
+        boolean spritesEnabled = TimeTravel.knightOfTimeMode && poseStack != null;
         MultiBufferSource.BufferSource buffer = spritesEnabled ? mc.renderBuffers().bufferSource() : null;
         float now = level.getGameTime() + partialTick;
         boolean drew = false;
