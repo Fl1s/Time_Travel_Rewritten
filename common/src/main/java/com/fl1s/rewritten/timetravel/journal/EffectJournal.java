@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -122,7 +123,7 @@ public final class EffectJournal {
 
         for (int i = STORE.entries().size() - 1; i >= 0; i--) {
             Entry p = STORE.entries().get(i);
-            if (p.tick != TimeTravel.sharedTick) break;
+            if (p.tick != TimeContext.now()) break;
             if (p.kind == BLOCK_EVENT && p.x == pos.getX() && p.y == pos.getY() && p.z == pos.getZ() && p.a == a && p.b == b)
                 return;
         }
@@ -178,11 +179,11 @@ public final class EffectJournal {
     private static Entry create(int kind, ServerLevel level, PlayerData pd, double x, double y, double z) {
         Entry e = new Entry();
         e.kind = kind;
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = x;
         e.y = y;
         e.z = z;
-        e.tick = TimeTravel.sharedTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         return e;

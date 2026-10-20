@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
@@ -46,7 +47,7 @@ public final class WeatherJournal {
     private static boolean applying = false;
 
     private static String key(ServerLevel level) {
-        return level.dimension().location().toString();
+        return Levels.canonicalId(level);
     }
 
     private static boolean hasSky(ServerLevel level) {
@@ -82,7 +83,7 @@ public final class WeatherJournal {
 
     private static boolean hasFuture(String dim) {
         Long max = maxTickByDim.get(dim);
-        return max != null && max > TimeTravel.sharedTick;
+        return max != null && max > TimeContext.now();
     }
 
     public static boolean isProtected(ServerLevel level) {
@@ -130,7 +131,7 @@ public final class WeatherJournal {
 
     private static void rebuildCurrent() {
         current.clear();
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.tick > now) continue;
             Entry prev = current.get(e.dim);
@@ -142,7 +143,7 @@ public final class WeatherJournal {
 
     public static void snapshotInitial() {
         for (ServerLevel level : owners()) {
-            if (!hasEntries(key(level))) write(level, TimeTravel.sharedTick, true);
+            if (!hasEntries(key(level))) write(level, TimeContext.now(), true);
         }
     }
 
@@ -175,12 +176,12 @@ public final class WeatherJournal {
 
     public static void onAdvance(ServerLevel level) {
         if (applying || !TimeTravel.isLooping || !isOwner(level) || isProtected(level)) return;
-        write(level, TimeTravel.sharedTick, false);
+        write(level, TimeContext.now(), false);
     }
 
     public static void onSetWeather(ServerLevel level) {
         if (applying || !TimeTravel.isLooping || !isOwner(level) || isProtected(level)) return;
-        write(level, TimeTravel.sharedTick, true);
+        write(level, TimeContext.now(), true);
     }
 
     public static void enforce(ServerLevel level) {
@@ -283,9 +284,9 @@ public final class WeatherJournal {
         rebuildCurrent();
         for (ServerLevel level : owners()) {
             String dim = key(level);
-            Entry best = findAt(dim, TimeTravel.sharedTick);
+            Entry best = findAt(dim, TimeContext.now());
             if (best == null) best = earliest(dim);
-            if (best != null) apply(level, best, TimeTravel.sharedTick, true);
+            if (best != null) apply(level, best, TimeContext.now(), true);
         }
         syncFollowers(true);
     }

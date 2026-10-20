@@ -1,5 +1,7 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.BossFightJournal;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
@@ -186,9 +188,9 @@ public final class MobTrailJournal {
 
     public static void seedInitial() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             for (Entity entity : level.getAllEntities()) {
                 if (!(entity instanceof Mob mob) || Clones.is(mob)) continue;
                 if (Clones.isVisualOnly(mob)) continue;
@@ -207,7 +209,7 @@ public final class MobTrailJournal {
 
     private static void sample(boolean onlyOutOfTime) {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
 
         if (now % 100 == 0) discoverBosses();
         sampledThisTick.clear();
@@ -215,7 +217,7 @@ public final class MobTrailJournal {
         double r2 = r * r;
 
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             List<ServerPlayer> viewers = new ArrayList<>(level.players());
             if (viewers.isEmpty()) continue;
 
@@ -308,7 +310,7 @@ public final class MobTrailJournal {
 
     public static void apply() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
 
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             UUID id = en.getKey();
@@ -624,7 +626,7 @@ public final class MobTrailJournal {
 
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         lastBossHealth.clear();
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             Track t = en.getValue();

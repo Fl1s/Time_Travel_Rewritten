@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.timeline;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.Journal;
@@ -41,7 +42,7 @@ public final class ChatTimeline {
         PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
         Entry e = new Entry();
-        e.tick = TimeTravel.sharedTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
         e.player = player.getName().getString();

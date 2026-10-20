@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.data.Levels;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -27,7 +28,7 @@ public final class VehicleJournal {
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
         if (!isTracked(entity)) return;
         VehicleSpawnJournal.onSpawn(level, entity);
-        VehicleTrailJournal.onSpawnSeen(entity.getUUID(), level.dimension().location().toString());
+        VehicleTrailJournal.onSpawnSeen(entity.getUUID(), Levels.canonicalId(level));
     }
 
     public static void onRemoved(Entity e, Entity.RemovalReason reason) {

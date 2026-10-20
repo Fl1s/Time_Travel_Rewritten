@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
@@ -70,7 +71,7 @@ public final class VehicleContainerJournal {
         if (TimeTravel.sharedTick % POLL_INTERVAL != 0) return;
 
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString().intern();
+            String dim = Levels.canonicalId(level);
             for (Entity e : level.getAllEntities()) {
                 if (!isContainer(e)) continue;
                 if (!(e instanceof Container container)) continue;
@@ -95,7 +96,7 @@ public final class VehicleContainerJournal {
                 entry.uuid = id;
                 entry.oldItems = prev;
                 entry.newItems = now;
-                entry.tick = TimeTravel.sharedTick;
+                entry.tick = TimeContext.now();
                 entry.seq = STORE.nextSeq();
                 entry.visit = pd.getCurrentVisit().id;
                 STORE.entries().add(entry);

@@ -1,5 +1,7 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
@@ -50,7 +52,7 @@ public final class MobJournal {
         MobSpawnJournal.onSpawn(level, entity);
         MobStateJournal.onSpawn(level, entity);
         if (entity instanceof Mob) {
-            MobTrailJournal.onSpawnSeen(entity.getUUID(), level.dimension().location().toString());
+            MobTrailJournal.onSpawnSeen(entity.getUUID(), Levels.canonicalId(level));
         }
         if (MobTrailJournal.isBoss(entity)) MobTrailJournal.registerBoss(entity.getUUID());
     }
@@ -100,13 +102,13 @@ public final class MobJournal {
         if (!(attacker instanceof Mob)) return false;
         MobEventJournal.Entry e = MobEventJournal.deathOf(attacker.getUUID());
         if (e == null) return false;
-        return e.tick > TimeTravel.sharedTick;
+        return e.tick > TimeContext.now();
     }
 
     public static int ownerVisit(UUID uuid) {
         MobEventJournal.Entry e = MobEventJournal.deathOf(uuid);
         if (e == null) return -1;
-        return e.tick > TimeTravel.sharedTick ? e.visit : -1;
+        return e.tick > TimeContext.now() ? e.visit : -1;
     }
 
     public static void fastForward(long from, long to) {
@@ -141,8 +143,8 @@ public final class MobJournal {
         WardenEventJournal.eraseVisits(visitIds);
         WardenWarningJournal.eraseVisits(visitIds);
         if (TimeTravel.server != null && TimeTravel.isLooping) {
-            MobSpawnJournal.onJump(TimeTravel.sharedTick, TimeTravel.sharedTick);
-            MobStateJournal.onJump(TimeTravel.sharedTick, TimeTravel.sharedTick);
+            MobSpawnJournal.onJump(TimeContext.now(), TimeContext.now());
+            MobStateJournal.onJump(TimeContext.now(), TimeContext.now());
         }
     }
 
