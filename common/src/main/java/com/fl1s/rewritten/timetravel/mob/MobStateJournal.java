@@ -29,6 +29,7 @@ import net.minecraft.world.entity.animal.goat.Goat;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.entity.monster.piglin.Piglin;
+import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.entity.npc.Villager;
 
 import java.util.ArrayList;
@@ -56,6 +57,7 @@ public final class MobStateJournal {
     private static final String[] BEE_KEYS = {"HasNectar", "HasStung", "AngerTime", "HivePos", "FlowerPos"};
     private static final String[] GOAT_KEYS = {"IsScreamingGoat", "HasLeftHorn", "HasRightHorn"};
     private static final String[] FROG_KEYS = {"variant", "FromBucket"};
+    private static final String[] WARDEN_KEYS = {"anger"};
     private static final String[] NO_KEYS = {};
 
     private static final int SAMPLE_STEP = 4;
@@ -83,6 +85,7 @@ public final class MobStateJournal {
     }
 
     private static String[] keysFor(Mob mob) {
+        if (mob instanceof Warden) return WARDEN_KEYS;
         if (mob instanceof Sheep) return SHEEP_KEYS;
         if (mob instanceof Villager) return VILLAGER_KEYS;
         if (mob instanceof EnderMan) return ENDERMAN_KEYS;
@@ -128,6 +131,7 @@ public final class MobStateJournal {
         for (String k : keys) {
             if (full.contains(k)) out.put(k, full.get(k));
         }
+        if (mob instanceof Warden) WardenSupport.quantizeAnger(out);
         return out.toString();
     }
 
