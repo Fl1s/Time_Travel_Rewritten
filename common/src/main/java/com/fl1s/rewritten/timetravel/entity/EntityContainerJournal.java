@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.entity;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Visit;
@@ -97,11 +98,11 @@ public final class EntityContainerJournal {
             List<ItemStack> now = BlockJournal.copyOf(container);
             if (!BlockJournal.sameItems(snap.last, now)) {
                 Entry e = new Entry();
-                e.tick = TimeTravel.sharedTick;
+                e.tick = TimeContext.now();
                 e.seq = STORE.nextSeq();
                 e.visit = snap.visit;
                 e.uuid = en.getKey();
-                e.dim = snap.level.dimension().location().toString();
+                e.dim = Levels.canonicalId(snap.level);
                 e.oldItems = BlockJournal.serializeItems(snap.last);
                 e.newItems = BlockJournal.serializeItems(now);
                 STORE.entries().add(e);

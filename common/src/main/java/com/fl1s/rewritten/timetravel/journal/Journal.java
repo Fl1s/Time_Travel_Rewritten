@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 
 import java.lang.reflect.Type;
@@ -97,14 +98,22 @@ public final class Journal<E> {
     }
 
     public void rebuildUpcoming() {
+        rebuildUpcoming(TimeContext.now());
+    }
+
+    public void rebuildUpcoming(long position) {
         upcoming.clear();
         for (E e : entries) {
-            if (tickFn.applyAsLong(e) > TimeTravel.sharedTick) upcoming.add(e);
+            if (tickFn.applyAsLong(e) > position) upcoming.add(e);
         }
     }
 
     public void tick(Consumer<E> onDue) {
-        while (!upcoming.isEmpty() && tickFn.applyAsLong(upcoming.peek()) <= TimeTravel.sharedTick) {
+        tick(TimeContext.now(), onDue);
+    }
+
+    public void tick(long position, Consumer<E> onDue) {
+        while (!upcoming.isEmpty() && tickFn.applyAsLong(upcoming.peek()) <= position) {
             onDue.accept(upcoming.poll());
         }
     }

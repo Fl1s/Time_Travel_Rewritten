@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
@@ -124,11 +125,11 @@ public final class WardenEventJournal {
         if (pd == null || pd.getCurrentVisit() == null) return null;
         Entry e = new Entry();
         e.kind = kind;
-        e.tick = TimeTravel.sharedTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.uuid = uuid;
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = x;
         e.y = y;
         e.z = z;
@@ -183,8 +184,8 @@ public final class WardenEventJournal {
 
     public static void onBoomParticle(ServerLevel level, double x, double y, double z) {
         if (!active()) return;
-        long now = TimeTravel.sharedTick;
-        String dim = level.dimension().location().toString();
+        long now = TimeContext.now();
+        String dim = Levels.canonicalId(level);
         Entry cur = currentBoom;
         if (cur != null && cur.tick == now && cur.dim.equals(dim)) {
             double dx = x - cur.x2, dy = y - cur.y2, dz = z - cur.z2;
@@ -315,7 +316,7 @@ public final class WardenEventJournal {
 
     private static void catchUpPoses(long now) {
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             for (Entity entity : level.getAllEntities()) {
                 if (!(entity instanceof Warden warden) || warden.isRemoved()) continue;
                 List<MobTrailJournal.Sample> samples = MobTrailJournal.samplesOf(warden.getUUID());
@@ -345,7 +346,7 @@ public final class WardenEventJournal {
         pending.clear();
         currentBoom = null;
         if (TimeTravel.server == null || !TimeTravel.isLooping) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.kind != EVENT || e.tick > now) continue;
             long elapsed = now - e.tick;

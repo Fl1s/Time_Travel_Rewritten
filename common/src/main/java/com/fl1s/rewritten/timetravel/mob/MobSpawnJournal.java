@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
@@ -63,7 +64,7 @@ public final class MobSpawnJournal {
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = mob.getUUID();
-        e.dim = level.dimension().location().toString();
+        e.dim = Levels.canonicalId(level);
         e.nbt = tag.toString();
         e.x = mob.getX();
         e.y = mob.getY();
@@ -101,11 +102,11 @@ public final class MobSpawnJournal {
         PlayerData pd = BlockJournal.nearestRecorder(level, mob.blockPosition());
 
         Entry e = new Entry();
-        e.tick = TimeTravel.sharedTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = mob.getUUID();
-        e.dim = level.dimension().location().toString();
+        e.dim = Levels.canonicalId(level);
         e.nbt = tag.toString();
         e.x = mob.getX();
         e.y = mob.getY();
@@ -128,7 +129,7 @@ public final class MobSpawnJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         while (!pending.isEmpty() && pending.peek().tick <= now) {
             Entry e = pending.poll();
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -147,7 +148,7 @@ public final class MobSpawnJournal {
     }
 
     public static void onJump(long from, long to) {
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
@@ -185,7 +186,7 @@ public final class MobSpawnJournal {
             sanitize(tag);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived == null) return;
-            Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeTravel.sharedTick);
+            Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeContext.now());
             if (at == null) at = new Vec3(e.x, e.y, e.z);
             revived.moveTo(at.x, at.y, at.z, revived.getYRot(), revived.getXRot());
             level.addFreshEntity(revived);
@@ -222,7 +223,7 @@ public final class MobSpawnJournal {
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
         pending.clear();
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
         }

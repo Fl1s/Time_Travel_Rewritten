@@ -1,6 +1,6 @@
 package com.fl1s.rewritten.timetravel.data;
 
-import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 
 /**
  * Shared replay-state flag used by every trail journal.
@@ -21,7 +21,7 @@ public final class ReplayState {
     }
 
     public static boolean isReplaying() {
-        return frontierTick >= 0 && TimeTravel.sharedTick < frontierTick;
+        return frontierTick >= 0 && TimeContext.now() < frontierTick;
     }
 
     public static void reset() {

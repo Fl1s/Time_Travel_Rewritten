@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
@@ -78,7 +79,7 @@ public final class VehicleSpawnJournal {
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = entity.getUUID();
-        e.dim = level.dimension().location().toString();
+        e.dim = Levels.canonicalId(level);
         e.nbt = tag.toString();
         e.x = entity.getX();
         e.y = entity.getY();
@@ -93,7 +94,7 @@ public final class VehicleSpawnJournal {
         if (!VehicleJournal.isTracked(entity)) return;
         if (Clones.is(entity)) return;
         if (canon.containsKey(entity.getUUID())) return;
-        register(level, entity, TimeTravel.sharedTick);
+        register(level, entity, TimeContext.now());
     }
 
     private static void register(ServerLevel level, Entity entity, long tick) {
@@ -107,7 +108,7 @@ public final class VehicleSpawnJournal {
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = entity.getUUID();
-        e.dim = level.dimension().location().toString();
+        e.dim = Levels.canonicalId(level);
         e.nbt = tag.toString();
         e.x = entity.getX();
         e.y = entity.getY();
@@ -131,7 +132,7 @@ public final class VehicleSpawnJournal {
         if (!(entity.level() instanceof ServerLevel level)) return;
         Entry e = canon.get(entity.getUUID());
         if (e == null) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         if (ended(e, now)) return;
 
         PlayerData pd = BlockJournal.nearestRecorder(level, entity.blockPosition());
@@ -142,7 +143,7 @@ public final class VehicleSpawnJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         while (!pendingRemovals.isEmpty() && pendingRemovals.peek().endTick <= now) {
             Entry e = pendingRemovals.poll();
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -163,7 +164,7 @@ public final class VehicleSpawnJournal {
 
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
 
         for (Entry e : STORE.entries()) {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -227,7 +228,7 @@ public final class VehicleSpawnJournal {
         STORE.rebuildUpcoming();
         pending.clear();
         pendingRemovals.clear();
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
             if (e.endTick > now) pendingRemovals.add(e);

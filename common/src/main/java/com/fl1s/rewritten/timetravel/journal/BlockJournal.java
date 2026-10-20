@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -153,8 +154,8 @@ public final class BlockJournal {
         if (list == null) return false;
         BlockState current = level.getBlockState(pos);
         if (current.is(requested.getBlock())) return false;
-        String dim = level.dimension().location().toString();
-        long now = TimeTravel.sharedTick;
+        String dim = Levels.canonicalId(level);
+        long now = TimeContext.now();
         for (Entry e : list) {
             if (!e.build || e.tick <= now || !e.dim.equals(dim)) continue;
             BlockState old = oldState(e);
@@ -258,7 +259,7 @@ public final class BlockJournal {
             visit = -1;
         }
 
-        String dim = level.dimension().location().toString().intern();
+        String dim = Levels.canonicalId(level);
         String oldS = serialize(old);
         String newS = serialize(now);
 
@@ -266,7 +267,7 @@ public final class BlockJournal {
         if (same != null) {
             for (Entry e : same) {
                 if (!e.dim.equals(dim)) continue;
-                if (Math.abs(e.tick - TimeTravel.sharedTick) > DEDUP_TICKS) continue;
+                if (Math.abs(e.tick - TimeContext.now()) > DEDUP_TICKS) continue;
                 if (!oldS.equals(e.oldState) || !newS.equals(e.newState)) continue;
                 return;
             }
@@ -281,7 +282,7 @@ public final class BlockJournal {
         entry.newState = newS;
         entry.oldParsed = old;
         entry.newParsed = now;
-        entry.tick = TimeTravel.sharedTick;
+        entry.tick = TimeContext.now();
         entry.seq = STORE.nextSeq();
         entry.visit = visit;
         entry.root = actionDepth > 0
@@ -628,7 +629,7 @@ public final class BlockJournal {
         Iterator<ContainerWatch> it = containerWatches.iterator();
         while (it.hasNext()) {
             ContainerWatch w = it.next();
-            String dim = w.level().dimension().location().toString();
+            String dim = Levels.canonicalId(w.level());
 
             for (Map.Entry<BlockPos, List<ItemStack>> e : w.last().entrySet()) {
                 BlockEntity be = w.level().getBlockEntity(e.getKey());
@@ -650,7 +651,7 @@ public final class BlockJournal {
                 entry.z = e.getKey().getZ();
                 entry.oldItems = serializeItems(e.getValue());
                 entry.newItems = serializeItems(now);
-                entry.tick = TimeTravel.sharedTick;
+                entry.tick = TimeContext.now();
                 entry.seq = STORE.nextSeq();
                 entry.visit = w.visit();
                 entry.root = true;
@@ -674,13 +675,13 @@ public final class BlockJournal {
         if (pd == null) return;
 
         Entry entry = new Entry();
-        entry.dim = level.dimension().location().toString();
+        entry.dim = Levels.canonicalId(level);
         entry.x = pos.getX();
         entry.y = pos.getY();
         entry.z = pos.getZ();
         entry.oldItems = serializeItems(before);
         entry.newItems = serializeItems(now);
-        entry.tick = TimeTravel.sharedTick;
+        entry.tick = TimeContext.now();
         entry.seq = STORE.nextSeq();
         entry.visit = pd.getCurrentVisit().id;
         entry.root = false;
@@ -799,7 +800,7 @@ public final class BlockJournal {
         mine.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
 
         for (Entry e : mine) {
-            if (e.tick <= TimeTravel.sharedTick) apply(e, false);
+            if (e.tick <= TimeContext.now()) apply(e, false);
         }
         finishBatch();
         flushFluids();

@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -59,11 +60,11 @@ public final class MobEventJournal {
         PlayerData pd = BlockJournal.nearestRecorder(level, victim.blockPosition());
 
         Entry e = new Entry();
-        e.tick = TimeTravel.sharedTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = victim.getUUID();
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.explode = explode;
         e.dig = dig;
         e.hasPosition = true;
@@ -86,7 +87,7 @@ public final class MobEventJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         while (!pendingDeaths.isEmpty() && pendingDeaths.peek().tick <= now) {
             Entry e = pendingDeaths.poll();
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -154,27 +155,24 @@ public final class MobEventJournal {
                 if (entity instanceof Creeper c && c.isAlive() && !Clones.is(c) && c.getSwellDir() > 0) fusing.add(c);
             }
         }
-        try {
-            for (Creeper c : fusing) {
-                CreeperAccessor acc = (CreeperAccessor) c;
-                long due = from + Math.max(1, acc.tt$getMaxSwell() - acc.tt$getSwell());
-                if (due > to) {
-                    acc.tt$setSwell(Math.min(acc.tt$getMaxSwell() - 1, acc.tt$getSwell() + (int) (to - from)));
-                    continue;
-                }
-                TimeTravel.sharedTick = due;
+        for (Creeper c : fusing) {
+            CreeperAccessor acc = (CreeperAccessor) c;
+            long due = from + Math.max(1, acc.tt$getMaxSwell() - acc.tt$getSwell());
+            if (due > to) {
+                acc.tt$setSwell(Math.min(acc.tt$getMaxSwell() - 1, acc.tt$getSwell() + (int) (to - from)));
+                continue;
+            }
+            TimeContext.runAt(due, () -> {
                 MobJournal.onEntityDeath(c, true);
                 acc.tt$explode();
-            }
-        } finally {
-            TimeTravel.sharedTick = from;
+            });
         }
     }
 
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
         pendingDeaths.clear();
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.tick > now && latestDeath.get(e.uuid) == e) pendingDeaths.add(e);
         }

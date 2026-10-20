@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.time;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
+import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -32,6 +33,14 @@ public final class TimeHeads {
 
     public void setSharedOffset(long offset) {
         sharedOffset = Math.max(0, offset);
+    }
+
+    public TimeHead owning(Level level) {
+        if (level == null) return null;
+        for (TimeHead head : heads.values()) {
+            if (head.hasOwnLevel() && head.level() == level) return head;
+        }
+        return null;
     }
 
     public TimeHead headOf(PlayerData pd) {

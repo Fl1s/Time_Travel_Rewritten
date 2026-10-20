@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -113,11 +114,11 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_DROP;
-        e.tick = TimeTravel.sharedTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = "";
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = item.getX();
         e.y = item.getY();
         e.z = item.getZ();
@@ -154,7 +155,7 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_DESTROY;
-        e.tick = TimeTravel.sharedTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = drop.visit;
         e.player = "";
@@ -179,11 +180,11 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_PICKUP;
-        e.tick = TimeTravel.sharedTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = sp.getName().getString().intern();
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = item.getX();
         e.y = item.getY();
         e.z = item.getZ();
@@ -201,7 +202,7 @@ public final class ItemFlowJournal {
             for (ItemEntity i : toDiscard) if (!i.isRemoved()) i.discard();
             toDiscard.clear();
         }
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (Iterator<Entry> it = retry.iterator(); it.hasNext(); ) {
             Entry r = it.next();
             ServerLevel rl = TimeTravel.server.getLevel(Levels.key(r.dim));
@@ -425,7 +426,7 @@ public final class ItemFlowJournal {
         pending.clear();
         retry.clear();
         toDiscard.clear();
-        long now = TimeTravel.sharedTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
         }
