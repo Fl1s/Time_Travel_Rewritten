@@ -144,7 +144,7 @@ public final class Timeline {
 
         TimeTravel.timelineTick = target;
         TimeTravel.config.timelineTick = target;
-        if (TimeTravel.syncDayTime) {
+        if (TimeTravel.syncDayTime && TimeTravel.serverLevel.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DAYLIGHT)) {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + target);
         }
         clones.setIdle(false);
@@ -202,9 +202,7 @@ public final class Timeline {
         CloneTracks.pollAll();
         clones.replayEvents();
         TimeTravel.JOURNALS.tickAll();
-        if (TimeTravel.syncDayTime) {
-            TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.timelineTick);
-        }
+
         clones.tickActive();
         CloneTracks.applyHealthAll();
         if (TimeTravel.trackVoice) VoicechatCompat.onTick();

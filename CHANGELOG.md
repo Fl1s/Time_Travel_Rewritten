@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Fixed
+
+ - Time travel mode ignores doDaylightCycle gamerule
+
 ## [1.21.1-0.11.0] - 2026-11-20
 
 ### Added
