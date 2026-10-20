@@ -8,7 +8,7 @@ https://github.com/user-attachments/assets/9edb60bc-1a26-46ae-b8ea-485697659877
 A Minecraft mod that lets you travel through a shared timeline and interact with past and future versions of yourself.
 
 Requires [Motion Capture Mod](https://modrinth.com/mod/motion-capture/).
-Based on mod [Time Loop](https://modrinth.com/mod/timeloop/), special thanks to [Vowless](https://modrinth.com/user/Vowless) and [luigi052005](https://modrinth.com/user/luigi052005)!
+Based on mod [Time Loop](https://modrinth.com/mod/timeloop/), special thanks to [Vowless](https://modrinth.com/user/Vowless) and [luigi052005](https://modrinth.com/user/luigi052005) for this mod and [Remedy Hearts](https://discord.gg/jfCe8fAq3Y) for the sfx!!! 
 
 If a serious bug or time desynchronization occurs, I highly recommend using the /tt reset command!!! Mod is on alpha stage!
 

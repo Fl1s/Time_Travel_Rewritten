@@ -7,9 +7,11 @@ import com.fl1s.rewritten.timetravel.mocap.ClonePlayback;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.CloneVanishPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
+import com.fl1s.rewritten.timetravel.util.TTSounds;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
@@ -34,7 +36,7 @@ public final class CloneManager {
     public static final int CLONE_SYNC_SKIP_LIMIT = 8000;
     public static final int CLONE_SKIP_PER_TICK = 40;
     public static final int VANISH_LEAD_TICKS = 32;
-    public static final int VANISH_SOUND_LEAD_TICKS = 3;
+    public static final int VANISH_SOUND_LEAD_TICKS = 20;
 
     public record PendingPiece(long startTick, String recording, String playerName, int skipTicks,
                                int visitId, int segment, long visitStartTick) {}
@@ -318,17 +320,8 @@ public final class CloneManager {
         try {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim()));
             if (level == null) return;
-            if (s.dir() > 0) {
-                level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT,
-                        SoundSource.PLAYERS, 1.6f, 1.7f);
-                level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_CHIME,
-                        SoundSource.PLAYERS, 1.4f, 1.5f);
-            } else {
-                level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT,
-                        SoundSource.PLAYERS, 1.6f, 0.6f);
-                level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_RESONATE,
-                        SoundSource.PLAYERS, 1.4f, 0.5f);
-            }
+            SoundEvent sound = TTSounds.travel(s.dir() > 0);
+            level.playSound(null, s.x(), s.y(), s.z(), sound, SoundSource.PLAYERS, 1.6f, 1.0f);
         } catch (Exception e) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to play time sound", e);
         }
