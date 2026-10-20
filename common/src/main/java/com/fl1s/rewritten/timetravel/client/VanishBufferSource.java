@@ -13,6 +13,9 @@ public final class VanishBufferSource implements MultiBufferSource {
 
     @Override
     public VertexConsumer getBuffer(RenderType type) {
+        if (CloneVanishFx.active()) {
+            type = CloneVanishFx.translucent(type);
+        }
         return new Consumer(inner.getBuffer(type));
     }
 

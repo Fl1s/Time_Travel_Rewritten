@@ -10,6 +10,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -39,7 +40,7 @@ public final class CloneVanishFx {
     private static final float SPRITE_FADE_MS = 1000.0F;
     private static final float SPRITE_GROW_MS = 50.0F;
 
-    private static final float FLASH_START_MS = 1200.0F;
+    private static final float FLASH_START_MS = 600.0F;
     private static final float FLASH_MS = 250.0F;
     private static final float FADE_START_MS = FLASH_START_MS + FLASH_MS;
     private static final float END_MS = FLASH_START_MS + SPRITE_TOTAL_MS;
@@ -93,6 +94,15 @@ public final class CloneVanishFx {
     public static void clear() {
         effects.clear();
         active = false;
+    }
+
+    public static RenderType translucent(RenderType type) {
+        if (type == Sheets.solidBlockSheet()
+                || type == Sheets.cutoutBlockSheet()
+                || type == Sheets.translucentCullBlockSheet()) {
+            return Sheets.translucentItemSheet();
+        }
+        return type;
     }
 
     public static boolean active() {

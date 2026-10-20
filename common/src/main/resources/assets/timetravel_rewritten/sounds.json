@@ -1,0 +1,26 @@
+{
+  "travel_forward": {
+    "subtitle": "subtitles.timetravel_rewritten.travel_forward",
+    "sounds": [
+      "timetravel_rewritten:travel_forward_1"
+    ]
+  },
+  "travel_backward": {
+    "subtitle": "subtitles.timetravel_rewritten.travel_back",
+    "sounds": [
+      "timetravel_rewritten:travel_backward_1"
+    ]
+  },
+  "aspect_travel_forward": {
+    "subtitle": "subtitles.timetravel_rewritten.aspect_travel_forward",
+    "sounds": [
+      "timetravel_rewritten:travel_forward_2"
+    ]
+  },
+  "aspect_travel_backward": {
+    "subtitle": "subtitles.timetravel_rewritten.aspect_travel_back",
+    "sounds": [
+      "timetravel_rewritten:travel_backward_2"
+    ]
+  }
+}

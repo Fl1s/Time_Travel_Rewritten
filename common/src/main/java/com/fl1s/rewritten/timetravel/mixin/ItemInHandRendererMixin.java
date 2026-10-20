@@ -11,9 +11,9 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 @Mixin(ItemInHandRenderer.class)
 public abstract class ItemInHandRendererMixin {
 
-    @ModifyVariable(method = "renderItem", at = @At("HEAD"), argsOnly = true, ordinal = 0
-    )
+    @ModifyVariable(method = "renderItem", at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private MultiBufferSource tt$vanishHandBuffer(MultiBufferSource buffer) {
-        return CloneVanishFx.active() ? new VanishBufferSource(buffer) : buffer;
+        return CloneVanishFx.active() && !(buffer instanceof VanishBufferSource)
+                ? new VanishBufferSource(buffer) : buffer;
     }
 }

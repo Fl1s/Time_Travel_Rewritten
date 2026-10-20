@@ -89,7 +89,7 @@ public final class MobSpawnJournal {
     }
 
     public static void onSpawn(ServerLevel level, Entity entity) {
-        if (!TimeTravel.isLooping || ReplayState.SUPPRESS) return;
+        if (!TimeTravel.isLooping) return;
         if (!(entity instanceof Mob mob)) return;
         if (Clones.is(mob)) return;
         if (canon.containsKey(mob.getUUID())) return;

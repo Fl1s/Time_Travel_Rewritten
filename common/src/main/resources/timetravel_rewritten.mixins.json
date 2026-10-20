@@ -53,8 +53,7 @@
     "CapeLayerMixin",
     "PlayerModelMixin",
     "EntityRenderDispatcherMixin",
-    "ItemInHandRendererMixin",
-    "ItemRendererMixin"
+    "ItemInHandRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
