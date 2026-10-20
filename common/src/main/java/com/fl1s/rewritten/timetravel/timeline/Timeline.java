@@ -19,6 +19,8 @@ import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import net.minecraft.network.chat.Component;
+import java.util.HashSet;
+import java.util.Set;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameRules;
@@ -146,6 +148,7 @@ public final class Timeline {
 
         pd.setLastJumpOrigin(from);
         s.heads.move(pd, TimeTravel.presentTick - target);
+        s.clones.markNeedsRebuild();
 
         ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
@@ -212,9 +215,8 @@ public final class Timeline {
         TimeTravel.broadcastStopDragonSound();
 
         TimeTravel.forEachOnlineRecorded((p, pd) -> s.visits.beginVisit(p, pd, dir));
-        clones.rebuild();
-        clones.flushPending();
-        clones.flushSounds();
+        clones.rebuildAll();
+        clones.flushAll();
 
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
@@ -256,9 +258,12 @@ public final class Timeline {
         }
         clones.setIdle(false);
 
-        if (clones.consumeNeedsRebuild()) clones.rebuild();
-        clones.flushPending();
-        clones.flushSounds();
+        Set<Long> liveHeads = new HashSet<>();
+        for (TimeHead head : s.heads.occupied()) liveHeads.add(head.offset());
+        clones.retainHeads(liveHeads);
+
+        if (clones.consumeNeedsRebuild()) clones.rebuildAll();
+        clones.flushAll();
 
         TimeTravel.presentTick++;
         TimeTravel.config.presentTick = TimeTravel.presentTick;

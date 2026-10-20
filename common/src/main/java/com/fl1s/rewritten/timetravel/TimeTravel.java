@@ -167,12 +167,13 @@ public class TimeTravel {
 		ResourceKey<Level> currentDimension = player.level().dimension();
 		if (currentDimension.equals(pd.getLastDimensionKey())) return;
 
-		pd.addPieceStart(sharedTick);
+		long position = personalTick(player);
+		pd.addPieceStart(position);
 		pd.nextSegment();
 		pd.setLastDimensionKey(currentDimension);
 
 		TIMELINE_LOGGER.info("Player '{}' changed dimension at tick {} (pieces in chunk: {})",
-				player.getName().getString(), sharedTick, pd.getPieceStarts().size());
+				player.getName().getString(), position, pd.getPieceStarts().size());
 	}
 
 	//player lifecycle
@@ -244,6 +245,18 @@ public class TimeTravel {
 		MinecraftServer s = server;
 		if (s == null || player == null || Clones.is(player)) return false;
 		return s.getPlayerList().getPlayer(player.getUUID()) == player;
+	}
+
+	public static long headOffsetOf(ServerPlayer player) {
+		TimeHeads h = heads();
+		if (h == null || timelineSceneManager == null) return 0;
+		PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+		return h.headOf(pd).offset();
+	}
+
+	public static long cloneHeadOf(Entity e) {
+		TimelineSession s = session;
+		return s == null ? CloneManager.NO_HEAD : s.clones.headOf(e);
 	}
 
 	public static int visitIdOf(Entity e) {
