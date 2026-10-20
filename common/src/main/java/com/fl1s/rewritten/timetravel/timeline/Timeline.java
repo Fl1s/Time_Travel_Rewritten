@@ -121,7 +121,6 @@ public final class Timeline {
         TimeTravel.config.nextVisitId = 1;
         TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
         s.lastJumpOrigin = -1;
-        s.clones.markNeedsRebuild();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
     }
@@ -173,7 +172,6 @@ public final class Timeline {
             brought++;
         }
 
-        s.clones.markNeedsRebuild();
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
 
