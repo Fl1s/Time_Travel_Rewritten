@@ -24,6 +24,7 @@ import net.minecraft.world.phys.AABB;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -85,6 +86,7 @@ public final class CloneManager {
     private final List<Clone> roots = new ArrayList<>();
     private final Map<Long, PriorityQueue<PendingPiece>> pending = new HashMap<>();
     private final Map<Long, PriorityQueue<PendingSound>> pendingSounds = new HashMap<>();
+    private final Set<Long> built = new HashSet<>();
     private boolean needsRebuild = true;
     private boolean idle = false;
 
@@ -136,6 +138,7 @@ public final class CloneManager {
     public void dropHead(long head) {
         pending.remove(head);
         pendingSounds.remove(head);
+        built.remove(head);
         stopHead(head);
     }
 
@@ -143,8 +146,10 @@ public final class CloneManager {
         needsRebuild = false;
         TimeHeads heads = TimeTravel.heads();
         if (heads == null) return;
+        stopAll();
         pending.clear();
         pendingSounds.clear();
+        built.clear();
         for (TimeHead head : heads.occupied()) rebuild(head.offset(), head.position());
     }
 
@@ -152,12 +157,14 @@ public final class CloneManager {
         TimeHeads heads = TimeTravel.heads();
         if (heads == null) return;
         for (TimeHead head : heads.occupied()) {
+            if (!built.contains(head.offset())) rebuild(head.offset(), head.position());
             flushPending(head.offset(), head.position());
             flushSounds(head.offset(), head.position());
         }
     }
 
     public void rebuild(long head, final long now) {
+        built.add(head);
         pieces(head).clear();
         sounds(head).clear();
 
