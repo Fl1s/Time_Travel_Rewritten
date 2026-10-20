@@ -33,6 +33,7 @@ public final class MobEventJournal {
         public UUID uuid;
         public String dim;
         public boolean explode;
+        public boolean dig;
         public boolean hasPosition;
         public double x, y, z;
         public float yRot, xRot;
@@ -48,6 +49,10 @@ public final class MobEventJournal {
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
 
     public static void recordDeath(LivingEntity victim, boolean explode) {
+        recordDeath(victim, explode, false);
+    }
+
+    public static void recordDeath(LivingEntity victim, boolean explode, boolean dig) {
         if (!TimeTravel.isLooping) return;
         if (Clones.is(victim)) return;
         if (!(victim.level() instanceof ServerLevel level)) return;
@@ -60,6 +65,7 @@ public final class MobEventJournal {
         e.uuid = victim.getUUID();
         e.dim = level.dimension().location().toString().intern();
         e.explode = explode;
+        e.dig = dig;
         e.hasPosition = true;
         e.x = victim.getX();
         e.y = victim.getY();
@@ -98,7 +104,7 @@ public final class MobEventJournal {
                     } finally {
                         MobJournal.exitApplying();
                     }
-                } else if (living instanceof EnderDragon) {
+                } else if (living instanceof EnderDragon || e.dig) {
                     MobJournal.enterApplying();
                     try {
                         living.discard();

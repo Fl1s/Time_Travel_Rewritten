@@ -9,6 +9,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.monster.warden.Warden;
 
 import java.util.Set;
 import java.util.UUID;
@@ -40,6 +41,10 @@ public final class MobJournal {
         }
     }
 
+    public static void onWardenDug(Warden warden) {
+        recordDeath(warden, false, true);
+    }
+
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
         MobSpawnJournal.onSpawn(level, entity);
         MobStateJournal.onSpawn(level, entity);
@@ -66,6 +71,10 @@ public final class MobJournal {
     }
 
     private static void recordDeath(LivingEntity entity, boolean explode) {
+        recordDeath(entity, explode, false);
+    }
+
+    private static void recordDeath(LivingEntity entity, boolean explode, boolean dig) {
         if (killing || applying) return;
         if (!TimeTravel.isLooping) return;
         if (MobTrailJournal.isReplaying() && isDoomed(entity)) return;
@@ -75,7 +84,7 @@ public final class MobJournal {
         if (entity instanceof Mob deadMob && entity.level() instanceof ServerLevel deadLevel) {
             MobSpawnJournal.ensureRegistered(deadLevel, deadMob);
         }
-        MobEventJournal.recordDeath(entity, explode);
+        MobEventJournal.recordDeath(entity, explode, dig);
     }
 
     private static boolean isReplayEntity(Entity e) {
