@@ -7,6 +7,7 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
@@ -21,12 +22,17 @@ import java.util.List;
  */
 public final class VisitManager {
 
+    private static long positionOf(PlayerData pd) {
+        TimeHeads heads = TimeTravel.heads();
+        return heads == null ? TimeTravel.sharedTick : heads.positionOf(pd);
+    }
+
     public void beginVisit(ServerPlayer player, PlayerData pd) {
         beginVisit(player, pd, 0);
     }
 
     public void beginVisit(ServerPlayer player, PlayerData pd, int arrivalDir) {
-        Visit visit = new Visit(TimeTravel.config.nextVisitId++, TimeTravel.sharedTick);
+        Visit visit = new Visit(TimeTravel.config.nextVisitId++, positionOf(pd));
         visit.arrivalDir = arrivalDir;
         visit.startDim = player.level().dimension().location().toString();
         visit.sx = player.getX();
@@ -58,7 +64,7 @@ public final class VisitManager {
         visit.departDir = (online != null) ? departDir : 0;
 
         finishChunk(pd);
-        visit.endTick = TimeTravel.sharedTick;
+        visit.endTick = positionOf(pd);
         pd.setCurrentVisit(null);
 
         if (visit.doomed) {
@@ -88,8 +94,8 @@ public final class VisitManager {
 
     private void startChunk(ServerPlayer player, PlayerData pd) {
         pd.clearPieceStarts();
-        pd.addPieceStart(TimeTravel.sharedTick);
-        pd.setChunkStartTick(TimeTravel.sharedTick);
+        pd.addPieceStart(positionOf(pd));
+        pd.setChunkStartTick(positionOf(pd));
         MocapAdapter.startRecording(player, pd.getName());
     }
 
@@ -102,7 +108,7 @@ public final class VisitManager {
         ArrayList<Long> starts = pd.getPieceStarts();
         int i = 0;
         for (var handle : MocapAdapter.stopAllRecordings(pd.getName())) {
-            long startTick = startFor(starts, i);
+            long startTick = startFor(starts, i, positionOf(pd));
             String name = String.format("%s_v%d_p%d", pd.getName().toLowerCase(), visit.id, pd.nextPieceNumber());
             if (MocapAdapter.save(handle, name)) {
                 visit.pieces.add(new Visit.Piece(name, startTick));
@@ -113,8 +119,8 @@ public final class VisitManager {
         }
     }
 
-    private static long startFor(List<Long> starts, int index) {
-        if (starts.isEmpty()) return TimeTravel.sharedTick;
+    private static long startFor(List<Long> starts, int index, long fallback) {
+        if (starts.isEmpty()) return fallback;
         return starts.get(Math.min(index, starts.size() - 1));
     }
 }
