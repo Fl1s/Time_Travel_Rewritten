@@ -23,6 +23,7 @@ import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -57,6 +58,8 @@ public final class MobTrailJournal {
         public int swell;
         public int invul;
         public int phase = -1;
+        public int pose = -1;
+        public int clientAnger = -1;
     }
 
     private static final class Track {
@@ -239,11 +242,11 @@ public final class MobTrailJournal {
     }
 
     private static boolean sameState(Sample a, Sample b) {
-        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell && a.invul == b.invul && a.phase == b.phase;
+        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell && a.invul == b.invul && a.phase == b.phase && a.pose == b.pose && a.clientAnger == b.clientAnger;
     }
 
     private static boolean cheapSameState(Sample a, Mob mob) {
-        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0) && a.invul == (mob instanceof WitherBoss w ? w.getInvulnerableTicks() : 0) && a.phase == phaseOf(mob);
+        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0) && a.invul == (mob instanceof WitherBoss w ? w.getInvulnerableTicks() : 0) && a.phase == phaseOf(mob) && a.pose == WardenSupport.poseOf(mob) && a.clientAnger == WardenSupport.angerOf(mob);
     }
 
     private static Sample makeSample(Mob mob, long now) {
@@ -274,6 +277,8 @@ public final class MobTrailJournal {
         }
         if (mob instanceof WitherBoss wither) s.invul = wither.getInvulnerableTicks();
         s.phase = phaseOf(mob);
+        s.pose = WardenSupport.poseOf(mob);
+        s.clientAnger = WardenSupport.angerOf(mob);
         return s;
     }
 
@@ -349,11 +354,13 @@ public final class MobTrailJournal {
         mob.setYHeadRot(s.yHeadRot);
         mob.setYBodyRot(s.yBodyRot);
 
+        WardenSupport.applyFx(mob);
         mob.swinging = s.swinging;
         if (s.swinging && mob.swingTime == 0) mob.swingTime = 1;
         mob.setAggressive(s.aggressive);
 
         applyBossState(mob, s);
+        WardenSupport.applyState(mob, s);
 
         if (mob instanceof Creeper creeper) {
             if (creeper.getSwellDir() != s.swellDir) creeper.setSwellDir(s.swellDir);
@@ -404,6 +411,7 @@ public final class MobTrailJournal {
                 mob.setNoAi(orig != null && orig);
                 mob.removeTag(PUPPET_TAG);
                 mob.removeTag(ORIG_NOAI_TAG);
+                if (mob instanceof Warden w) WardenSupport.settle(w);
                 return;
             }
         }
@@ -420,6 +428,7 @@ public final class MobTrailJournal {
                     mob.setNoAi(mob.getTags().contains(ORIG_NOAI_TAG));
                     mob.removeTag(PUPPET_TAG);
                     mob.removeTag(ORIG_NOAI_TAG);
+                    if (mob instanceof Warden w) WardenSupport.settle(w);
                 } else if (includeTracked && mob.isNoAi() && tracks.containsKey(id)) {
                     mob.setNoAi(false);
                 }
