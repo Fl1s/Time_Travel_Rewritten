@@ -23,6 +23,7 @@ public class PlayerData {
     private Skin skin;
     private String inventoryTag;
     private boolean active;
+    private long timeOffset;
 
     private List<Visit> visits = new ArrayList<>();
 
@@ -42,6 +43,7 @@ public class PlayerData {
     private transient long chunkStartTick;
     private transient int pieceCounter;
     private transient long lastJumpServerTick = -1;
+    private transient long lastJumpOrigin = -1;
 
     public PlayerData(String name, String nickname, String skin, Vec3 joinPosition, CompoundTag inventoryTag) {
         this.name = name;
@@ -72,8 +74,29 @@ public class PlayerData {
         this.chunkStartTick = 0;
         this.pieceCounter = 0;
         this.lastJumpServerTick = -1;
+        this.lastJumpOrigin = -1;
         // Audio is transient (saved separately by AudioPersistence)
         this.audio = new ConcurrentHashMap<>();
+    }
+
+    public long getLastJumpOrigin() {
+        return lastJumpOrigin;
+    }
+
+    public void setLastJumpOrigin(long tick) {
+        this.lastJumpOrigin = tick;
+    }
+
+    public long getTimeOffset() {
+        return Math.max(0, timeOffset);
+    }
+
+    public void setTimeOffset(long offset) {
+        this.timeOffset = Math.max(0, offset);
+    }
+
+    public boolean isTravelling() {
+        return timeOffset > 0;
     }
 
     public long getLastJumpServerTick() {

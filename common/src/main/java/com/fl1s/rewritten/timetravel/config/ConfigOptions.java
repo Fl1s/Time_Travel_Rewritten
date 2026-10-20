@@ -41,6 +41,12 @@ public final class ConfigOptions {
             new ConfigOption.Bool("timeline", "syncDayTime",
                     "Synchronize the world day time with the timeline.",
                     true, v -> TimeTravel.syncDayTime = v),
+            new ConfigOption.Bool("timeline", "internalTime",
+                    "Each player carries their own time offset instead of the whole server sharing one clock.",
+                    false, v -> {
+                        TimeTravel.internalTime = v;
+                        if (!v && TimeTravel.heads() != null) TimeTravel.heads().collapseToShared();
+                    }),
             new ConfigOption.Bool("timeline", "jumpRequiresOp",
                     "Only operators may jump in time.",
                     true, v -> TimeTravel.jumpRequiresOp = v),

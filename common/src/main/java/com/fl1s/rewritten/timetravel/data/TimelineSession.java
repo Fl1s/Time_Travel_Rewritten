@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.data;
 
 import com.fl1s.rewritten.timetravel.clone.CloneManager;
 import com.fl1s.rewritten.timetravel.clone.DeathChain;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.timeline.Timeline;
 import com.fl1s.rewritten.timetravel.util.VisitManager;
 
@@ -21,6 +22,9 @@ public final class TimelineSession {
 
     /** Core timeline: clock, jumps, per-tick work. */
     public final Timeline timeline = new Timeline();
+
+    /** Read positions into shared history; the shared head is where non-travellers sit. */
+    public final TimeHeads heads = new TimeHeads();
 
     /** Server tick of the previous jump (for the return command). */
     public long lastJumpOrigin = -1;

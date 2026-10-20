@@ -14,6 +14,7 @@ import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Skin;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.network.protocol.game.ClientboundStopSoundPacket;
 import net.minecraft.resources.ResourceKey;
@@ -43,8 +44,10 @@ public class TimeTravel {
 
 	public static boolean isLooping;
 	public static long sharedTick;
+	public static long presentTick;
 	public static long dayTimeOrigin;
 	public static boolean syncDayTime;
+	public static boolean internalTime;
 	public static boolean jumpRequiresOp;
 	public static long maxJumpTicks;
 	public static int jumpCooldownTicks = 20;
@@ -93,9 +96,22 @@ public class TimeTravel {
 		return s;
 	}
 
+	public static TimeHeads heads() {
+		TimelineSession s = session;
+		return s == null ? null : s.heads;
+	}
+
 	public static long lastJumpOrigin() {
 		TimelineSession s = session;
 		return s == null ? -1 : s.lastJumpOrigin;
+	}
+
+	public static long lastJumpOrigin(String playerName) {
+		if (timelineSceneManager != null) {
+			PlayerData pd = timelineSceneManager.getRecordingPlayer(playerName);
+			if (pd != null && pd.getLastJumpOrigin() >= 0) return pd.getLastJumpOrigin();
+		}
+		return lastJumpOrigin();
 	}
 
 	public static void queueTask(Runnable task) {
@@ -147,6 +163,8 @@ public class TimeTravel {
 
 	//player lifecycle
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
+		TimeHeads h = heads();
+		if (h != null) h.move(pd, internalTime ? pd.getTimeOffset() : h.sharedOffset());
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
 			TimelineSession s = session();
 			s.visits.beginVisit(player, pd);
@@ -160,6 +178,8 @@ public class TimeTravel {
 	}
 
 	public static void onPlayerLeft(PlayerData pd) {
+		TimeHeads h = heads();
+		if (h != null) h.release(pd);
 		if (isLooping && pd != null && pd.getCurrentVisit() != null) {
 			session().visits.endVisit(pd);
 			timelineSceneManager.saveRecordingPlayers();
@@ -242,16 +262,26 @@ public class TimeTravel {
 		return s == null ? 0 : s.clones.countPending();
 	}
 
+	public static long personalTick(ServerPlayer player) {
+		TimeHeads h = heads();
+		if (!internalTime || timelineSceneManager == null || h == null) return sharedTick;
+		PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+		return pd == null ? sharedTick : h.positionOf(pd);
+	}
+
+	private static TimelineSyncPayload syncFor(ServerPlayer player) {
+		return new TimelineSyncPayload(personalTick(player), isLooping, displayTimeInTicks, showTimelineInfo);
+	}
+
 	public static void sendSync(ServerPlayer player) {
-		TimelineNet.sendToPlayer(player, new TimelineSyncPayload(sharedTick, isLooping, displayTimeInTicks, showTimelineInfo));
+		TimelineNet.sendToPlayer(player, syncFor(player));
 	}
 
 	public static void broadcastSync() {
 		if (server == null) return;
-		TimelineSyncPayload payload = new TimelineSyncPayload(sharedTick, isLooping, displayTimeInTicks, showTimelineInfo);
 		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
 			if (isClone(player)) continue;
-			TimelineNet.sendToPlayer(player, payload);
+			TimelineNet.sendToPlayer(player, syncFor(player));
 		}
 	}
 
