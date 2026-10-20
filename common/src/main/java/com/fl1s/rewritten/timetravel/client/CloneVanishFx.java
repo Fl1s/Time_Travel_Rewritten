@@ -33,6 +33,8 @@ public final class CloneVanishFx {
     private static final int CLOCK_FRAMES = 14;
     private static final float FRAME_MS = 45.0F;
     private static final float CLOCK_LAST_FRAME_MS = 1000.0F;
+    private static float shadowFactor = 1.0F;
+    private static final float SHADOW_FADE_MS = 120.0F;
     private static final float SPRITE_TOTAL_MS = (CLOCK_FRAMES - 1) * FRAME_MS + CLOCK_LAST_FRAME_MS;
     private static final float SPRITE_FADE_MS = 1000.0F;
     private static final float SPRITE_GROW_MS = 50.0F;
@@ -100,6 +102,26 @@ public final class CloneVanishFx {
     private static float smooth(float x) {
         x = Mth.clamp(x, 0.0F, 1.0F);
         return x * x * (3.0F - 2.0F * x);
+    }
+
+    public static void beginShadow(Entity entity, float partialTick) {
+        shadowFactor = 1.0F;
+        if (effects.isEmpty()) return;
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null || level != lastLevel) return;
+        Effect effect = effects.get(entity.getId());
+        if (effect == null) return;
+        float ms = (level.getGameTime() + partialTick - effect.startTick) * MS_PER_TICK;
+        if (ms < FLASH_START_MS) return;
+        shadowFactor = 1.0F - smooth((ms - FLASH_START_MS) / SHADOW_FADE_MS);
+    }
+
+    public static float shadow(float original) {
+        return original * shadowFactor;
+    }
+
+    public static void endShadow() {
+        shadowFactor = 1.0F;
     }
 
     private static Vec3 chestOf(Entity entity, float partialTick) {
