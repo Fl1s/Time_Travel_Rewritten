@@ -27,6 +27,7 @@ Use `/timetravel` or `/tt` to control the timeline.
 - `jump return` - Return to the previous time position.
 - `jump present` - Jump to the newest point the timeline has reached.
 - `jump join <player>` - Match another traveller's time. Requires `internalTime`.
+- `jump ... bring <targets>` - Take other players along on your jump, e.g. `jump back 30s bring @a[distance=..8]`. Only players carry their own time, so non-player targets are ignored.
 - `jump mark <name>` - Jump to a saved time mark.
 - `mark <name>` - Save the current time as a mark.
 - `unmark <name>` - Delete a saved mark.

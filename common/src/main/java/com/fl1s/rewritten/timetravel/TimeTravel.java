@@ -142,6 +142,10 @@ public class TimeTravel {
 		return session().timeline.jumpTo(target, initiatorName);
 	}
 
+	public static String jumpTo(long target, String initiatorName, java.util.List<ServerPlayer> bring) {
+		return session().timeline.jumpTo(target, initiatorName, bring);
+	}
+
 	public static void onServerTick() {
 		session().timeline.tick();
 	}

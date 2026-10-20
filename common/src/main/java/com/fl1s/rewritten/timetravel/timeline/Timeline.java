@@ -20,6 +20,7 @@ import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import net.minecraft.network.chat.Component;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -125,7 +126,18 @@ public final class Timeline {
         TimeTravel.broadcastSync();
     }
 
-    private String jumpHead(long target, String initiatorName) {
+    private static void relocate(TimelineSession s, PlayerData pd, long from, long target, int dir) {
+        ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
+        if (pd.getCurrentVisit() != null) s.visits.endVisit(pd, dir);
+        pd.setLastJumpOrigin(from);
+        s.heads.move(pd, Math.max(0, TimeTravel.presentTick - target));
+        if (player != null) {
+            s.visits.beginVisit(player, pd, dir);
+            TimeTravel.sendSync(player);
+        }
+    }
+
+    private String jumpHead(long target, String initiatorName, List<ServerPlayer> bring) {
         TimelineSession s = TimeTravel.session();
         PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(initiatorName);
         if (pd == null) return "Only recorded players can travel while internalTime is on";
@@ -146,26 +158,40 @@ public final class Timeline {
         }
         pd.setLastJumpServerTick(nowServerTick);
 
-        pd.setLastJumpOrigin(from);
-        s.heads.move(pd, TimeTravel.presentTick - target);
-        s.clones.markNeedsRebuild();
+        int dir = target > from ? 1 : -1;
+        relocate(s, pd, from, target, dir);
 
-        ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
+        int brought = 0;
+        for (ServerPlayer passenger : bring) {
+            String name = passenger.getName().getString();
+            if (name.equalsIgnoreCase(pd.getName())) continue;
+            PlayerData ppd = TimeTravel.timelineSceneManager.getRecordingPlayer(name);
+            if (ppd == null || !ppd.getActive()) continue;
+            relocate(s, ppd, s.heads.positionOf(ppd), target, dir);
+            passenger.displayClientMessage(Component.literal(initiatorName + " brought you to "
+                    + TimeFormat.format(target, TimeTravel.displayTimeInTicks)), true);
+            brought++;
+        }
+
+        s.clones.markNeedsRebuild();
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
-        if (player != null) TimeTravel.sendSync(player);
 
-        TimeTravel.TIMELINE_LOGGER.info("Internal time jump by {}: {} -> {} (offset {})",
-                initiatorName, from, target, pd.getTimeOffset());
+        TimeTravel.TIMELINE_LOGGER.info("Internal time jump by {}: {} -> {} (offset {}, brought {})",
+                initiatorName, from, target, pd.getTimeOffset(), brought);
         return null;
     }
 
     public String jumpTo(long target, String initiatorName) {
+        return jumpTo(target, initiatorName, List.of());
+    }
+
+    public String jumpTo(long target, String initiatorName, List<ServerPlayer> bring) {
         if (!TimeTravel.isLooping) return "Timeline is not running (use /timetravel start)";
         if (!MocapAdapter.isReady()) return "Mocap is not ready yet";
 
         target = Math.max(0, target);
-        if (TimeTravel.internalTime) return jumpHead(target, initiatorName);
+        if (TimeTravel.internalTime) return jumpHead(target, initiatorName, bring);
         if (TimeTravel.maxJumpTicks > 0) {
             long min = Math.max(0, TimeTravel.sharedTick - TimeTravel.maxJumpTicks);
             long max = TimeTravel.sharedTick + TimeTravel.maxJumpTicks;
