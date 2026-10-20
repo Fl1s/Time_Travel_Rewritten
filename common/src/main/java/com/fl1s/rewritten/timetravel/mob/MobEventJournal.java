@@ -71,7 +71,7 @@ public final class MobEventJournal {
         PlayerData pd = BlockJournal.nearestRecorder(level, victim.blockPosition());
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = victim.getUUID();
@@ -101,7 +101,7 @@ public final class MobEventJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         while (!pendingDeaths.isEmpty() && pendingDeaths.peek().tick <= now) {
             Entry e = pendingDeaths.poll();
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -195,19 +195,19 @@ public final class MobEventJournal {
                     acc.tt$setSwell(Math.min(acc.tt$getMaxSwell() - 1, acc.tt$getSwell() + (int) (to - from)));
                     continue;
                 }
-                TimeTravel.timelineTick = due;
+                TimeTravel.sharedTick = due;
                 MobJournal.onEntityDeath(c, true);
                 acc.tt$explode();
             }
         } finally {
-            TimeTravel.timelineTick = from;
+            TimeTravel.sharedTick = from;
         }
     }
 
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
         pendingDeaths.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             if (e.tick > now && latestDeath.get(e.uuid) == e) pendingDeaths.add(e);
         }

@@ -23,7 +23,7 @@ public abstract class PlayerInteractMixin {
     private void tt$reserved(Entity target, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
         if (!TimeTravel.isLooping || !(target instanceof LivingEntity)) return;
         if (!((Object) this instanceof ServerPlayer sp) || !TimeTravel.isRealPlayer(sp)) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         boolean reserved = CloneTracks.isReservedByClone(target.getUUID(), now);
         boolean future = target instanceof Mob mob && MobStateJournal.hasFutureChange(mob.getUUID(), now);
         if (!reserved && !future) return;

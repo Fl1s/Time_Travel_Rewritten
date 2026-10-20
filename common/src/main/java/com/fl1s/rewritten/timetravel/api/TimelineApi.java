@@ -47,7 +47,7 @@ public final class TimelineApi {
     }
 
     public static long tick() {
-        return TimeTravel.timelineTick;
+        return TimeTravel.sharedTick;
     }
 
     public static boolean isReplaying() {

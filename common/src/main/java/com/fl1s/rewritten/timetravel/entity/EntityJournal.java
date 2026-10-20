@@ -94,7 +94,7 @@ public final class EntityJournal {
         if (orb && ItemFlowJournal.isCloneKill()) return;
         if (MobJournal.isApplying()) return;
         if (entity instanceof AreaEffectCloud) {
-            clouds.put(entity.getUUID(), new CloudRef(level.dimension().location().toString(), TimeTravel.timelineTick));
+            clouds.put(entity.getUUID(), new CloudRef(level.dimension().location().toString(), TimeTravel.sharedTick));
             return;
         }
         if (!isTracked(entity)) return;
@@ -110,7 +110,7 @@ public final class EntityJournal {
         e.dim = level.dimension().location().toString();
         e.nbt = tag.toString();
         e.item = entity instanceof ItemEntity;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.uuid = entity.getUUID();
@@ -146,7 +146,7 @@ public final class EntityJournal {
             if (arrow.save(t) && t.getBoolean("inGround")) {
                 t.remove("UUID");
                 e.landNbt = t.toString();
-                e.landTick = TimeTravel.timelineTick;
+                e.landTick = TimeTravel.sharedTick;
                 STORE.markDirty();
                 it.remove();
             }
@@ -212,7 +212,7 @@ public final class EntityJournal {
 
     public static void onJump() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
 
         for (Entry e : STORE.entries()) {
             ServerLevel level = levelOf(e.dim);
@@ -279,7 +279,7 @@ public final class EntityJournal {
     }
 
     private static void discardClouds() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         Iterator<Map.Entry<UUID, CloudRef>> it = clouds.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<UUID, CloudRef> en = it.next();
@@ -312,13 +312,13 @@ public final class EntityJournal {
             while (!q.isEmpty() && guard++ < 512) {
                 Due d = q.poll();
                 if (d.tnt().isRemoved()) continue;
-                TimeTravel.timelineTick = d.tick();
+                TimeTravel.sharedTick = d.tick();
                 d.tnt().setFuse(1);
                 d.tnt().tick();
                 collect(d.tick(), to, q, seen);
             }
         } finally {
-            TimeTravel.timelineTick = from;
+            TimeTravel.sharedTick = from;
         }
     }
 

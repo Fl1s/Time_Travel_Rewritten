@@ -100,13 +100,13 @@ public final class MobJournal {
         if (!(attacker instanceof Mob)) return false;
         MobEventJournal.Entry e = MobEventJournal.deathOf(attacker.getUUID());
         if (e == null) return false;
-        return e.tick > TimeTravel.timelineTick;
+        return e.tick > TimeTravel.sharedTick;
     }
 
     public static int ownerVisit(UUID uuid) {
         MobEventJournal.Entry e = MobEventJournal.deathOf(uuid);
         if (e == null) return -1;
-        return e.tick > TimeTravel.timelineTick ? e.visit : -1;
+        return e.tick > TimeTravel.sharedTick ? e.visit : -1;
     }
 
     public static void fastForward(long from, long to) {
@@ -141,8 +141,8 @@ public final class MobJournal {
         WardenEventJournal.eraseVisits(visitIds);
         WardenWarningJournal.eraseVisits(visitIds);
         if (TimeTravel.server != null && TimeTravel.isLooping) {
-            MobSpawnJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
-            MobStateJournal.onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
+            MobSpawnJournal.onJump(TimeTravel.sharedTick, TimeTravel.sharedTick);
+            MobStateJournal.onJump(TimeTravel.sharedTick, TimeTravel.sharedTick);
         }
     }
 

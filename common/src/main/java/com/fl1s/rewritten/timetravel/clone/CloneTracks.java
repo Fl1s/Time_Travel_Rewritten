@@ -53,7 +53,7 @@ public final class CloneTracks {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.pearls == null) visit.pearls = new ArrayList<>();
-        visit.pearls.add(TimeTravel.timelineTick);
+        visit.pearls.add(TimeTravel.sharedTick);
     }
 
     private static void applyPearls(Visit visit, ServerPlayer clone, long now) {
@@ -70,7 +70,7 @@ public final class CloneTracks {
     public static void poll(ServerPlayer player, PlayerData pd) {
         Visit visit = pd.getCurrentVisit();
         if (visit == null) return;
-        long tick = TimeTravel.timelineTick;
+        long tick = TimeTravel.sharedTick;
 
         int mode = player.gameMode.getGameModeForPlayer().getId();
         boolean flying = player.getAbilities().flying;
@@ -109,20 +109,20 @@ public final class CloneTracks {
         if (target instanceof Player) return;
         Visit visit = recordedVisit(player);
         if (visit == null) return;
-        visit.attacks.add(new Visit.AttackEvent(TimeTravel.timelineTick, target.getUUID().toString()));
+        visit.attacks.add(new Visit.AttackEvent(TimeTravel.sharedTick, target.getUUID().toString()));
     }
 
     public static void onTotem(ServerPlayer player) {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.totems == null) visit.totems = new ArrayList<>();
-        visit.totems.add(TimeTravel.timelineTick);
+        visit.totems.add(TimeTravel.sharedTick);
     }
 
     public static void onAttributesDirty(ServerPlayer player, Collection<AttributeInstance> dirty) {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
-        long tick = TimeTravel.timelineTick;
+        long tick = TimeTravel.sharedTick;
         for (AttributeInstance inst : dirty) recordAttr(visit, tick, inst);
     }
 
@@ -173,7 +173,7 @@ public final class CloneTracks {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.fishing == null) visit.fishing = new ArrayList<>();
-        visit.fishing.add(new Visit.FishEvent(TimeTravel.timelineTick, type, result));
+        visit.fishing.add(new Visit.FishEvent(TimeTravel.sharedTick, type, result));
     }
 
     public static void replay(Visit visit, ServerPlayer clone, long now) {
@@ -237,7 +237,7 @@ public final class CloneTracks {
 
     public static void applyHealthAll() {
         if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> {
             for (Visit visit : pd.getVisits()) {
                 Entity e = TimeTravel.entityOfVisit(visit.id);

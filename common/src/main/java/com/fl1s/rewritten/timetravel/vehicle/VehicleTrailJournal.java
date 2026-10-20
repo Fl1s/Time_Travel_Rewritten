@@ -73,7 +73,7 @@ public final class VehicleTrailJournal {
 
     public static void seedInitial() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = level.dimension().location().toString();
             for (Entity entity : level.getAllEntities()) {
@@ -94,7 +94,7 @@ public final class VehicleTrailJournal {
 
     public static void sample() {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         sampledThisTick.clear();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = level.dimension().location().toString();
@@ -150,7 +150,7 @@ public final class VehicleTrailJournal {
 
     public static void apply() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             Track t = en.getValue();
             if (t.samples.isEmpty()) continue;

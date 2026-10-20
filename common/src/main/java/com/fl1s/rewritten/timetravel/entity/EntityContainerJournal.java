@@ -97,7 +97,7 @@ public final class EntityContainerJournal {
             List<ItemStack> now = BlockJournal.copyOf(container);
             if (!BlockJournal.sameItems(snap.last, now)) {
                 Entry e = new Entry();
-                e.tick = TimeTravel.timelineTick;
+                e.tick = TimeTravel.sharedTick;
                 e.seq = STORE.nextSeq();
                 e.visit = snap.visit;
                 e.uuid = en.getKey();

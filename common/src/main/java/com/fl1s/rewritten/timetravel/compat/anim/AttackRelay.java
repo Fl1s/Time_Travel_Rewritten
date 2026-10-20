@@ -47,7 +47,7 @@ public final class AttackRelay {
     }
 
     public static boolean isInsideBcHandler() {
-        return inBcHandler && bcFlagTick == TimeTravel.timelineTick;
+        return inBcHandler && bcFlagTick == TimeTravel.sharedTick;
     }
 
     public static void onIncoming(CustomPacketPayload payload, ServerPlayer player) {
@@ -67,10 +67,10 @@ public final class AttackRelay {
             int cursorTarget = (Integer) c.getMethod("cursorTarget").invoke(payload);
             int[] entityIds = (int[]) c.getMethod("entityIds").invoke(payload);
 
-            AttackJournal.record(TimeTravel.timelineTick, pd.getCurrentVisit().id, player.level().dimension().location().toString(), comboCount, isSneaking, selectedSlot, cursorTarget, entityIds);
+            AttackJournal.record(TimeTravel.sharedTick, pd.getCurrentVisit().id, player.level().dimension().location().toString(), comboCount, isSneaking, selectedSlot, cursorTarget, entityIds);
 
             inBcHandler = true;
-            bcFlagTick = TimeTravel.timelineTick;
+            bcFlagTick = TimeTravel.sharedTick;
         } catch (Throwable t) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to record Better Combat attack", t);
         }

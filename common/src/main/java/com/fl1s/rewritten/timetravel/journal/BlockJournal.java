@@ -176,7 +176,7 @@ public final class BlockJournal {
         BlockState current = level.getBlockState(pos);
         if (current.is(requested.getBlock())) return false;
         String dim = level.dimension().location().toString();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : list) {
             if (!e.build || e.tick <= now || !e.dim.equals(dim)) continue;
             BlockState old = oldState(e);
@@ -274,7 +274,7 @@ public final class BlockJournal {
         boolean derived = actionDepth == 0 && mechanical;
         if (actionDepth == 0 && old.getBlock() == now.getBlock() && RedstoneJournal.isOutput(now)) return;
         if (derived && ReplayState.isReplaying()) return;
-        long tick = TimeTravel.timelineTick;
+        long tick = TimeTravel.sharedTick;
         Map<Long, MovingOrigin> inFlight = moving.computeIfAbsent(level, l -> new HashMap<>());
         if (now.is(Blocks.MOVING_PISTON)) {
             if (!old.is(Blocks.MOVING_PISTON)) inFlight.put(pos.asLong(), new MovingOrigin(old, tick));
@@ -768,7 +768,7 @@ public final class BlockJournal {
                 entry.z = e.getKey().getZ();
                 entry.oldItems = serializeItems(e.getValue());
                 entry.newItems = serializeItems(now);
-                entry.tick = TimeTravel.timelineTick;
+                entry.tick = TimeTravel.sharedTick;
                 entry.seq = STORE.nextSeq();
                 entry.visit = w.visit();
                 entry.root = true;
@@ -798,7 +798,7 @@ public final class BlockJournal {
         entry.z = pos.getZ();
         entry.oldItems = serializeItems(before);
         entry.newItems = serializeItems(now);
-        entry.tick = TimeTravel.timelineTick;
+        entry.tick = TimeTravel.sharedTick;
         entry.seq = STORE.nextSeq();
         entry.visit = pd.getCurrentVisit().id;
         entry.root = false;

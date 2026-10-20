@@ -72,7 +72,7 @@ public final class WardenWarningJournal {
         Optional<WardenSpawnTracker> tracker = player.getWardenSpawnTracker();
         if (tracker.isEmpty()) return;
         int level = tracker.get().getWarningLevel();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         List<Entry> list = byPlayer.get(player.getUUID());
         Entry at = list == null ? null : stateAt(list, now);
         if (at != null && at.level == level) return;
@@ -99,7 +99,7 @@ public final class WardenWarningJournal {
     }
 
     private static void restoreAll() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         TimeTravel.forEachOnlineRecorded((player, pd) -> {
             List<Entry> list = byPlayer.get(player.getUUID());
             if (list == null) return;

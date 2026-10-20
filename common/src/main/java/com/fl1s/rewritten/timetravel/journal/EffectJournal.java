@@ -122,7 +122,7 @@ public final class EffectJournal {
 
         for (int i = STORE.entries().size() - 1; i >= 0; i--) {
             Entry p = STORE.entries().get(i);
-            if (p.tick != TimeTravel.timelineTick) break;
+            if (p.tick != TimeTravel.sharedTick) break;
             if (p.kind == BLOCK_EVENT && p.x == pos.getX() && p.y == pos.getY() && p.z == pos.getZ() && p.a == a && p.b == b)
                 return;
         }
@@ -182,7 +182,7 @@ public final class EffectJournal {
         e.x = x;
         e.y = y;
         e.z = z;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         return e;

@@ -99,12 +99,12 @@ public final class Journal<E> {
     public void rebuildUpcoming() {
         upcoming.clear();
         for (E e : entries) {
-            if (tickFn.applyAsLong(e) > TimeTravel.timelineTick) upcoming.add(e);
+            if (tickFn.applyAsLong(e) > TimeTravel.sharedTick) upcoming.add(e);
         }
     }
 
     public void tick(Consumer<E> onDue) {
-        while (!upcoming.isEmpty() && tickFn.applyAsLong(upcoming.peek()) <= TimeTravel.timelineTick) {
+        while (!upcoming.isEmpty() && tickFn.applyAsLong(upcoming.peek()) <= TimeTravel.sharedTick) {
             onDue.accept(upcoming.poll());
         }
     }

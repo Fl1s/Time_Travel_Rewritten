@@ -106,7 +106,7 @@ public final class ProjectileJournal {
         if (!entity.save(tag)) return;
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.kind = KIND_SPAWN;
@@ -136,7 +136,7 @@ public final class ProjectileJournal {
         if (!(entity.level() instanceof ServerLevel level)) return;
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = -1;
         e.kind = KIND_END;
@@ -150,7 +150,7 @@ public final class ProjectileJournal {
 
     private static void sample() {
         if (TimeTravel.server == null || tracked.isEmpty()) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = level.dimension().location().toString();
             for (Entity e : level.getAllEntities()) {
@@ -230,7 +230,7 @@ public final class ProjectileJournal {
             created.addTag(EntityJournal.TAG);
 
             boolean landed = false;
-            long nowTick = TimeTravel.timelineTick;
+            long nowTick = TimeTravel.sharedTick;
             List<Entry> trail = getTrails().get(spawn.uuid);
 
             if (created instanceof AbstractArrow) {
@@ -296,7 +296,7 @@ public final class ProjectileJournal {
 
     private static void applyPuppets() {
         if (puppets.isEmpty()) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         Map<UUID, List<Entry>> trails = getTrails();
         for (Puppet p : new ArrayList<>(puppets.values())) {
             if (p.entity == null || p.entity.isRemoved()) {
@@ -354,7 +354,7 @@ public final class ProjectileJournal {
         puppets.clear();
         trails = null;
 
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         Map<UUID, Entry> lastSpawn = new HashMap<>();
         Map<UUID, Entry> lastEnd = new HashMap<>();
         for (Entry e : STORE.entries()) {

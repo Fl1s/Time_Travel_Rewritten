@@ -52,8 +52,8 @@ public final class DeathChain {
 
             boolean dead = player.isDeadOrDying();
             if (dead && !visit.wasDead) {
-                visit.deathTicks.add(TimeTravel.timelineTick);
-                if (visit.deathTick < 0) visit.deathTick = TimeTravel.timelineTick;
+                visit.deathTicks.add(TimeTravel.sharedTick);
+                if (visit.deathTick < 0) visit.deathTick = TimeTravel.sharedTick;
             }
             visit.wasDead = dead;
         }
@@ -73,7 +73,7 @@ public final class DeathChain {
             if (fx.killHandled) continue;
             fx.killHandled = true;
 
-            if (!TimeTravel.chainDeath || TimeTravel.timelineTick <= fx.graceUntil) continue;
+            if (!TimeTravel.chainDeath || TimeTravel.sharedTick <= fx.graceUntil) continue;
             if (isRecordedDeath(clone.playerName, clone.visitId)) continue;
 
             TimeTravel.TIMELINE_LOGGER.info("Clone of {} (visit {}) was killed during playback!!! Collapsing the chain",
@@ -90,9 +90,9 @@ public final class DeathChain {
         for (Visit v : pd.getVisits()) {
             if (v.id != visitId) continue;
             for (long d : v.deathTicks) {
-                if (Math.abs(TimeTravel.timelineTick - d) <= 15) return true;
+                if (Math.abs(TimeTravel.sharedTick - d) <= 15) return true;
             }
-            return v.deathTick >= 0 && Math.abs(TimeTravel.timelineTick - v.deathTick) <= 15;
+            return v.deathTick >= 0 && Math.abs(TimeTravel.sharedTick - v.deathTick) <= 15;
         }
         return true;
     }
@@ -138,7 +138,7 @@ public final class DeathChain {
 
         TimeTravel.JOURNALS.eraseVisitsAll(ids);
         MobBinding.eraseVisits(ids);
-        ChatTimeline.resend(TimeTravel.timelineTick);
+        ChatTimeline.resend(TimeTravel.sharedTick);
 
         int maxId = 0;
         for (PlayerData other : scene.getRecordingPlayers()) {

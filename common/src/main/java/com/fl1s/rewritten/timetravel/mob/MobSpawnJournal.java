@@ -70,7 +70,7 @@ public final class MobSpawnJournal {
         STORE.entries().add(e);
         canon.put(e.uuid, e);
         STORE.markDirty();
-        if (e.despawnTick > TimeTravel.timelineTick) {
+        if (e.despawnTick > TimeTravel.sharedTick) {
             pendingDespawns.add(e);
         }
     }
@@ -106,7 +106,7 @@ public final class MobSpawnJournal {
         PlayerData pd = BlockJournal.nearestRecorder(level, mob.blockPosition());
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = mob.getUUID();
@@ -137,7 +137,7 @@ public final class MobSpawnJournal {
         if (e.despawnTick >= 0) return;
         if (reason == Entity.RemovalReason.KILLED && MobEventJournal.deathOf(mob.getUUID()) != null) return;
 
-        e.despawnTick = TimeTravel.timelineTick;
+        e.despawnTick = TimeTravel.sharedTick;
         if (mob.level() instanceof ServerLevel level) {
             PlayerData pd = BlockJournal.nearestRecorder(level, mob.blockPosition());
             e.despawnVisit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
@@ -182,7 +182,7 @@ public final class MobSpawnJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
 
         List<Entry> deferred = new ArrayList<>();
         while (!pendingDespawns.isEmpty() && pendingDespawns.peek().despawnTick <= now) {
@@ -219,7 +219,7 @@ public final class MobSpawnJournal {
     }
 
     public static void onJump(long from, long to) {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
@@ -258,7 +258,7 @@ public final class MobSpawnJournal {
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived == null) return;
             revived.setUUID(e.uuid);
-            Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeTravel.timelineTick);
+            Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeTravel.sharedTick);
             if (at == null) at = new Vec3(e.x, e.y, e.z);
             revived.moveTo(at.x, at.y, at.z, revived.getYRot(), revived.getXRot());
             IrSpellsCompat.onRiseAnimation(revived);
@@ -306,7 +306,7 @@ public final class MobSpawnJournal {
         STORE.rebuildUpcoming();
         pending.clear();
         pendingDespawns.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
             if (e.despawnTick > now) pendingDespawns.add(e);

@@ -67,7 +67,7 @@ public final class VehicleContainerJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        if (TimeTravel.timelineTick % POLL_INTERVAL != 0) return;
+        if (TimeTravel.sharedTick % POLL_INTERVAL != 0) return;
 
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = level.dimension().location().toString().intern();
@@ -95,7 +95,7 @@ public final class VehicleContainerJournal {
                 entry.uuid = id;
                 entry.oldItems = prev;
                 entry.newItems = now;
-                entry.tick = TimeTravel.timelineTick;
+                entry.tick = TimeTravel.sharedTick;
                 entry.seq = STORE.nextSeq();
                 entry.visit = pd.getCurrentVisit().id;
                 STORE.entries().add(entry);

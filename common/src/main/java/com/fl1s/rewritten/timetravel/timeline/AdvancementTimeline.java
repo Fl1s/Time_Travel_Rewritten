@@ -44,7 +44,7 @@ public final class AdvancementTimeline {
         if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return;
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = pd.getNickname();

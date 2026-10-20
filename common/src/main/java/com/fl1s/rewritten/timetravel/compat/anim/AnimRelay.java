@@ -45,6 +45,6 @@ public final class AnimRelay {
         String data = adapter.serialize(payload);
         if (data == null) return;
 
-        AnimJournal.record(TimeTravel.timelineTick, pd.getCurrentVisit().id, id, data);
+        AnimJournal.record(TimeTravel.sharedTick, pd.getCurrentVisit().id, id, data);
     }
 }
