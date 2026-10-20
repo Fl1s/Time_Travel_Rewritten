@@ -24,6 +24,8 @@ Use `/timetravel` or `/tt` to control the timeline.
 - `jump forward <time>` - Jump forward by a duration.
 - `jump back <time>` - Jump backward by a duration.
 - `jump return` - Return to the previous time position.
+- `jump present` - Jump to the newest point the timeline has reached.
+- `jump join <player>` - Match another traveller's time. Requires `internalTime`.
 - `jump mark <name>` - Jump to a saved time mark.
 - `mark <name>` - Save the current time as a mark.
 - `unmark <name>` - Delete a saved mark.
