@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.commands.TimelineCommands;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.mob.MobStateJournal;
+import com.fl1s.rewritten.timetravel.net.*;
 import com.fl1s.rewritten.timetravel.timeline.ChatTimeline;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.neoforge.events.*;
@@ -38,13 +39,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import com.fl1s.rewritten.timetravel.client.TimelineClient;
-import com.fl1s.rewritten.timetravel.net.ToggleTimelinePayload;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import com.fl1s.rewritten.timetravel.net.ClearChatPayload;
 import net.neoforged.neoforge.event.ServerChatEvent;
-import com.fl1s.rewritten.timetravel.net.JumpRequestPayload;
-import com.fl1s.rewritten.timetravel.net.TimelineNet;
-import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,6 +120,9 @@ public class TimeTravelNeoForge {
 
         registrar.playToClient(TimelineSyncPayload.TYPE, TimelineSyncPayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> TimelineClient.onSync(payload)));
+
+        registrar.playToClient(WardenAnimPayload.TYPE, WardenAnimPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> WardenAnimClient.handle(payload)));
 
         registrar.playToClient(ClearChatPayload.TYPE, ClearChatPayload.CODEC,
                 (payload, context) -> context.enqueueWork(TimelineClient::onClearChat));

@@ -1,9 +1,7 @@
 package com.fl1s.rewritten.fabric;
 
 import com.fl1s.rewritten.timetravel.client.TimelineClient;
-import com.fl1s.rewritten.timetravel.net.ClearChatPayload;
-import com.fl1s.rewritten.timetravel.net.TimelineNet;
-import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
+import com.fl1s.rewritten.timetravel.net.*;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -23,6 +21,8 @@ public class TimeTravelFabricClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(TimelineSyncPayload.TYPE,
                 (payload, context) -> TimelineClient.onSync(payload));
+        ClientPlayNetworking.registerGlobalReceiver(WardenAnimPayload.TYPE,
+                (payload, context) -> WardenAnimClient.handle(payload));
 
         ClientPlayNetworking.registerGlobalReceiver(ClearChatPayload.TYPE,
                 (payload, context) -> TimelineClient.onClearChat());
