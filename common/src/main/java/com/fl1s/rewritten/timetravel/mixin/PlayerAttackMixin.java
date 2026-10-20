@@ -30,7 +30,7 @@ public abstract class PlayerAttackMixin {
                 ci.cancel();
                 return;
             }
-            long now = TimeTravel.timelineTick;
+            long now = TimeTravel.sharedTick;
             if (VehicleSpawnJournal.isProtected(target.getUUID(), now) || VehicleTrailJournal.hasFutureSamples(target.getUUID(), now)) {
                 if (target.level() instanceof ServerLevel sl) DoomedFeedback.tryShowVehicle(sp, sl);
                 ci.cancel();

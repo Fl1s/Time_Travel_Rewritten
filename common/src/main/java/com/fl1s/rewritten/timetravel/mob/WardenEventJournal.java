@@ -124,7 +124,7 @@ public final class WardenEventJournal {
         if (pd == null || pd.getCurrentVisit() == null) return null;
         Entry e = new Entry();
         e.kind = kind;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.uuid = uuid;
@@ -183,7 +183,7 @@ public final class WardenEventJournal {
 
     public static void onBoomParticle(ServerLevel level, double x, double y, double z) {
         if (!active()) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         String dim = level.dimension().location().toString();
         Entry cur = currentBoom;
         if (cur != null && cur.tick == now && cur.dim.equals(dim)) {
@@ -345,7 +345,7 @@ public final class WardenEventJournal {
         pending.clear();
         currentBoom = null;
         if (TimeTravel.server == null || !TimeTravel.isLooping) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             if (e.kind != EVENT || e.tick > now) continue;
             long elapsed = now - e.tick;

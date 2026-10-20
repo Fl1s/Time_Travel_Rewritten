@@ -93,7 +93,7 @@ public final class VehicleSpawnJournal {
         if (!VehicleJournal.isTracked(entity)) return;
         if (Clones.is(entity)) return;
         if (canon.containsKey(entity.getUUID())) return;
-        register(level, entity, TimeTravel.timelineTick);
+        register(level, entity, TimeTravel.sharedTick);
     }
 
     private static void register(ServerLevel level, Entity entity, long tick) {
@@ -131,7 +131,7 @@ public final class VehicleSpawnJournal {
         if (!(entity.level() instanceof ServerLevel level)) return;
         Entry e = canon.get(entity.getUUID());
         if (e == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         if (ended(e, now)) return;
 
         PlayerData pd = BlockJournal.nearestRecorder(level, entity.blockPosition());
@@ -142,7 +142,7 @@ public final class VehicleSpawnJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         while (!pendingRemovals.isEmpty() && pendingRemovals.peek().endTick <= now) {
             Entry e = pendingRemovals.poll();
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -163,7 +163,7 @@ public final class VehicleSpawnJournal {
 
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
 
         for (Entry e : STORE.entries()) {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -227,7 +227,7 @@ public final class VehicleSpawnJournal {
         STORE.rebuildUpcoming();
         pending.clear();
         pendingRemovals.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
             if (e.endTick > now) pendingRemovals.add(e);

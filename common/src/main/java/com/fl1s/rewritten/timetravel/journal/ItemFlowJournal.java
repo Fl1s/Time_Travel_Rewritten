@@ -113,7 +113,7 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_DROP;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = "";
@@ -154,7 +154,7 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_DESTROY;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = drop.visit;
         e.player = "";
@@ -179,7 +179,7 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_PICKUP;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = sp.getName().getString().intern();
@@ -201,7 +201,7 @@ public final class ItemFlowJournal {
             for (ItemEntity i : toDiscard) if (!i.isRemoved()) i.discard();
             toDiscard.clear();
         }
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Iterator<Entry> it = retry.iterator(); it.hasNext(); ) {
             Entry r = it.next();
             ServerLevel rl = TimeTravel.server.getLevel(Levels.key(r.dim));
@@ -425,7 +425,7 @@ public final class ItemFlowJournal {
         pending.clear();
         retry.clear();
         toDiscard.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
         }

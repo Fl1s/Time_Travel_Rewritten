@@ -81,7 +81,7 @@ public final class BlockEntityJournal {
 
     public static void snapshotInitial() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         Set<String> visitedDims = new HashSet<>();
         for (ServerPlayer player : TimeTravel.server.getPlayerList().getPlayers()) {
             if (Clones.is(player)) continue;
@@ -149,7 +149,7 @@ public final class BlockEntityJournal {
         e.z = pos.getZ();
         e.oldNbt = nbt;
         e.newNbt = nbt;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = -1;
         STORE.entries().add(e);
@@ -188,7 +188,7 @@ public final class BlockEntityJournal {
             base.z = pos.getZ();
             base.oldNbt = nbt;
             base.newNbt = nbt;
-            base.tick = TimeTravel.timelineTick;
+            base.tick = TimeTravel.sharedTick;
             base.seq = STORE.nextSeq();
             base.visit = -1;
             STORE.entries().add(base);
@@ -206,7 +206,7 @@ public final class BlockEntityJournal {
         e.z = pos.getZ();
         e.oldNbt = prev.newNbt;
         e.newNbt = nbt;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         STORE.entries().add(e);

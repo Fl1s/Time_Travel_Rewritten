@@ -101,7 +101,7 @@ public final class MobSpawnJournal {
         PlayerData pd = BlockJournal.nearestRecorder(level, mob.blockPosition());
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = mob.getUUID();
@@ -128,7 +128,7 @@ public final class MobSpawnJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         while (!pending.isEmpty() && pending.peek().tick <= now) {
             Entry e = pending.poll();
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -147,7 +147,7 @@ public final class MobSpawnJournal {
     }
 
     public static void onJump(long from, long to) {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
@@ -185,7 +185,7 @@ public final class MobSpawnJournal {
             sanitize(tag);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived == null) return;
-            Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeTravel.timelineTick);
+            Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeTravel.sharedTick);
             if (at == null) at = new Vec3(e.x, e.y, e.z);
             revived.moveTo(at.x, at.y, at.z, revived.getYRot(), revived.getXRot());
             level.addFreshEntity(revived);
@@ -222,7 +222,7 @@ public final class MobSpawnJournal {
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
         pending.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
         }

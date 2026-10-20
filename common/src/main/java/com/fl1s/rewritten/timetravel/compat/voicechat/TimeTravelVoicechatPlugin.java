@@ -49,7 +49,7 @@ public class TimeTravelVoicechatPlugin {
 
         data.addVoiceFrame(
                 visit.id,
-                (int) (TimeTravel.timelineTick - visit.startTick),
+                (int) (TimeTravel.sharedTick - visit.startTick),
                 opusData,
                 player.position()
         );

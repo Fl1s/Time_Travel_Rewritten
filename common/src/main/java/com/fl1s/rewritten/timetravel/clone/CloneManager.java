@@ -106,7 +106,7 @@ public final class CloneManager {
         pendingSounds.clear();
 
         TimelineSceneManager scene = TimeTravel.timelineSceneManager;
-        final long now = TimeTravel.timelineTick;
+        final long now = TimeTravel.sharedTick;
         if (scene == null) {
             needsRebuild = false;
             return;
@@ -157,7 +157,7 @@ public final class CloneManager {
     }
 
     public void flushPending() {
-        final long now = TimeTravel.timelineTick;
+        final long now = TimeTravel.sharedTick;
         while (!pending.isEmpty()
                 && pending.peek().startTick() <= now + TimeTravel.cloneLookaheadTicks) {
             PendingPiece piece = pending.poll();
@@ -166,14 +166,14 @@ public final class CloneManager {
     }
 
     public void flushSounds() {
-        final long now = TimeTravel.timelineTick;
+        final long now = TimeTravel.sharedTick;
         while (!pendingSounds.isEmpty() && pendingSounds.peek().tick() <= now) {
             playTimeSound(pendingSounds.poll());
         }
     }
 
     public void replayEvents() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Clone clone : roots) {
             if (clone.pendingSkip > 0 || clone.root.isFinished()) continue;
             if (clone.visit == null) continue;
@@ -182,7 +182,7 @@ public final class CloneManager {
     }
 
     public void tickActive() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Clone clone : roots) {
             boolean protect = clone.pendingSkip > 0 || now < clone.fx.graceUntil;
             if (protect) shield(clone);
@@ -251,7 +251,7 @@ public final class CloneManager {
         }
 
         CloneFx fx = new CloneFx(cloneEntity);
-        fx.graceUntil = TimeTravel.timelineTick + 20;
+        fx.graceUntil = TimeTravel.sharedTick + 20;
 
         Visit cloneVisit = null;
         for (Visit v : pd.getVisits()) {
@@ -281,7 +281,7 @@ public final class CloneManager {
         shield(clone);
         if (syncSkip > 0) {
             playback.tick(syncSkip);
-            fx.graceUntil = TimeTravel.timelineTick + 20;
+            fx.graceUntil = TimeTravel.sharedTick + 20;
         }
 
         if (TimeTravel.trackVoice && TimeTravel.voiceChatLoaded) {
@@ -432,8 +432,8 @@ public final class CloneManager {
         for (PlayerData pd : scene.getRecordingPlayers()) {
             for (Visit v : pd.getVisits()) {
                 if (v.id == visitId) {
-                    return v.startTick > TimeTravel.timelineTick
-                            && v.startTick - TimeTravel.timelineTick <= PENDING_VISIT_WINDOW;
+                    return v.startTick > TimeTravel.sharedTick
+                            && v.startTick - TimeTravel.sharedTick <= PENDING_VISIT_WINDOW;
                 }
             }
         }

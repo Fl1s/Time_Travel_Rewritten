@@ -15,7 +15,7 @@ public class DispenserBlockEntityMixin {
     private RandomSource tt$seeded(RandomSource random) {
         BlockEntity self = (BlockEntity) (Object) this;
         if (!TimeTravel.isLooping || !(self.getLevel() instanceof ServerLevel)) return random;
-        long seed = self.getBlockPos().asLong() * 31L + TimeTravel.timelineTick * 0x9E3779B97F4A7C15L;
+        long seed = self.getBlockPos().asLong() * 31L + TimeTravel.sharedTick * 0x9E3779B97F4A7C15L;
         return RandomSource.create(seed);
     }
 }

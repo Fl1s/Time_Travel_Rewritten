@@ -154,7 +154,7 @@ public final class BlockJournal {
         BlockState current = level.getBlockState(pos);
         if (current.is(requested.getBlock())) return false;
         String dim = level.dimension().location().toString();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : list) {
             if (!e.build || e.tick <= now || !e.dim.equals(dim)) continue;
             BlockState old = oldState(e);
@@ -266,7 +266,7 @@ public final class BlockJournal {
         if (same != null) {
             for (Entry e : same) {
                 if (!e.dim.equals(dim)) continue;
-                if (Math.abs(e.tick - TimeTravel.timelineTick) > DEDUP_TICKS) continue;
+                if (Math.abs(e.tick - TimeTravel.sharedTick) > DEDUP_TICKS) continue;
                 if (!oldS.equals(e.oldState) || !newS.equals(e.newState)) continue;
                 return;
             }
@@ -281,7 +281,7 @@ public final class BlockJournal {
         entry.newState = newS;
         entry.oldParsed = old;
         entry.newParsed = now;
-        entry.tick = TimeTravel.timelineTick;
+        entry.tick = TimeTravel.sharedTick;
         entry.seq = STORE.nextSeq();
         entry.visit = visit;
         entry.root = actionDepth > 0
@@ -650,7 +650,7 @@ public final class BlockJournal {
                 entry.z = e.getKey().getZ();
                 entry.oldItems = serializeItems(e.getValue());
                 entry.newItems = serializeItems(now);
-                entry.tick = TimeTravel.timelineTick;
+                entry.tick = TimeTravel.sharedTick;
                 entry.seq = STORE.nextSeq();
                 entry.visit = w.visit();
                 entry.root = true;
@@ -680,7 +680,7 @@ public final class BlockJournal {
         entry.z = pos.getZ();
         entry.oldItems = serializeItems(before);
         entry.newItems = serializeItems(now);
-        entry.tick = TimeTravel.timelineTick;
+        entry.tick = TimeTravel.sharedTick;
         entry.seq = STORE.nextSeq();
         entry.visit = pd.getCurrentVisit().id;
         entry.root = false;
@@ -799,7 +799,7 @@ public final class BlockJournal {
         mine.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
 
         for (Entry e : mine) {
-            if (e.tick <= TimeTravel.timelineTick) apply(e, false);
+            if (e.tick <= TimeTravel.sharedTick) apply(e, false);
         }
         finishBatch();
         flushFluids();

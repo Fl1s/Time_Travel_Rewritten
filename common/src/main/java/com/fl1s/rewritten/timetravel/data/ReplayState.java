@@ -21,7 +21,7 @@ public final class ReplayState {
     }
 
     public static boolean isReplaying() {
-        return frontierTick >= 0 && TimeTravel.timelineTick < frontierTick;
+        return frontierTick >= 0 && TimeTravel.sharedTick < frontierTick;
     }
 
     public static void reset() {

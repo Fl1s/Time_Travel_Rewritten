@@ -42,7 +42,7 @@ public class TimeTravel {
 	public static ServerLevel serverLevel;
 
 	public static boolean isLooping;
-	public static long timelineTick;
+	public static long sharedTick;
 	public static long dayTimeOrigin;
 	public static boolean syncDayTime;
 	public static boolean jumpRequiresOp;
@@ -137,12 +137,12 @@ public class TimeTravel {
 		ResourceKey<Level> currentDimension = player.level().dimension();
 		if (currentDimension.equals(pd.getLastDimensionKey())) return;
 
-		pd.addPieceStart(timelineTick);
+		pd.addPieceStart(sharedTick);
 		pd.nextSegment();
 		pd.setLastDimensionKey(currentDimension);
 
 		TIMELINE_LOGGER.info("Player '{}' changed dimension at tick {} (pieces in chunk: {})",
-				player.getName().getString(), timelineTick, pd.getPieceStarts().size());
+				player.getName().getString(), sharedTick, pd.getPieceStarts().size());
 	}
 
 	//player lifecycle
@@ -174,7 +174,7 @@ public class TimeTravel {
 			session().clones.stopAll();
 			timelineSceneManager.saveRecordingPlayers();
 			config.isLooping = true;
-			config.timelineTick = timelineTick;
+			config.timelineTick = sharedTick;
 		}
 		BlockJournal.flushWatches();
 		JOURNALS.saveAll();
@@ -243,12 +243,12 @@ public class TimeTravel {
 	}
 
 	public static void sendSync(ServerPlayer player) {
-		TimelineNet.sendToPlayer(player, new TimelineSyncPayload(timelineTick, isLooping, displayTimeInTicks, showTimelineInfo));
+		TimelineNet.sendToPlayer(player, new TimelineSyncPayload(sharedTick, isLooping, displayTimeInTicks, showTimelineInfo));
 	}
 
 	public static void broadcastSync() {
 		if (server == null) return;
-		TimelineSyncPayload payload = new TimelineSyncPayload(timelineTick, isLooping, displayTimeInTicks, showTimelineInfo);
+		TimelineSyncPayload payload = new TimelineSyncPayload(sharedTick, isLooping, displayTimeInTicks, showTimelineInfo);
 		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
 			if (isClone(player)) continue;
 			TimelineNet.sendToPlayer(player, payload);

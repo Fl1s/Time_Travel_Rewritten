@@ -141,7 +141,7 @@ public final class EntityStateJournal {
         if (applying || !TimeTravel.isLooping || ReplayState.SUPPRESS) return;
         if (TimeTravel.timelineSceneManager == null) return;
         if (byUuid.containsKey(entity.getUUID())) return;
-        record(level, entity, TimeTravel.timelineTick, visitAt(level, entity.blockPosition()));
+        record(level, entity, TimeTravel.sharedTick, visitAt(level, entity.blockPosition()));
     }
 
     public static void beforeChange(Entity entity) {
@@ -156,7 +156,7 @@ public final class EntityStateJournal {
         ServerLevel level = activeLevel(entity);
         if (level == null || !inWorld(level, entity)) return;
         UUID id = entity.getUUID();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         String sig = signature(entity);
         Entry at = stateAt(id, now);
         if (at != null && at.sig != null && at.sig.equals(sig)) return;
@@ -176,12 +176,12 @@ public final class EntityStateJournal {
         if (level == null || entity.isRemoved() || !inWorld(level, entity)) return;
         ensureBaseline(level, entity);
         UUID id = entity.getUUID();
-        Entry at = stateAt(id, TimeTravel.timelineTick);
+        Entry at = stateAt(id, TimeTravel.sharedTick);
         if (at != null && at.nbt == null) return;
         Entry e = new Entry();
         e.dim = level.dimension().location().toString();
         e.uuid = id;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = visitAt(level, entity.blockPosition());
         STORE.entries().add(e);
@@ -231,7 +231,7 @@ public final class EntityStateJournal {
     }
 
     public static void onJump(long from, long to) {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Map.Entry<UUID, List<Entry>> en : new ArrayList<>(byUuid.entrySet())) {
             List<Entry> list = en.getValue();
             if (list.isEmpty()) continue;

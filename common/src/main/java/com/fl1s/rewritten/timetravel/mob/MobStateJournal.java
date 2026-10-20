@@ -208,7 +208,7 @@ public final class MobStateJournal {
     public static void onChanged(Mob mob) {
         if (Clones.is(mob) || !active()) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
-        check(level, mob, TimeTravel.timelineTick);
+        check(level, mob, TimeTravel.sharedTick);
     }
 
     private static void check(ServerLevel level, Mob mob, long now) {
@@ -229,7 +229,7 @@ public final class MobStateJournal {
     }
 
     private static void sample() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         if (now % SAMPLE_STEP != 0 || !active()) return;
         sampledThisTick.clear();
         double r = TimeTravel.entityTrackingDistance;
@@ -293,7 +293,7 @@ public final class MobStateJournal {
 
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (List<Entry> list : byUuid.values()) {
             if (list.isEmpty()) continue;
             Entry at = stateAtOf(list, now);

@@ -26,7 +26,7 @@ public final class VisitManager {
     }
 
     public void beginVisit(ServerPlayer player, PlayerData pd, int arrivalDir) {
-        Visit visit = new Visit(TimeTravel.config.nextVisitId++, TimeTravel.timelineTick);
+        Visit visit = new Visit(TimeTravel.config.nextVisitId++, TimeTravel.sharedTick);
         visit.arrivalDir = arrivalDir;
         visit.startDim = player.level().dimension().location().toString();
         visit.sx = player.getX();
@@ -58,7 +58,7 @@ public final class VisitManager {
         visit.departDir = (online != null) ? departDir : 0;
 
         finishChunk(pd);
-        visit.endTick = TimeTravel.timelineTick;
+        visit.endTick = TimeTravel.sharedTick;
         pd.setCurrentVisit(null);
 
         if (visit.doomed) {
@@ -88,8 +88,8 @@ public final class VisitManager {
 
     private void startChunk(ServerPlayer player, PlayerData pd) {
         pd.clearPieceStarts();
-        pd.addPieceStart(TimeTravel.timelineTick);
-        pd.setChunkStartTick(TimeTravel.timelineTick);
+        pd.addPieceStart(TimeTravel.sharedTick);
+        pd.setChunkStartTick(TimeTravel.sharedTick);
         MocapAdapter.startRecording(player, pd.getName());
     }
 
@@ -114,7 +114,7 @@ public final class VisitManager {
     }
 
     private static long startFor(List<Long> starts, int index) {
-        if (starts.isEmpty()) return TimeTravel.timelineTick;
+        if (starts.isEmpty()) return TimeTravel.sharedTick;
         return starts.get(Math.min(index, starts.size() - 1));
     }
 }

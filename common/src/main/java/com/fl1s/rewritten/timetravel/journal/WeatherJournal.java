@@ -82,7 +82,7 @@ public final class WeatherJournal {
 
     private static boolean hasFuture(String dim) {
         Long max = maxTickByDim.get(dim);
-        return max != null && max > TimeTravel.timelineTick;
+        return max != null && max > TimeTravel.sharedTick;
     }
 
     public static boolean isProtected(ServerLevel level) {
@@ -130,7 +130,7 @@ public final class WeatherJournal {
 
     private static void rebuildCurrent() {
         current.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) {
             if (e.tick > now) continue;
             Entry prev = current.get(e.dim);
@@ -142,7 +142,7 @@ public final class WeatherJournal {
 
     public static void snapshotInitial() {
         for (ServerLevel level : owners()) {
-            if (!hasEntries(key(level))) write(level, TimeTravel.timelineTick, true);
+            if (!hasEntries(key(level))) write(level, TimeTravel.sharedTick, true);
         }
     }
 
@@ -175,12 +175,12 @@ public final class WeatherJournal {
 
     public static void onAdvance(ServerLevel level) {
         if (applying || !TimeTravel.isLooping || !isOwner(level) || isProtected(level)) return;
-        write(level, TimeTravel.timelineTick, false);
+        write(level, TimeTravel.sharedTick, false);
     }
 
     public static void onSetWeather(ServerLevel level) {
         if (applying || !TimeTravel.isLooping || !isOwner(level) || isProtected(level)) return;
-        write(level, TimeTravel.timelineTick, true);
+        write(level, TimeTravel.sharedTick, true);
     }
 
     public static void enforce(ServerLevel level) {
@@ -283,9 +283,9 @@ public final class WeatherJournal {
         rebuildCurrent();
         for (ServerLevel level : owners()) {
             String dim = key(level);
-            Entry best = findAt(dim, TimeTravel.timelineTick);
+            Entry best = findAt(dim, TimeTravel.sharedTick);
             if (best == null) best = earliest(dim);
-            if (best != null) apply(level, best, TimeTravel.timelineTick, true);
+            if (best != null) apply(level, best, TimeTravel.sharedTick, true);
         }
         syncFollowers(true);
     }

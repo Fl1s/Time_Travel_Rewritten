@@ -111,7 +111,7 @@ public final class ProcessJournal {
 
         Snap s = new Snap();
         s.key = k;
-        s.tick = TimeTravel.timelineTick;
+        s.tick = TimeTravel.sharedTick;
         s.seq = nextSeq++;
         s.nbt = nbt;
         s.event = event;
@@ -171,7 +171,7 @@ public final class ProcessJournal {
     }
 
     public static void tick() {
-        while (!upcomingEvents.isEmpty() && upcomingEvents.peek().tick <= TimeTravel.timelineTick) {
+        while (!upcomingEvents.isEmpty() && upcomingEvents.peek().tick <= TimeTravel.sharedTick) {
             Snap s = upcomingEvents.poll();
             ServerLevel level = levelOf(s.key);
             if (level == null) continue;
@@ -225,10 +225,10 @@ public final class ProcessJournal {
             }
         }
 
-        if (!tracked.isEmpty() && pendingSim.isEmpty() && TimeTravel.timelineTick % 20 == 0) {
+        if (!tracked.isEmpty() && pendingSim.isEmpty() && TimeTravel.sharedTick % 20 == 0) {
             snapshotAll();
         }
-        if (!tracked.isEmpty() && TimeTravel.timelineTick % 1200 == 0) {
+        if (!tracked.isEmpty() && TimeTravel.sharedTick % 1200 == 0) {
             pruneTracked();
         }
     }
@@ -322,7 +322,7 @@ public final class ProcessJournal {
         upcomingEvents.clear();
         for (List<Snap> list : snaps.values()) {
             for (Snap s : list) {
-                if (s.event && s.tick > TimeTravel.timelineTick) upcomingEvents.add(s);
+                if (s.event && s.tick > TimeTravel.sharedTick) upcomingEvents.add(s);
             }
         }
     }

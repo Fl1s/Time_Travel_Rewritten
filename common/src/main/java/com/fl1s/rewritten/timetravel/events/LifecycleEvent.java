@@ -22,7 +22,7 @@ public class LifecycleEvent {
 
         TimeTravelConfig c = TimeTravel.config;
         TimeTravel.isLooping = c.isLooping;
-        TimeTravel.timelineTick = c.timelineTick;
+        TimeTravel.sharedTick = c.timelineTick;
         TimeTravel.dayTimeOrigin = c.dayTimeOrigin;
         TimeTravel.syncDayTime = c.syncDayTime;
         TimeTravel.jumpRequiresOp = c.jumpRequiresOp;

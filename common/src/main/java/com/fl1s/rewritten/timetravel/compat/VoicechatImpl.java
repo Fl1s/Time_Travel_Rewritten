@@ -362,7 +362,7 @@ public final class VoicechatImpl {
     private static void processScheduledRegions() {
         if (scheduledRegions.isEmpty()) return;
 
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
 
         List<ScheduledSpeechRegion> snapshot;
         synchronized (scheduledRegions) {

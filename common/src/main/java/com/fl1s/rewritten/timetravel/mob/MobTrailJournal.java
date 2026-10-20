@@ -173,7 +173,7 @@ public final class MobTrailJournal {
 
     public static void seedInitial() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = level.dimension().location().toString();
             for (Entity entity : level.getAllEntities()) {
@@ -193,7 +193,7 @@ public final class MobTrailJournal {
 
     private static void sample(boolean onlyOutOfTime) {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
 
         if (now % 100 == 0) discoverBosses();
         sampledThisTick.clear();
@@ -293,7 +293,7 @@ public final class MobTrailJournal {
 
     public static void apply() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
 
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             UUID id = en.getKey();
@@ -521,14 +521,14 @@ public final class MobTrailJournal {
                 releaseAllPuppets();
                 wasReplaying = false;
             }
-            if (TimeTravel.timelineTick % 100 == 0) sweepStrayPuppets(false);
+            if (TimeTravel.sharedTick % 100 == 0) sweepStrayPuppets(false);
             sample();
         }
     }
 
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         lastBossHealth.clear();
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             Track t = en.getValue();

@@ -58,7 +58,7 @@ public final class RedstoneJournal {
         PlayerData pd = BlockJournal.nearestRecorder(serverLevel, pos);
         if (pd == null || pd.getCurrentVisit() == null) return;
 
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         long key = ((long) level.dimension().location().hashCode() << 32) ^ pos.asLong();
 
         Entry existing = pendingByKey.get(key);
@@ -88,7 +88,7 @@ public final class RedstoneJournal {
 
     private static void restorePending() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         restoring = true;
         try {
             for (Entry e : STORE.entries()) {

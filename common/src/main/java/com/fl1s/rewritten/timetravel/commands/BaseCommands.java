@@ -92,7 +92,7 @@ public class BaseCommands {
             return 0;
         }
         TimeTravel.startTimeline();
-        source.sendSuccess(() -> Component.literal("Timeline started at " + TimeFormat.clock(TimeTravel.timelineTick)), true);
+        source.sendSuccess(() -> Component.literal("Timeline started at " + TimeFormat.clock(TimeTravel.sharedTick)), true);
         return 1;
     }
 
@@ -103,7 +103,7 @@ public class BaseCommands {
             return 0;
         }
         TimeTravel.stopTimeline();
-        source.sendSuccess(() -> Component.literal("Timeline stopped at " + TimeFormat.clock(TimeTravel.timelineTick)), true);
+        source.sendSuccess(() -> Component.literal("Timeline stopped at " + TimeFormat.clock(TimeTravel.sharedTick)), true);
         return 1;
     }
 
@@ -141,7 +141,7 @@ public class BaseCommands {
 
     private static int setMark(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
-        long tick = TimeTravel.timelineTick;
+        long tick = TimeTravel.sharedTick;
         TimeTravel.config.marks.put(name, tick);
         TimeTravel.config.save();
         context.getSource().sendSuccess(() -> Component.literal("Mark '" + name + "' saved at " + TimeFormat.clock(tick)
@@ -217,8 +217,8 @@ public class BaseCommands {
 
         long target = switch (mode) {
             case TO -> ticks;
-            case FORWARD -> TimeTravel.timelineTick + ticks;
-            case BACK -> TimeTravel.timelineTick - ticks;
+            case FORWARD -> TimeTravel.sharedTick + ticks;
+            case BACK -> TimeTravel.sharedTick - ticks;
         };
 
         String error = TimeTravel.jumpTo(target, source.getTextName());
@@ -242,7 +242,7 @@ public class BaseCommands {
                 + " (voice of clones: " + (TimeTravel.trackVoice ? "on" : "off") + ").\n";
 
         String status = (TimeTravel.isLooping ? "Timeline is running.\n" : "Timeline is not running.\n")
-                + "Server time: " + TimeFormat.clock(TimeTravel.timelineTick) + " (tick " + TimeTravel.timelineTick + ").\n"
+                + "Server time: " + TimeFormat.clock(TimeTravel.sharedTick) + " (tick " + TimeTravel.sharedTick + ").\n"
                 + "Recorded visits: " + visits[0] + ", past selves queued: " + TimeTravel.countPendingClones() + ".\n"
                 + "Sync day time: " + TimeTravel.syncDayTime + ".\n"
                 + tracking + voice;
