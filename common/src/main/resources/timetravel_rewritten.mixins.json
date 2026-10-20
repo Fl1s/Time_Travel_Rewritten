@@ -3,7 +3,6 @@
   "package": "com.fl1s.rewritten.timetravel.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "MinecraftServerAccessor",
     "ServerLevelMixin",
     "LevelMixin",
     "PrimedTntMixin",
