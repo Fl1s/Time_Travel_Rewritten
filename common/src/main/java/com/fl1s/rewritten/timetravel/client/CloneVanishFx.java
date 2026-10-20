@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.client;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.net.CloneAppearPayload;
 import com.fl1s.rewritten.timetravel.net.CloneVanishPayload;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -58,6 +59,11 @@ public final class CloneVanishFx {
     private static final float MIN_CENTER_HEIGHT = 1.25F;
     private static final float MS_PER_TICK = 50.0F;
 
+    private static final float APPEAR_MS = 450.0F;
+    private static final float APPEAR_FLASH_MS = 250.0F;
+    private static final float APPEAR_SPRITE_SPAN = (CLOCK_FRAMES - 1) * FRAME_MS;
+    private static final Map<Integer, Effect> appears = new HashMap<>();
+
     private static final class Effect {
         final int entityId;
         final float startTick;
@@ -93,6 +99,7 @@ public final class CloneVanishFx {
 
     public static void clear() {
         effects.clear();
+        appears.clear();
         active = false;
     }
 
@@ -103,6 +110,17 @@ public final class CloneVanishFx {
             return Sheets.translucentItemSheet();
         }
         return type;
+    }
+
+    public static void handleAppear(CloneAppearPayload payload) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) return;
+        if (level != lastLevel) {
+            effects.clear();
+            appears.clear();
+            lastLevel = level;
+        }
+        appears.put(payload.entityId(), new Effect(payload.entityId(), level.getGameTime() + payload.delayTicks()));
     }
 
     public static boolean active() {
@@ -141,9 +159,30 @@ public final class CloneVanishFx {
 
     public static void begin(LivingEntity entity, float partialTick) {
         active = false;
-        if (effects.isEmpty()) return;
+        if (effects.isEmpty() && appears.isEmpty()) return;
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null || level != lastLevel) return;
+
+        Effect appear = appears.get(entity.getId());
+        if (appear != null) {
+            float ms = (level.getGameTime() + partialTick - appear.startTick) * MS_PER_TICK;
+            if (ms < 0.0F) {
+                bodyAlpha = 0.0F;
+                tintGb = PRE_FLASH_GB;
+                flash = 0.0F;
+                active = true;
+                return;
+            }
+            if (ms <= APPEAR_MS) {
+                float u = ms / APPEAR_FLASH_MS;
+                flash = u < 1.0F ? (u < 0.3F ? u / 0.3F : 1.0F - (u - 0.3F) / 0.7F) : 0.0F;
+                bodyAlpha = smooth(u);
+                tintGb = Mth.lerp(smooth(ms / APPEAR_MS), PRE_FLASH_GB, 1.0F);
+                active = true;
+                return;
+            }
+        }
+
         Effect effect = effects.get(entity.getId());
         if (effect == null) return;
 
@@ -195,7 +234,7 @@ public final class CloneVanishFx {
     }
 
     public static void renderWorld(PoseStack poseStack, Vec3 camera, float partialTick) {
-        if (effects.isEmpty()) return;
+        if (effects.isEmpty() && appears.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null || level != lastLevel) {
@@ -223,6 +262,18 @@ public final class CloneVanishFx {
             }
             if (effect.anchor == null || ms < FLASH_START_MS) continue;
             drew |= drawSprites(poseStack, buffer, camera, effect.anchor, ms - FLASH_START_MS);
+        }
+
+        Iterator<Effect> ait = appears.values().iterator();
+        while (ait.hasNext()) {
+            Effect a = ait.next();
+            float ms = (now - a.startTick) * MS_PER_TICK;
+            if (ms > APPEAR_MS + CLEANUP_MS) { ait.remove(); continue; }
+            if (!spritesEnabled || ms < 0.0F || ms > APPEAR_MS) continue;
+            Entity entity = level.getEntity(a.entityId);
+            if (entity == null) continue;
+            float t = (1.0F - ms / APPEAR_MS) * APPEAR_SPRITE_SPAN;
+            drew |= drawSprites(poseStack, buffer, camera, chestOf(entity, partialTick), t);
         }
         if (drew) buffer.endBatch();
     }

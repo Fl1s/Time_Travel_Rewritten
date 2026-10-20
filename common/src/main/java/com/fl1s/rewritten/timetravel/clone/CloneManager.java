@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.data.*;
 import com.fl1s.rewritten.timetravel.mocap.ClonePlayback;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.net.CloneAppearPayload;
 import com.fl1s.rewritten.timetravel.net.CloneVanishPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.util.TTSounds;
@@ -36,6 +37,7 @@ public final class CloneManager {
     public static final int CLONE_SYNC_SKIP_LIMIT = 8000;
     public static final int CLONE_SKIP_PER_TICK = 40;
     public static final int VANISH_LEAD_TICKS = 32;
+    public static final int APPEAR_SOUND_LEAD_TICKS = 0;
     public static final int VANISH_SOUND_LEAD_TICKS = 20;
 
     public record PendingPiece(long startTick, String recording, String playerName, int skipTicks,
@@ -110,7 +112,8 @@ public final class CloneManager {
                 if (visit.pieces.isEmpty()) continue;
 
                 if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= now) {
-                    pendingSounds.add(new PendingSound(visit.startTick, visit.startDim,
+                    long arriveTick = Math.max(now, visit.startTick - APPEAR_SOUND_LEAD_TICKS);
+                    pendingSounds.add(new PendingSound(arriveTick, visit.startDim,
                             visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id));
                 }
                 if (visit.departDir != 0 && visit.endDim != null && visit.endTick > now) {
@@ -250,6 +253,17 @@ public final class CloneManager {
         Clone clone = new Clone(playback, piece.playerName(), piece.visitId(), fx, pendingSkip - syncSkip, cloneVisit);
         clone.endTick = endTickOf(cloneVisit, piece.recording());
         roots.add(clone);
+
+        if (cloneEntity != null && pendingSkip == 0
+                && piece.segment() == 0
+                && cloneVisit != null && cloneVisit.arrivalDir != 0
+                && cloneEntity.level() instanceof ServerLevel level) {
+            CloneAppearPayload p = new CloneAppearPayload(cloneEntity.getId(), delayTicks);
+            for (ServerPlayer pl : new ArrayList<>(level.players())) {
+                if (Clones.is(pl)) continue;
+                TimelineNet.sendToPlayer(pl, p);
+            }
+        }
 
         shield(clone);
         if (syncSkip > 0) {

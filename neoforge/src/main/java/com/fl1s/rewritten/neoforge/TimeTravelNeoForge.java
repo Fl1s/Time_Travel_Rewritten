@@ -125,6 +125,9 @@ public class TimeTravelNeoForge {
         registrar.playToClient(CloneVanishPayload.TYPE, CloneVanishPayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> CloneVanishFx.handle(payload)));
 
+        registrar.playToClient(CloneAppearPayload.TYPE, CloneAppearPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> CloneVanishFx.handleAppear(payload)));
+
         registrar.playToClient(WardenAnimPayload.TYPE, WardenAnimPayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> WardenAnimClient.handle(payload)));
 
