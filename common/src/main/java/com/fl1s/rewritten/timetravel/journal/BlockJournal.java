@@ -931,7 +931,7 @@ public final class BlockJournal {
             erasing = false;
         }
         STORE.entries().removeAll(mine);
-        STORE.upcoming().removeAll(mine);
+        STORE.removeUpcoming(mine::contains);
         rebuildIndex();
         STORE.markDirty();
     }

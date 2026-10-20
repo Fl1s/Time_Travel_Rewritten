@@ -280,7 +280,7 @@ public final class BlockEntityJournal {
 
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
-        STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
+        STORE.removeUpcoming(e -> visitIds.contains(e.visit));
         STORE.markDirty();
         rebuildLastIndex();
     }

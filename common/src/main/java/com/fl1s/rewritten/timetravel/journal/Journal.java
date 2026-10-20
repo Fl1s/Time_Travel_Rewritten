@@ -9,9 +9,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.ToLongFunction;
 import java.util.function.ToIntFunction;
 
@@ -26,8 +29,11 @@ import java.util.function.ToIntFunction;
  * @param <E> entry type
  */
 public final class Journal<E> {
+    public static final long SHARED_CURSOR = Long.MIN_VALUE;
+
     private final List<E> entries = new ArrayList<>();
-    private final PriorityQueue<E> upcoming;
+    private final Map<Long, PriorityQueue<E>> cursors = new HashMap<>();
+    private final Comparator<E> order;
     private final Type listType;
     private final String fileName;
     private final ToLongFunction<E> tickFn;
@@ -42,15 +48,23 @@ public final class Journal<E> {
         this.tickFn = tickFn;
         this.seqFn = seqFn;
         this.visitFn = visitFn;
-        this.upcoming = new PriorityQueue<>(Comparator.comparingLong(tickFn).thenComparingLong(seqFn));
+        this.order = Comparator.comparingLong(tickFn).thenComparingLong(seqFn);
     }
 
     public List<E> entries() {
         return entries;
     }
 
-    public PriorityQueue<E> upcoming() {
-        return upcoming;
+    private PriorityQueue<E> cursor(long head) {
+        return cursors.computeIfAbsent(head, k -> new PriorityQueue<>(order));
+    }
+
+    public void removeUpcoming(Predicate<E> filter) {
+        for (PriorityQueue<E> q : cursors.values()) q.removeIf(filter);
+    }
+
+    public void dropCursor(long head) {
+        cursors.remove(head);
     }
 
     public long nextSeq() {
@@ -63,7 +77,7 @@ public final class Journal<E> {
 
     public void load() {
         entries.clear();
-        upcoming.clear();
+        cursors.clear();
         nextSeq = 0;
         if (TimeTravel.worldFolder != null) {
             Path f = TimeTravel.worldFolder.resolve(fileName);
@@ -91,36 +105,46 @@ public final class Journal<E> {
 
     public void clear() {
         entries.clear();
-        upcoming.clear();
+        cursors.clear();
         nextSeq = 0;
         dirty = true;
         save();
     }
 
     public void rebuildUpcoming() {
-        rebuildUpcoming(TimeContext.now());
+        rebuildUpcoming(SHARED_CURSOR, TimeContext.now());
     }
 
     public void rebuildUpcoming(long position) {
-        upcoming.clear();
+        rebuildUpcoming(SHARED_CURSOR, position);
+    }
+
+    public void rebuildUpcoming(long head, long position) {
+        PriorityQueue<E> q = cursor(head);
+        q.clear();
         for (E e : entries) {
-            if (tickFn.applyAsLong(e) > position) upcoming.add(e);
+            if (tickFn.applyAsLong(e) > position) q.add(e);
         }
     }
 
     public void tick(Consumer<E> onDue) {
-        tick(TimeContext.now(), onDue);
+        tick(SHARED_CURSOR, TimeContext.now(), onDue);
     }
 
     public void tick(long position, Consumer<E> onDue) {
-        while (!upcoming.isEmpty() && tickFn.applyAsLong(upcoming.peek()) <= position) {
-            onDue.accept(upcoming.poll());
+        tick(SHARED_CURSOR, position, onDue);
+    }
+
+    public void tick(long head, long position, Consumer<E> onDue) {
+        PriorityQueue<E> q = cursor(head);
+        while (!q.isEmpty() && tickFn.applyAsLong(q.peek()) <= position) {
+            onDue.accept(q.poll());
         }
     }
 
     public void eraseVisits(Set<Integer> visitIds) {
         entries.removeIf(e -> visitIds.contains(visitFn.applyAsInt(e)));
-        upcoming.removeIf(e -> visitIds.contains(visitFn.applyAsInt(e)));
+        removeUpcoming(e -> visitIds.contains(visitFn.applyAsInt(e)));
         dirty = true;
     }
 }

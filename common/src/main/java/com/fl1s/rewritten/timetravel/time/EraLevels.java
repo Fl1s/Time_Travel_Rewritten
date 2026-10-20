@@ -91,6 +91,17 @@ public final class EraLevels {
         }
     }
 
+    public static ServerLevel resolve(String canonicalDim, TimeHead head) {
+        MinecraftServer server = TimeTravel.server;
+        if (server == null) return null;
+        if (head != null && head.hasOwnLevel()) {
+            ServerLevel view = head.level();
+            ResourceKey<Level> viewed = Levels.canonical(view);
+            if (viewed != null && viewed.location().toString().equals(canonicalDim)) return view;
+        }
+        return server.getLevel(Levels.key(canonicalDim));
+    }
+
     private static void adopt(TimeHead head, ServerLevel level, ServerLevel canonical) {
         head.setLevel(level);
         Levels.registerView(level.dimension(), canonical.dimension());

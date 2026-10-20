@@ -238,7 +238,7 @@ public final class VehicleSpawnJournal {
             }
         }
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
-        STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
+        STORE.removeUpcoming(e -> visitIds.contains(e.visit));
         canon.values().removeIf(e -> visitIds.contains(e.visit));
         STORE.markDirty();
         rebuildUpcoming();

@@ -169,7 +169,7 @@ public final class MobEventJournal {
 
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
-        STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
+        STORE.removeUpcoming(e -> visitIds.contains(e.visit));
         latestDeath.clear();
         for (Entry e : STORE.entries()) {
             Entry prev = latestDeath.get(e.uuid);
