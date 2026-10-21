@@ -90,7 +90,7 @@ public final class CloneManager {
     private boolean needsRebuild = true;
     private boolean idle = false;
 
-    private static long positionOf(long head) {
+    static long positionOf(long head) {
         return Math.max(0, TimeTravel.presentTick - head);
     }
 
