@@ -70,7 +70,7 @@ public final class CloneTracks {
     public static void poll(ServerPlayer player, PlayerData pd) {
         Visit visit = pd.getCurrentVisit();
         if (visit == null) return;
-        long tick = TimeTravel.sharedTick;
+        long tick = TimeTravel.personalTick(player);
 
         int mode = player.gameMode.getGameModeForPlayer().getId();
         boolean flying = player.getAbilities().flying;
@@ -109,7 +109,7 @@ public final class CloneTracks {
         if (target instanceof Player) return;
         Visit visit = recordedVisit(player);
         if (visit == null) return;
-        visit.attacks.add(new Visit.AttackEvent(TimeTravel.sharedTick, target.getUUID().toString()));
+        visit.attacks.add(new Visit.AttackEvent(TimeTravel.personalTick(player), target.getUUID().toString()));
     }
 
     public static void onTotem(ServerPlayer player) {
@@ -237,15 +237,13 @@ public final class CloneTracks {
 
     public static void applyHealthAll() {
         if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
-        long now = TimeTravel.sharedTick;
-        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> {
-            for (Visit visit : pd.getVisits()) {
-                Entity e = TimeTravel.entityOfVisit(visit.id);
-                if (e instanceof ServerPlayer clone && Clones.is(clone) && !clone.isRemoved()) {
-                    applyHealth(visit, clone, now);
-                }
+        CloneManager clones = TimeTravel.session().clones;
+        for (CloneManager.Clone active : new ArrayList<>(clones.roots())) {
+            if (active.visit == null) continue;
+            if (active.fx.entity() instanceof ServerPlayer clone && !clone.isRemoved()) {
+                applyHealth(active.visit, clone, CloneManager.positionOf(active.head));
             }
-        });
+        }
     }
 
     private static void applyMode(Visit visit, ServerPlayer clone, long now) {

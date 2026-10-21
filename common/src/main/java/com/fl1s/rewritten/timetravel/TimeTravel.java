@@ -263,6 +263,12 @@ public class TimeTravel {
 		return s == null ? CloneManager.NO_HEAD : s.clones.headOf(e);
 	}
 
+	public static long clonePosition(Entity e) {
+		long head = cloneHeadOf(e);
+		if (head == CloneManager.NO_HEAD) return sharedTick;
+		return Math.max(0, presentTick - head);
+	}
+
 	public static int visitIdOf(Entity e) {
 		TimelineSession s = session;
 		return s == null ? -1 : s.clones.visitIdOf(e);

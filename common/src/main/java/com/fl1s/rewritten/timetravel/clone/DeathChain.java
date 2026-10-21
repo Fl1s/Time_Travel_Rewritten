@@ -52,8 +52,9 @@ public final class DeathChain {
 
             boolean dead = player.isDeadOrDying();
             if (dead && !visit.wasDead) {
-                visit.deathTicks.add(TimeTravel.sharedTick);
-                if (visit.deathTick < 0) visit.deathTick = TimeTravel.sharedTick;
+                long at = TimeTravel.personalTick(player);
+                visit.deathTicks.add(at);
+                if (visit.deathTick < 0) visit.deathTick = at;
             }
             visit.wasDead = dead;
         }
@@ -73,8 +74,9 @@ public final class DeathChain {
             if (fx.killHandled) continue;
             fx.killHandled = true;
 
-            if (!TimeTravel.chainDeath || TimeTravel.sharedTick <= fx.graceUntil) continue;
-            if (isRecordedDeath(clone.playerName, clone.visitId)) continue;
+            long now = CloneManager.positionOf(clone.head);
+            if (!TimeTravel.chainDeath || now <= fx.graceUntil) continue;
+            if (isRecordedDeath(clone.playerName, clone.visitId, now)) continue;
 
             TimeTravel.TIMELINE_LOGGER.info("Clone of {} (visit {}) was killed during playback!!! Collapsing the chain",
                     clone.playerName, clone.visitId);
@@ -82,7 +84,7 @@ public final class DeathChain {
         }
     }
 
-    private boolean isRecordedDeath(String playerName, int visitId) {
+    private boolean isRecordedDeath(String playerName, int visitId, long now) {
         TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         if (scene == null) return true;
         PlayerData pd = scene.getRecordingPlayer(playerName);
@@ -90,9 +92,9 @@ public final class DeathChain {
         for (Visit v : pd.getVisits()) {
             if (v.id != visitId) continue;
             for (long d : v.deathTicks) {
-                if (Math.abs(TimeTravel.sharedTick - d) <= 15) return true;
+                if (Math.abs(now - d) <= 15) return true;
             }
-            return v.deathTick >= 0 && Math.abs(TimeTravel.sharedTick - v.deathTick) <= 15;
+            return v.deathTick >= 0 && Math.abs(now - v.deathTick) <= 15;
         }
         return true;
     }
