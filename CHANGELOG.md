@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.11.1] - 2026-11-21
+
+### Added
+
+ - Past self time jump animation
+
+### Changed
+
+ - New time jump sfx by Remedy Hearts
+
+### Fixed
+
+ - doDaylightCycle=false gamerule does nothing
+ - Spawners duplicating mobs on replay 
+
 ## [1.21.1-0.11.0] - 2026-11-20
 
 ### Added

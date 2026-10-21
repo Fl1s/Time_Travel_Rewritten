@@ -66,6 +66,7 @@ public final class TimelineClient {
         displayTick = 0;
         previewTick = NO_PREVIEW;
         holdBack = holdForward = 0;
+        CloneVanishFx.clear();
     }
 
     private static long stepTicks() {

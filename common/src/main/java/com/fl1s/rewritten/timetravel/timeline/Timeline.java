@@ -16,6 +16,7 @@ import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.GameRules;
 
 /**
  * Core timeline: shared clock, jump orchestration, and per-server-tick work.
@@ -144,7 +145,7 @@ public final class Timeline {
 
         TimeTravel.timelineTick = target;
         TimeTravel.config.timelineTick = target;
-        if (TimeTravel.syncDayTime) {
+        if (TimeTravel.syncDayTime && TimeTravel.serverLevel.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + target);
         }
         clones.setIdle(false);
@@ -202,9 +203,7 @@ public final class Timeline {
         CloneTracks.pollAll();
         clones.replayEvents();
         TimeTravel.JOURNALS.tickAll();
-        if (TimeTravel.syncDayTime) {
-            TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.timelineTick);
-        }
+
         clones.tickActive();
         CloneTracks.applyHealthAll();
         if (TimeTravel.trackVoice) VoicechatCompat.onTick();

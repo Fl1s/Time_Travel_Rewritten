@@ -36,5 +36,9 @@
   "hud.timetravel_rewritten.target": "Jump to: %s (%s)",
   "message.timetravel_rewritten.no_permission": "Only operators can travel in time on this server",
   "neoforge.configuration.section.timetravel_rewritten.client.title": "Client",
-  "neoforge.configuration.section.timetravel_rewritten.server.title": "Server"
+  "neoforge.configuration.section.timetravel_rewritten.server.title": "Server",
+  "subtitles.timetravel_rewritten.travel_forward": "Time travel jump forward",
+  "subtitles.timetravel_rewritten.travel_back": "Time travel jump backward",
+  "subtitles.timetravel_rewritten.aspect_travel_forward": "Aspect time travel jump forward",
+  "subtitles.timetravel_rewritten.aspect_travel_back": "Aspect time travel jump backward"
 }

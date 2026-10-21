@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.neoforge;
 
 import com.fl1s.rewritten.timetravel.*;
+import com.fl1s.rewritten.timetravel.client.CloneVanishFx;
 import com.fl1s.rewritten.timetravel.commands.TimelineCommands;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
@@ -120,6 +121,12 @@ public class TimeTravelNeoForge {
 
         registrar.playToClient(TimelineSyncPayload.TYPE, TimelineSyncPayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> TimelineClient.onSync(payload)));
+
+        registrar.playToClient(CloneVanishPayload.TYPE, CloneVanishPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> CloneVanishFx.handle(payload)));
+
+        registrar.playToClient(CloneAppearPayload.TYPE, CloneAppearPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> CloneVanishFx.handleAppear(payload)));
 
         registrar.playToClient(WardenAnimPayload.TYPE, WardenAnimPayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> WardenAnimClient.handle(payload)));
