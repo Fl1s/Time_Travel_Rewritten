@@ -48,6 +48,7 @@ Use `/tt settings` to view the current settings.
 
 Use `/tt settings toggles <option> <true|false>` to change an option.
 
+- `internalTime` - Give each player their own position on the timeline instead of moving the whole server together. See below.
 - `syncDayTime` - Synchronize the world's time of day with the timeline.
 - `jumpRequiresOp` - Configure operator requirements for time jumps.
 - `chainDeath` - Configure chained death behavior.
@@ -67,6 +68,31 @@ Requires [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat/).
 - `voice distance <blocks>` - Set the voice distance.
 - `voice threshold <dB>` - Set the voice interaction threshold.
 - `voice cooldown <ticks>` - Set the voice interaction cooldown.
+
+# Internal time
+
+By default a time jump moves the whole server: everyone's clock changes together and the world
+rewinds with it. With `internalTime` on, each player instead carries their own position on the
+timeline, so two people can be five minutes apart without dragging anyone along.
+
+What changes for a player in the past:
+
+- They see the past selves recorded at *their* time, and nobody else's. A player at the present sees
+  the present's past selves. Neither is forced to the other's time.
+- Their recording, deaths, chat and voice are stamped at their own position, so what they do there
+  becomes history that anyone who later passes that point will observe.
+- Past selves from another player's time are invisible to them, and cannot push or be pushed by them.
+- `jump join <player>` matches another traveller's time, and `jump ... bring <targets>` takes players
+  with you.
+
+What does **not** change: **the world itself stays shared and live.** Blocks, mobs and weather are at
+the present for everyone, so jumping back five minutes will not un-break a block you broke in those
+five minutes. One position in the world can hold only one state, so per-player world state would mean
+a separate dimension per era, which this mod deliberately does not create. If you want the world to
+rewind as well, leave `internalTime` off and let the server move together.
+
+Only players carry a time offset. Mobs, items and vehicles live in the shared world, which is why
+`bring` reports non-player targets as ignored.
 
 # Support
 

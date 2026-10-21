@@ -101,17 +101,23 @@ public final class ChatTimeline {
     public static void resend(long upTo) {
         if (!TimeTravel.trackChat || TimeTravel.server == null) return;
 
+        List<Line> shared = TimeTravel.internalTime ? null : historyUpTo(upTo);
+
+        for (ServerPlayer player : new ArrayList<>(TimeTravel.server.getPlayerList().getPlayers())) {
+            if (Clones.is(player)) continue;
+            List<Line> history = shared != null ? shared : historyUpTo(TimeTravel.personalTick(player));
+            TimelineNet.sendToPlayer(player, ClearChatPayload.INSTANCE);
+            for (Line l : history) player.sendSystemMessage(l.text());
+        }
+    }
+
+    private static List<Line> historyUpTo(long upTo) {
         List<Line> history = new ArrayList<>();
         for (Entry e : STORE.entries()) if (e.tick <= upTo) history.add(new Line(e.tick, e.seq, component(e)));
         AdvancementTimeline.collect(upTo, history);
         history.sort(Comparator.comparingLong(Line::tick).thenComparingLong(Line::seq));
         if (history.size() > RESEND_LIMIT) history = history.subList(history.size() - RESEND_LIMIT, history.size());
-
-        for (ServerPlayer player : new ArrayList<>(TimeTravel.server.getPlayerList().getPlayers())) {
-            if (Clones.is(player)) continue;
-            TimelineNet.sendToPlayer(player, ClearChatPayload.INSTANCE);
-            for (Line l : history) player.sendSystemMessage(l.text());
-        }
+        return history;
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
