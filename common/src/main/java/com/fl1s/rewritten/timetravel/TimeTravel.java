@@ -10,6 +10,7 @@ import com.fl1s.rewritten.timetravel.journal.JournalRegistry;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.net.StopDragonSoundPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.data.Clones;
@@ -196,6 +197,13 @@ public class TimeTravel {
 			if (pd != null && pd.getActive()) count++;
 		}
 		return count;
+	}
+
+	public static void broadcastStopDragonSound() {
+		if (server == null) return;
+		for (ServerPlayer p : new ArrayList<>(server.getPlayerList().getPlayers())) {
+			if (!isClone(p)) TimelineNet.sendToPlayer(p, StopDragonSoundPayload.INSTANCE);
+		}
 	}
 
 	static boolean isClone(ServerPlayer player) {

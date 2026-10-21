@@ -151,6 +151,7 @@ public final class Timeline {
         clones.setIdle(false);
 
         TimeTravel.JOURNALS.onJumpAll(from, target);
+        TimeTravel.broadcastStopDragonSound();
 
         TimeTravel.forEachOnlineRecorded((p, pd) -> s.visits.beginVisit(p, pd, dir));
         clones.rebuild();
