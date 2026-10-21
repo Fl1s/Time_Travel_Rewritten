@@ -26,6 +26,8 @@ public class TimeTravelFabricClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(WardenAnimPayload.TYPE,
                 (payload, context) -> WardenAnimClient.handle(payload));
         ClientPlayNetworking.registerGlobalReceiver(CloneVanishPayload.TYPE, (payload, context) -> CloneVanishFx.handle(payload));
+        ClientPlayNetworking.registerGlobalReceiver(DragonDeathPayload.TYPE,
+                (payload, context) -> DragonDeathClient.handle(payload));
         ClientPlayNetworking.registerGlobalReceiver(CloneAppearPayload.TYPE, (payload, context) -> CloneVanishFx.handleAppear(payload));
         WorldRenderEvents.AFTER_TRANSLUCENT.register(context -> CloneVanishFx.renderWorld(context.matrixStack(), context.camera().getPosition(), context.tickCounter().getGameTimeDeltaPartialTick(false)));
 

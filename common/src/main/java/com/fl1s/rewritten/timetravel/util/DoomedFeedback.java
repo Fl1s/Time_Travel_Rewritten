@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.util;
 
+import com.fl1s.rewritten.timetravel.data.Clones;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -67,6 +68,7 @@ public final class DoomedFeedback {
     }
 
     private static void show(ServerPlayer player, ServerLevel level, String[] pool) {
+        if (Clones.is(player)) return;
         long now = level.getGameTime();
         Long last = lastShown.get(player.getUUID());
         if (last != null && now - last < COOLDOWN_TICKS) return;

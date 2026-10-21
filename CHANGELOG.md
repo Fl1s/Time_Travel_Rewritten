@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Changed
+
+ - Past Self category in client-side mod config
+
+### Fixed
+
+ - Ender Dragon bossbar incorrect update though timeline & unskippable death cutscene
+
 ## [1.21.1-0.11.1] - 2026-11-21
 
 ### Added

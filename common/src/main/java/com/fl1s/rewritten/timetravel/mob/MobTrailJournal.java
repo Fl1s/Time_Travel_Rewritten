@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.mob;
 
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.journal.BossFightJournal;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -111,6 +112,10 @@ public final class MobTrailJournal {
 
     public static boolean isBoss(Entity entity) {
         return entity instanceof EnderDragon || entity instanceof WitherBoss;
+    }
+
+    static void registerBoss(UUID id) {
+        bosses.add(id);
     }
 
     private static int phaseOf(Mob mob) {
@@ -305,6 +310,7 @@ public final class MobTrailJournal {
             Entity e = level.getEntity(id);
             if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
             if (mob.isDeadOrDying() && !MobJournal.isDoomed(mob)) continue;
+            if (mob instanceof EnderDragon d && BossFightJournal.isDrivenDeath(d)) continue;
 
             if (!puppets.contains(id)) {
                 boolean orig = mob.getTags().contains(PUPPET_TAG) ? mob.getTags().contains(ORIG_NOAI_TAG) : mob.isNoAi();
@@ -314,22 +320,28 @@ public final class MobTrailJournal {
                 if (orig) mob.addTag(ORIG_NOAI_TAG);
             }
 
+            Vec3 vel = Vec3.ZERO;
+            if (mob instanceof EnderDragon) {
+                Sample prev = sampleAt(t.samples, now - 1);
+                if (prev != null) vel = new Vec3(s.x - prev.x, s.y - prev.y, s.z - prev.z);
+            }
+
             if (!MobJournal.isApplying()) {
                 MobJournal.enterApplying();
                 try {
-                    applySample(mob, s);
+                    applySample(mob, s, vel);
                 } finally {
                     MobJournal.exitApplying();
                 }
             } else {
-                applySample(mob, s);
+                applySample(mob, s, vel);
             }
         }
     }
 
-    private static void applySample(Mob mob, Sample s) {
+    private static void applySample(Mob mob, Sample s, Vec3 vel) {
         mob.setNoAi(!(mob instanceof EnderDragon));
-        mob.setDeltaMovement(Vec3.ZERO);
+        mob.setDeltaMovement(vel);
         mob.fallDistance = 0;
 
         if (s.health <= 0) return;
@@ -475,6 +487,15 @@ public final class MobTrailJournal {
         if (t == null || t.samples.isEmpty()) return null;
         Sample s = sampleAt(t.samples, tick);
         return s == null ? null : new Vec3(s.x, s.y, s.z);
+    }
+
+    public static void rewriteHealth(UUID id, long tick, float lost) {
+        Track t = tracks.get(id);
+        if (t == null) return;
+        for (Sample s : t.samples) {
+            if (s.tick >= tick && s.health > 1.0F) s.health = Math.max(1.0F, s.health - lost);
+        }
+        dirty = true;
     }
 
     public static void tick() {

@@ -51,6 +51,7 @@ public final class MobJournal {
         if (entity instanceof Mob) {
             MobTrailJournal.onSpawnSeen(entity.getUUID(), level.dimension().location().toString());
         }
+        if (MobTrailJournal.isBoss(entity)) MobTrailJournal.registerBoss(entity.getUUID());
     }
 
     public static void onEntityDeath(LivingEntity entity) {

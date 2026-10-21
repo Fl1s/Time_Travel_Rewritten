@@ -18,6 +18,7 @@ import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.decoration.Painting;
+import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -190,17 +191,22 @@ public final class EntityStateJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        STORE.tick(EntityStateJournal::applyEntry);
+        STORE.tick(e -> applyEntry(e, true));
     }
 
-    private static void applyEntry(Entry e) {
+    private static void applyEntry(Entry e, boolean fx) {
         ServerLevel level = levelOf(e.dim);
         if (level == null) return;
         applying = true;
         try {
             Entity existing = level.getEntity(e.uuid);
             if (e.nbt == null) {
-                if (existing != null && !existing.isRemoved()) existing.discard();
+                if (existing != null && !existing.isRemoved()) {
+                    if (fx && existing instanceof EndCrystal) {
+                        level.explode(existing, existing.getX(), existing.getY(), existing.getZ(), 6.0F, Level.ExplosionInteraction.NONE);
+                    }
+                    existing.discard();
+                }
                 return;
             }
             CompoundTag cached = e.parsed;
@@ -231,7 +237,7 @@ public final class EntityStateJournal {
             if (list.isEmpty()) continue;
             Entry at = stateAtOf(list, now);
             if (at != null) {
-                applyEntry(at);
+                applyEntry(at, false);
                 continue;
             }
             ServerLevel level = levelOf(list.get(0).dim);
