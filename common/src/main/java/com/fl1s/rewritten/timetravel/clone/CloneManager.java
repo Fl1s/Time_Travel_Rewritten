@@ -174,46 +174,79 @@ public final class CloneManager {
         if (scene == null) return;
 
         scene.forEachRecordingPlayer(pd -> {
-            for (Visit visit : pd.getVisits()) {
-                if (visit.pieces.isEmpty()) continue;
-
-                if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= now) {
-                    long arriveTick = Math.max(now, visit.startTick - APPEAR_SOUND_LEAD_TICKS);
-                    sounds(head).add(new PendingSound(arriveTick, visit.startDim,
-                            visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id, true));
-                }
-                if (visit.departDir != 0 && visit.endDim != null && visit.endTick > now) {
-                    int lead;
-                    if (TimeTravel.oldSfx) {
-                        lead = OG_VANISH_SOUND_LEAD_TICKS;
-                    } else if (TimeTravel.flowerManMode) {
-                        lead = FLOWER_VANISH_SOUND_LEAD_TICKS;
-                    } else {
-                        lead = VANISH_SOUND_LEAD_TICKS;
-                    }
-                    long soundTick = visit.endTick - lead;
-                    if (soundTick < now) soundTick = now;
-                    sounds(head).add(new PendingSound(soundTick, visit.endDim,
-                            visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id, false));
-                }
-
-                for (int i = 0; i < visit.pieces.size(); i++) {
-                    Visit.Piece piece = visit.pieces.get(i);
-                    long end = (i + 1 < visit.pieces.size())
-                            ? visit.pieces.get(i + 1).startTick
-                            : visit.endTick;
-                    if (piece.startTick >= now) {
-                        pieces(head).add(new PendingPiece(piece.startTick, piece.recording, pd.getName(),
-                                0, visit.id, i, visit.startTick));
-                    } else if (end > now) {
-                        pieces(head).add(new PendingPiece(now, piece.recording, pd.getName(),
-                                (int) (now - piece.startTick), visit.id, i, visit.startTick));
-                    }
-                }
-            }
+            for (Visit visit : pd.getVisits()) queueVisit(head, now, pd, visit);
+            queueVisit(head, now, pd, pd.getCurrentVisit());
         });
         TimeTravel.TIMELINE_LOGGER.info("Clone queue for head {} rebuilt at tick {}: {} piece(s) pending",
                 head, now, pieces(head).size());
+    }
+
+    private void queueVisit(long head, long now, PlayerData pd, Visit visit) {
+        if (visit == null || visit.pieces.isEmpty()) return;
+
+        if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= now) {
+            long arriveTick = Math.max(now, visit.startTick - APPEAR_SOUND_LEAD_TICKS);
+            sounds(head).add(new PendingSound(arriveTick, visit.startDim,
+                    visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id, true));
+        }
+        queueDeparture(head, now, pd, visit);
+        queuePieces(head, now, pd, visit, 0);
+    }
+
+    private void queueDeparture(long head, long now, PlayerData pd, Visit visit) {
+        if (visit.departDir == 0 || visit.endDim == null || visit.endTick <= now) return;
+        int lead;
+        if (TimeTravel.oldSfx) {
+            lead = OG_VANISH_SOUND_LEAD_TICKS;
+        } else if (TimeTravel.flowerManMode) {
+            lead = FLOWER_VANISH_SOUND_LEAD_TICKS;
+        } else {
+            lead = VANISH_SOUND_LEAD_TICKS;
+        }
+        long soundTick = Math.max(now, visit.endTick - lead);
+        sounds(head).add(new PendingSound(soundTick, visit.endDim,
+                visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id, false));
+    }
+
+    private void queuePieces(long head, long now, PlayerData pd, Visit visit, int fromIndex) {
+        long tail = tailOf(pd, visit);
+        for (int i = Math.max(0, fromIndex); i < visit.pieces.size(); i++) {
+            Visit.Piece piece = visit.pieces.get(i);
+            long end = (i + 1 < visit.pieces.size())
+                    ? visit.pieces.get(i + 1).startTick
+                    : tail;
+            if (piece.startTick >= now) {
+                pieces(head).add(new PendingPiece(piece.startTick, piece.recording, pd.getName(),
+                        0, visit.id, i, visit.startTick));
+            } else if (end > now) {
+                pieces(head).add(new PendingPiece(now, piece.recording, pd.getName(),
+                        (int) (now - piece.startTick), visit.id, i, visit.startTick));
+            }
+        }
+    }
+
+    private static long tailOf(PlayerData pd, Visit visit) {
+        return visit.endTick >= 0 ? visit.endTick : pd.getChunkStartTick();
+    }
+
+    public void publishPieces(PlayerData pd, Visit visit, int fromIndex) {
+        if (!TimeTravel.individualTime || visit == null) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (!built.contains(head.offset())) continue;
+            queuePieces(head.offset(), head.position(), pd, visit, fromIndex);
+        }
+    }
+
+    public void publishDeparture(PlayerData pd, Visit visit) {
+        if (!TimeTravel.individualTime || visit == null) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (!built.contains(head.offset())) continue;
+            queueDeparture(head.offset(), head.position(), pd, visit);
+        }
     }
 
     public void flushPending(long head, long now) {
@@ -321,6 +354,10 @@ public final class CloneManager {
                 break;
             }
         }
+        if (cloneVisit == null && pd.getCurrentVisit() != null
+                && pd.getCurrentVisit().id == piece.visitId()) {
+            cloneVisit = pd.getCurrentVisit();
+        }
 
         int pendingSkip = piece.skipTicks();
         int syncSkip = Math.min(pendingSkip, CLONE_SYNC_SKIP_LIMIT);
@@ -351,13 +388,10 @@ public final class CloneManager {
     }
 
     private static long endTickOf(Visit visit, String recording) {
-        if (visit == null) return -1;
-        for (int i = 0; i < visit.pieces.size(); i++) {
-            if (!visit.pieces.get(i).recording.equals(recording)) continue;
-            long end = i + 1 < visit.pieces.size() ? visit.pieces.get(i + 1).startTick : visit.endTick;
-            return end > 0 ? end : -1;
-        }
-        return -1;
+        if (visit == null || visit.endTick <= 0) return -1;
+        int last = visit.pieces.size() - 1;
+        if (last < 0 || !visit.pieces.get(last).recording.equals(recording)) return -1;
+        return visit.endTick;
     }
 
     private static void announceVanish(Clone g, long now) {

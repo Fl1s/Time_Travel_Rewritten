@@ -83,6 +83,9 @@ What changes for a player in the past:
 - Their recording, deaths, chat and voice are stamped at their own position, so what they do there
   becomes history that anyone who later passes that point will observe.
 - Past selves from another player's time are invisible to them, and cannot push or be pushed by them.
+- Everyone's recording is closed and republished in chunks while anyone is behind, so a traveller sees
+  the other players' past selves too, not just their own. A chunk is only replayable once it is closed,
+  so a player less than two seconds behind the present may not see the very latest history yet.
 - `jump join <player>` matches another traveller's time, and `jump ... bring <targets>` takes players
   with you.
 
