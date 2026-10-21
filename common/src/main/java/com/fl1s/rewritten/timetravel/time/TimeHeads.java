@@ -45,7 +45,7 @@ public final class TimeHeads {
 
     public TimeHead headOf(PlayerData pd) {
         if (pd == null) return of(sharedOffset);
-        return of(TimeTravel.internalTime ? pd.getTimeOffset() : sharedOffset);
+        return of(TimeTravel.individualTime ? pd.getTimeOffset() : sharedOffset);
     }
 
     public long positionOf(PlayerData pd) {

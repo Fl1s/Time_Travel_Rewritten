@@ -459,7 +459,7 @@ public final class CloneManager {
 
     private static void emit(ServerLevel level, long head, PendingSound s,
                              SoundEvent sound, float volume, float pitch) {
-        if (!TimeTravel.internalTime) {
+        if (!TimeTravel.individualTime) {
             level.playSound(null, s.x(), s.y(), s.z(), sound, SoundSource.PLAYERS, volume, pitch);
             return;
         }

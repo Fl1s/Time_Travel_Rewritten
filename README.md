@@ -25,7 +25,7 @@ Use `/timetravel` or `/tt` to control the timeline.
 - `jump back <time>` - Jump backward by a duration.
 - `jump return` - Return to the previous time position.
 - `jump present` - Jump to the newest point the timeline has reached.
-- `jump join <player>` - Match another traveller's time. Requires `internalTime`.
+- `jump join <player>` - Match another traveller's time. Requires `individualTime`.
 - `jump ... bring <targets>` - Take other players along on your jump, e.g. `jump back 30s bring @a[distance=..8]`. Only players carry their own time, so non-player targets are ignored.
 - `jump mark <name>` - Jump to a saved time mark.
 - `mark <name>` - Save the current time as a mark.
@@ -48,7 +48,7 @@ Use `/tt settings` to view the current settings.
 
 Use `/tt settings toggles <option> <true|false>` to change an option.
 
-- `internalTime` - Give each player their own position on the timeline instead of moving the whole server together. See below.
+- `individualTime` - Give each player their own position on the timeline instead of moving the whole server together. See below.
 - `syncDayTime` - Synchronize the world's time of day with the timeline.
 - `jumpRequiresOp` - Configure operator requirements for time jumps.
 - `chainDeath` - Configure chained death behavior.
@@ -69,10 +69,10 @@ Requires [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat/).
 - `voice threshold <dB>` - Set the voice interaction threshold.
 - `voice cooldown <ticks>` - Set the voice interaction cooldown.
 
-# Internal time
+# Individual time
 
 By default a time jump moves the whole server: everyone's clock changes together and the world
-rewinds with it. With `internalTime` on, each player instead carries their own position on the
+rewinds with it. With `individualTime` on, each player instead carries their own position on the
 timeline, so two people can be five minutes apart without dragging anyone along.
 
 What changes for a player in the past:
@@ -89,7 +89,7 @@ What does **not** change: **the world itself stays shared and live.** Blocks, mo
 the present for everyone, so jumping back five minutes will not un-break a block you broke in those
 five minutes. One position in the world can hold only one state, so per-player world state would mean
 a separate dimension per era, which this mod deliberately does not create. If you want the world to
-rewind as well, leave `internalTime` off and let the server move together.
+rewind as well, leave `individualTime` off and let the server move together.
 
 Only players carry a time offset. Mobs, items and vehicles live in the shared world, which is why
 `bring` reports non-player targets as ignored.

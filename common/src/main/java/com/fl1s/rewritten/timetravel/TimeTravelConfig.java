@@ -24,7 +24,8 @@ public class TimeTravelConfig {
     public int configVersion = 0;
 
     public boolean syncDayTime = true;
-    public boolean internalTime = false;
+    public boolean individualTime = false;
+    private Boolean internalTime;
     public boolean jumpRequiresOp = false;
     public boolean chainDeath = true;
     public int jumpCooldownTicks = 20;
@@ -81,6 +82,11 @@ public class TimeTravelConfig {
 
         if (config.recordingPlayers == null) {
             config.recordingPlayers = new HashMap<>();
+        }
+
+        if (config.internalTime != null) {
+            config.individualTime = config.internalTime;
+            config.internalTime = null;
         }
 
         config.recordingPlayers.values().forEach(PlayerData::initTransients);

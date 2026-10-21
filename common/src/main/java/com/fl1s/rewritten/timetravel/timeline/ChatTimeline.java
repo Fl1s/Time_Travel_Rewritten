@@ -101,7 +101,7 @@ public final class ChatTimeline {
     public static void resend(long upTo) {
         if (!TimeTravel.trackChat || TimeTravel.server == null) return;
 
-        List<Line> shared = TimeTravel.internalTime ? null : historyUpTo(upTo);
+        List<Line> shared = TimeTravel.individualTime ? null : historyUpTo(upTo);
 
         for (ServerPlayer player : new ArrayList<>(TimeTravel.server.getPlayerList().getPlayers())) {
             if (Clones.is(player)) continue;

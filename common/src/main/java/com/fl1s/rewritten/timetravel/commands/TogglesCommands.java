@@ -21,9 +21,9 @@ public class TogglesCommands {
             TimeTravel.config.syncDayTime = v;
         }));
 
-        togglesNode.then(toggle("internalTime", () -> TimeTravel.internalTime, v -> {
-            TimeTravel.internalTime = v;
-            TimeTravel.config.internalTime = v;
+        togglesNode.then(toggle("individualTime", () -> TimeTravel.individualTime, v -> {
+            TimeTravel.individualTime = v;
+            TimeTravel.config.individualTime = v;
             if (!v && TimeTravel.heads() != null) TimeTravel.heads().collapseToShared();
             TimeTravel.broadcastSync();
         }));

@@ -11,7 +11,7 @@ public final class HeadInteraction {
     }
 
     public static boolean allows(Entity a, Entity b) {
-        if (!TimeTravel.internalTime || !TimeTravel.isLooping) return true;
+        if (!TimeTravel.individualTime || !TimeTravel.isLooping) return true;
         if (a == null || b == null || a == b) return true;
 
         boolean cloneA = Clones.is(a);
