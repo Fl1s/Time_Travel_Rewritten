@@ -41,6 +41,7 @@
   "key.timetravel_rewritten.confirm": "Confirm time jump",
   "key.timetravel_rewritten.cancel": "Cancel time jump",
   "hud.timetravel_rewritten.time": "Server time: %s",
+  "hud.timetravel_rewritten.current_time": "Current time: %s",
   "hud.timetravel_rewritten.target": "Jump to: %s (%s)",
   "hud.timetravel_rewritten.target.past": "◀ %s  (%s)",
   "hud.timetravel_rewritten.target.future": "%s  (%s) ▶",

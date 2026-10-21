@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.commands;
 
+import com.fl1s.rewritten.timetravel.clone.HeadTracking;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
@@ -25,6 +26,7 @@ public class TogglesCommands {
             TimeTravel.individualTime = v;
             TimeTravel.config.individualTime = v;
             if (!v && TimeTravel.heads() != null) TimeTravel.heads().collapseToShared();
+            HeadTracking.markDirty();
             TimeTravel.broadcastSync();
         }));
 

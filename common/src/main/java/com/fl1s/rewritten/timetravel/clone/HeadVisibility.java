@@ -5,19 +5,19 @@ import com.fl1s.rewritten.timetravel.data.Clones;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 
-public final class CloneVisibility {
+public final class HeadVisibility {
 
-    private CloneVisibility() {
+    private HeadVisibility() {
     }
 
     public static boolean visibleTo(Entity entity, ServerPlayer viewer) {
         if (!TimeTravel.individualTime || !TimeTravel.isLooping) return true;
-        if (entity == null || viewer == null) return true;
-        if (!Clones.is(entity)) return true;
+        if (entity == null || viewer == null || entity == viewer) return true;
+        if (Clones.is(viewer)) return true;
 
-        long cloneHead = TimeTravel.cloneHeadOf(entity);
-        if (cloneHead == CloneManager.NO_HEAD) return true;
+        long head = HeadInteraction.headOf(entity);
+        if (head == HeadInteraction.UNBOUND) return true;
 
-        return cloneHead == TimeTravel.headOffsetOf(viewer);
+        return head == TimeTravel.headOffsetOf(viewer);
     }
 }
