@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.timeline;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.api.TimelineEventBus;
 import com.fl1s.rewritten.timetravel.clone.CloneManager;
+import com.fl1s.rewritten.timetravel.clone.HeadTracking;
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
@@ -50,6 +51,7 @@ public final class Timeline {
 
         TimeTravel.isLooping = true;
         TimeTravel.config.isLooping = true;
+        HeadTracking.markDirty();
         TimeTravel.dayTimeOrigin = TimeTravel.serverLevel.getDayTime() - TimeTravel.sharedTick;
         TimeTravel.config.dayTimeOrigin = TimeTravel.dayTimeOrigin;
 
@@ -91,6 +93,7 @@ public final class Timeline {
 
         TimeTravel.isLooping = false;
         TimeTravel.config.isLooping = false;
+        HeadTracking.markDirty();
         TimeTravel.config.timelineTick = TimeTravel.sharedTick;
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         VoicechatInteractionCompat.clearCooldowns();
@@ -264,6 +267,7 @@ public final class Timeline {
         }
 
         BlockJournal.flushWatches();
+        HeadTracking.refreshIfDirty();
 
         if (!TimeTravel.isLooping || !MocapAdapter.isReady()) return;
 

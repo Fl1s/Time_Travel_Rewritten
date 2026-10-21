@@ -364,6 +364,7 @@ public final class CloneManager {
         Clone clone = new Clone(playback, piece.playerName(), piece.visitId(), fx, pendingSkip - syncSkip, cloneVisit, head);
         clone.endTick = endTickOf(cloneVisit, piece.recording());
         roots.add(clone);
+        HeadTracking.markDirty();
 
         if (cloneEntity != null && pendingSkip == 0
                 && piece.segment() == 0

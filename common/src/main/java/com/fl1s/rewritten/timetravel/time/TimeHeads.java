@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.time;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.clone.HeadTracking;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import net.minecraft.world.level.Level;
 
@@ -55,6 +56,7 @@ public final class TimeHeads {
     public void move(PlayerData pd, long newOffset) {
         if (pd == null) return;
         long clamped = Math.max(0, newOffset);
+        if (clamped != pd.getTimeOffset()) HeadTracking.markDirty();
         of(pd.getTimeOffset()).remove(pd.getName());
         pd.setTimeOffset(clamped);
         of(clamped).add(pd.getName());
@@ -69,6 +71,7 @@ public final class TimeHeads {
 
     public void release(PlayerData pd) {
         if (pd == null) return;
+        HeadTracking.markDirty();
         of(pd.getTimeOffset()).remove(pd.getName());
         prune();
     }
@@ -99,6 +102,7 @@ public final class TimeHeads {
     }
 
     public void resetAll() {
+        HeadTracking.markDirty();
         heads.clear();
         sharedOffset = 0;
         if (TimeTravel.timelineSceneManager != null) {

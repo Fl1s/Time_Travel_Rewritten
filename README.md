@@ -82,7 +82,10 @@ What changes for a player in the past:
   the present's past selves. Neither is forced to the other's time.
 - Their recording, deaths, chat and voice are stamped at their own position, so what they do there
   becomes history that anyone who later passes that point will observe.
-- Past selves from another player's time are invisible to them, and cannot push or be pushed by them.
+- Players only see each other while they share a time. Someone five minutes behind you is gone from
+  your world until one of you closes the gap, and the same goes for past selves belonging to another
+  player's time. Nobody you cannot see can push you or be pushed by you.
+- The HUD gains a `Current time` counter under `Server time`, showing the time you are in right now.
 - Everyone's recording is closed and republished in chunks while anyone is behind, so a traveller sees
   the other players' past selves too, not just their own. A chunk is only replayable once it is closed,
   so a player less than two seconds behind the present may not see the very latest history yet.

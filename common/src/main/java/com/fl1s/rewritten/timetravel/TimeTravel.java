@@ -295,7 +295,8 @@ public class TimeTravel {
 	}
 
 	private static TimelineSyncPayload syncFor(ServerPlayer player) {
-		return new TimelineSyncPayload(personalTick(player), isLooping, displayTimeInTicks, showTimelineInfo);
+		return new TimelineSyncPayload(personalTick(player), sharedTick, isLooping,
+				displayTimeInTicks, showTimelineInfo, individualTime);
 	}
 
 	public static void sendSync(ServerPlayer player) {

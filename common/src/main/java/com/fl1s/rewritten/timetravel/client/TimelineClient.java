@@ -38,6 +38,8 @@ public final class TimelineClient {
     private static boolean showTicks = false;
     private static boolean showHud = true;
     private static long displayTick = 0;
+    private static long serverTick = 0;
+    private static boolean individualTime = false;
     private static long previewTick = NO_PREVIEW;
     private static long returnTick = NO_PREVIEW;
     private static boolean synced = false;
@@ -49,9 +51,11 @@ public final class TimelineClient {
         running = payload.running();
         showTicks = payload.showTicks();
         showHud = payload.showHud();
+        individualTime = payload.individualTime();
         if (synced && Math.abs(payload.tick() - displayTick) > 40) returnTick = displayTick;
         synced = true;
         displayTick = payload.tick();
+        serverTick = payload.serverTick();
         if (!running) previewTick = NO_PREVIEW;
     }
 
@@ -64,6 +68,8 @@ public final class TimelineClient {
         returnTick = NO_PREVIEW;
         running = false;
         displayTick = 0;
+        serverTick = 0;
+        individualTime = false;
         previewTick = NO_PREVIEW;
         holdBack = holdForward = 0;
         CloneVanishFx.clear();
@@ -105,7 +111,10 @@ public final class TimelineClient {
             return;
         }
 
-        if (running && !mc.isPaused()) displayTick++;
+        if (running && !mc.isPaused()) {
+            displayTick++;
+            serverTick++;
+        }
         if (flashTicks > 0) flashTicks--;
 
         while (KEY_TOGGLE.consumeClick()) {
@@ -146,21 +155,32 @@ public final class TimelineClient {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.options.hideGui || !running || !showHud) return;
 
-        boolean previewing = previewTick != NO_PREVIEW;
-
-        Component line1 = Component.translatable("hud.timetravel_rewritten.time", TimeFormat.format(displayTick, showTicks));
-        Component line2 = null;
-        if (previewing) {
-            line2 = Component.translatable("hud.timetravel_rewritten.target",
-                    TimeFormat.format(previewTick, showTicks),
-                    TimeFormat.delta(previewTick - displayTick, showTicks));
-        }
+        Component serverLine = Component.translatable("hud.timetravel_rewritten.time",
+                TimeFormat.format(serverTick, showTicks));
+        Component currentLine = individualTime
+                ? Component.translatable("hud.timetravel_rewritten.current_time",
+                        TimeFormat.format(displayTick, showTicks))
+                : null;
+        Component targetLine = previewTick != NO_PREVIEW
+                ? Component.translatable("hud.timetravel_rewritten.target",
+                        TimeFormat.format(previewTick, showTicks),
+                        TimeFormat.delta(previewTick - displayTick, showTicks))
+                : null;
 
         int width = graphics.guiWidth();
         int lineH = mc.font.lineHeight + 2;
-        int lines = 1 + (line2 != null ? 1 : 0);
+        int lines = 1;
+        int boxW = mc.font.width(serverLine);
+        if (currentLine != null) {
+            boxW = Math.max(boxW, mc.font.width(currentLine));
+            lines++;
+        }
+        if (targetLine != null) {
+            boxW = Math.max(boxW, mc.font.width(targetLine));
+            lines++;
+        }
+        boxW += 12;
 
-        int boxW = Math.max(mc.font.width(line1), line2 != null ? mc.font.width(line2) : 0) + 12;
         int x1 = (width - boxW) / 2;
         int y1 = 4;
         int y2 = y1 + lines * lineH + 6;
@@ -169,11 +189,16 @@ public final class TimelineClient {
 
         int y = y1 + 4;
         int mainColor = flashTicks > 0 ? 0xFF55FF55 : 0xFFFFFFFF;
-        graphics.drawCenteredString(mc.font, line1, width / 2, y, mainColor);
+        graphics.drawCenteredString(mc.font, serverLine, width / 2, y, mainColor);
         y += lineH;
-        if (line2 != null) {
+        if (currentLine != null) {
+            int color = displayTick < serverTick ? 0xFF55AAFF : 0xFFFFFFFF; //behind the server is blue
+            graphics.drawCenteredString(mc.font, currentLine, width / 2, y, color);
+            y += lineH;
+        }
+        if (targetLine != null) {
             int color = previewTick < displayTick ? 0xFF55AAFF : 0xFFFFAA00; //past is blue; future is orange
-            graphics.drawCenteredString(mc.font, line2, width / 2, y, color);
+            graphics.drawCenteredString(mc.font, targetLine, width / 2, y, color);
         }
     }
 }
