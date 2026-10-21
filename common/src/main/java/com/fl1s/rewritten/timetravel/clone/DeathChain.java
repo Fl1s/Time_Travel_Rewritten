@@ -89,14 +89,22 @@ public final class DeathChain {
         if (scene == null) return true;
         PlayerData pd = scene.getRecordingPlayer(playerName);
         if (pd == null) return true;
+        Visit visit = null;
         for (Visit v : pd.getVisits()) {
-            if (v.id != visitId) continue;
-            for (long d : v.deathTicks) {
-                if (Math.abs(now - d) <= 15) return true;
+            if (v.id == visitId) {
+                visit = v;
+                break;
             }
-            return v.deathTick >= 0 && Math.abs(now - v.deathTick) <= 15;
         }
-        return true;
+        if (visit == null) {
+            Visit live = pd.getCurrentVisit();
+            if (live == null || live.id != visitId) return true;
+            visit = live;
+        }
+        for (long d : visit.deathTicks) {
+            if (Math.abs(now - d) <= 15) return true;
+        }
+        return visit.deathTick >= 0 && Math.abs(now - visit.deathTick) <= 15;
     }
 
     private void collapseChain(String playerName, int fromVisitId) {

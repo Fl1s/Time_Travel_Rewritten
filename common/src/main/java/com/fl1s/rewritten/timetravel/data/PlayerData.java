@@ -273,6 +273,10 @@ public class PlayerData {
         activeSegment++;
     }
 
+    public void setSegment(int segment) {
+        this.activeSegment = Math.max(0, segment);
+    }
+
     public int getActiveSegment() {
         return activeSegment;
     }

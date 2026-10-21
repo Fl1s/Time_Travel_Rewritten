@@ -281,6 +281,7 @@ public final class Timeline {
             return;
         }
         clones.setIdle(false);
+        s.visits.rotateTrailing();
 
         Set<Long> liveHeads = new HashSet<>();
         for (TimeHead head : s.heads.occupied()) liveHeads.add(head.offset());
