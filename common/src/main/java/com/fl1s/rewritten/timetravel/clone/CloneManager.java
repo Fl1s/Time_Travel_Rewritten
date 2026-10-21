@@ -38,13 +38,14 @@ public final class CloneManager {
     public static final int CLONE_SKIP_PER_TICK = 40;
     public static final int VANISH_LEAD_TICKS = 32;
     public static final int APPEAR_SOUND_LEAD_TICKS = 0;
-    public static final int VANISH_SOUND_LEAD_TICKS = 20;
+    public static final int VANISH_SOUND_LEAD_TICKS = 25;
+    private static final float APPEAR_SOUND_PITCH = 1.6f;
 
     public record PendingPiece(long startTick, String recording, String playerName, int skipTicks,
                                int visitId, int segment, long visitStartTick) {}
 
     public record PendingSound(long tick, String dim, double x, double y, double z, int dir,
-                               String playerName, int visitId) {}
+                               String playerName, int visitId, boolean appear) {}
 
     static final class Clone {
         final ClonePlayback root;
@@ -114,13 +115,13 @@ public final class CloneManager {
                 if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= now) {
                     long arriveTick = Math.max(now, visit.startTick - APPEAR_SOUND_LEAD_TICKS);
                     pendingSounds.add(new PendingSound(arriveTick, visit.startDim,
-                            visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id));
+                            visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id, true));
                 }
                 if (visit.departDir != 0 && visit.endDim != null && visit.endTick > now) {
                     long soundTick = visit.endTick - VANISH_SOUND_LEAD_TICKS;
                     if (soundTick < now) soundTick = now;
                     pendingSounds.add(new PendingSound(soundTick, visit.endDim,
-                            visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id));
+                            visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id, false));
                 }
 
                 for (int i = 0; i < visit.pieces.size(); i++) {
@@ -334,13 +335,33 @@ public final class CloneManager {
         try {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim()));
             if (level == null) return;
+
+            if (TimeTravel.ogSfx) {
+                playOgSound(level, s);
+                return;
+            }
+
             SoundEvent sound = TTSounds.travel(s.dir() > 0);
-            level.playSound(null, s.x(), s.y(), s.z(), sound, SoundSource.PLAYERS, 1.6f, 1.0f);
+            float pitch = s.appear() ? APPEAR_SOUND_PITCH : 1.0f;
+            level.playSound(null, s.x(), s.y(), s.z(), sound, SoundSource.PLAYERS, 1.6f, pitch);
         } catch (Exception e) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to play time sound", e);
         }
     }
 
+    private static void playOgSound(ServerLevel level, PendingSound s) {
+        if (s.dir() > 0) {
+            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT,
+                    SoundSource.PLAYERS, 1.6f, 1.7f);
+            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_CHIME,
+                    SoundSource.PLAYERS, 1.4f, 1.5f);
+        } else {
+            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT,
+                    SoundSource.PLAYERS, 1.6f, 0.6f);
+            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_RESONATE,
+                    SoundSource.PLAYERS, 1.4f, 0.5f);
+        }
+    }
     public int visitIdOf(Entity entity) {
         if (!(entity instanceof ServerPlayer player)) return -1;
         if (Clones.is(player)) {

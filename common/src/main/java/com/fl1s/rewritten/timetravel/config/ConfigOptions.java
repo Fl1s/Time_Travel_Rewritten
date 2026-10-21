@@ -19,7 +19,11 @@ public final class ConfigOptions {
                     false, v -> TimeTravel.displayTimeInTicks = v),
             new ConfigOption.Bool("display", "knightOfTimeMode",
                     "links your time travel abilities to a clock and gears or something.. anyways GO READ HOMESTUCK!!! >:[",
-                    true, v -> TimeTravel.knightOfTimeMode = v),
+                    false, v -> TimeTravel.knightOfTimeMode = v),
+
+            new ConfigOption.Bool("sounds", "ogSfx",
+                    "Use the original vanilla-based time travel sounds (v0.8.9 - v0.11.0).",
+                    false, v -> TimeTravel.ogSfx = v),
 
             new ConfigOption.Bool("voice", "showPlayerVoiceIcon",
                     "Show the voice chat icon above players.",

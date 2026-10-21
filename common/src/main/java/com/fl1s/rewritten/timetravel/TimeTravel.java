@@ -52,6 +52,7 @@ public class TimeTravel {
 	public static boolean knightOfTimeMode;
 	public static boolean displayTimeInTicks;
 	public static boolean trackItems;
+	public static boolean ogSfx;
 	public static int entityTrackingDistance;
 	public static boolean trackChat;
 	public static boolean hurtPastSelves;
