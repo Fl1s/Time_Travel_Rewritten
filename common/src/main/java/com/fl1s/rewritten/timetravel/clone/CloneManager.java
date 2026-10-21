@@ -12,6 +12,8 @@ import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TTSounds;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
@@ -226,7 +228,7 @@ public final class CloneManager {
     public void flushSounds(long head, long now) {
         PriorityQueue<PendingSound> queue = sounds(head);
         while (!queue.isEmpty() && queue.peek().tick() <= now) {
-            playTimeSound(queue.poll());
+            playTimeSound(queue.poll(), head);
         }
     }
 
@@ -427,35 +429,52 @@ public final class CloneManager {
         }
     }
 
-    private void playTimeSound(PendingSound s) {
+    private void playTimeSound(PendingSound s, long head) {
         try {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim()));
             if (level == null) return;
 
             if (TimeTravel.oldSfx) {
-                playOldSfx(level, s);
+                playOldSfx(level, s, head);
                 return;
             }
 
             SoundEvent sound = TTSounds.travel(s.dir() > 0);
             float pitch = s.appear() ? APPEAR_SOUND_PITCH : 1.0f;
-            level.playSound(null, s.x(), s.y(), s.z(), sound, SoundSource.PLAYERS, 1.6f, pitch);
+            emit(level, head, s, sound, 1.6f, pitch);
         } catch (Exception e) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to play time sound", e);
         }
     }
 
-    private static void playOldSfx(ServerLevel level, PendingSound s) {
+    private static void playOldSfx(ServerLevel level, PendingSound s, long head) {
         if (s.dir() > 0) {
-            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT,
-                    SoundSource.PLAYERS, 1.6f, 1.7f);
-            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_CHIME,
-                    SoundSource.PLAYERS, 1.4f, 1.5f);
+            emit(level, head, s, SoundEvents.ENDERMAN_TELEPORT, 1.6f, 1.7f);
+            emit(level, head, s, SoundEvents.AMETHYST_BLOCK_CHIME, 1.4f, 1.5f);
         } else {
-            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT,
-                    SoundSource.PLAYERS, 1.6f, 0.6f);
-            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_RESONATE,
-                    SoundSource.PLAYERS, 1.4f, 0.5f);
+            emit(level, head, s, SoundEvents.ENDERMAN_TELEPORT, 1.6f, 0.6f);
+            emit(level, head, s, SoundEvents.AMETHYST_BLOCK_RESONATE, 1.4f, 0.5f);
+        }
+    }
+
+    private static void emit(ServerLevel level, long head, PendingSound s,
+                             SoundEvent sound, float volume, float pitch) {
+        if (!TimeTravel.internalTime) {
+            level.playSound(null, s.x(), s.y(), s.z(), sound, SoundSource.PLAYERS, volume, pitch);
+            return;
+        }
+
+        double radius = volume > 1.0f ? 16.0 * volume : 16.0;
+        double radiusSq = radius * radius;
+        ClientboundSoundPacket packet = new ClientboundSoundPacket(
+                BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), SoundSource.PLAYERS,
+                s.x(), s.y(), s.z(), volume, pitch, level.getRandom().nextLong());
+
+        for (ServerPlayer listener : level.players()) {
+            if (Clones.is(listener)) continue;
+            if (TimeTravel.headOffsetOf(listener) != head) continue;
+            if (listener.distanceToSqr(s.x(), s.y(), s.z()) > radiusSq) continue;
+            listener.connection.send(packet);
         }
     }
     public int visitIdOf(Entity entity) {
