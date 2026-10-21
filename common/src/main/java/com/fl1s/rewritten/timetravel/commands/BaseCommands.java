@@ -245,7 +245,7 @@ public class BaseCommands {
 
     private static int setMark(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
-        long tick = TimeTravel.sharedTick;
+        long tick = positionOf(context.getSource());
         TimeTravel.config.marks.put(name, tick);
         TimeTravel.config.save();
         context.getSource().sendSuccess(() -> Component.literal("Mark '" + name + "' saved at " + TimeFormat.clock(tick)

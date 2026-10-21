@@ -65,7 +65,8 @@ public final class TimelineNet {
         if (error != null) {
             player.displayClientMessage(Component.literal(error), true);
         } else {
-            player.displayClientMessage(Component.literal("-> " + TimeFormat.format(TimeTravel.sharedTick, TimeTravel.displayTimeInTicks)), true);
+            player.displayClientMessage(Component.literal("-> "
+                    + TimeFormat.format(TimeTravel.personalTick(player), TimeTravel.displayTimeInTicks)), true);
         }
     }
 }
