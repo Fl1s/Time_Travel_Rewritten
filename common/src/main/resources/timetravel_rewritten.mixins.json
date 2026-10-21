@@ -42,7 +42,9 @@
     "WardenFxMixin",
     "WardenSoundMixin",
     "WardenAccessor",
-    "WardenSpawnTrackerAccessor"
+    "WardenSpawnTrackerAccessor",
+    "BaseSpawnerMixin",
+    "TrialSpawnerMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",

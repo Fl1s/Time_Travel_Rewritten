@@ -39,6 +39,7 @@ public final class CloneManager {
     public static final int VANISH_LEAD_TICKS = 32;
     public static final int APPEAR_SOUND_LEAD_TICKS = 0;
     public static final int VANISH_SOUND_LEAD_TICKS = 25;
+    public static final int OG_VANISH_SOUND_LEAD_TICKS = 5;
     private static final float APPEAR_SOUND_PITCH = 1.6f;
 
     public record PendingPiece(long startTick, String recording, String playerName, int skipTicks,
@@ -118,7 +119,8 @@ public final class CloneManager {
                             visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id, true));
                 }
                 if (visit.departDir != 0 && visit.endDim != null && visit.endTick > now) {
-                    long soundTick = visit.endTick - VANISH_SOUND_LEAD_TICKS;
+                    int lead = TimeTravel.ogSfx ? OG_VANISH_SOUND_LEAD_TICKS : VANISH_SOUND_LEAD_TICKS;
+                    long soundTick = visit.endTick - lead;
                     if (soundTick < now) soundTick = now;
                     pendingSounds.add(new PendingSound(soundTick, visit.endDim,
                             visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id, false));
