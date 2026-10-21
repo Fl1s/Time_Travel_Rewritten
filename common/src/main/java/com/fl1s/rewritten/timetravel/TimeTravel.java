@@ -48,7 +48,7 @@ public class TimeTravel {
 	public static long presentTick;
 	public static long dayTimeOrigin;
 	public static boolean syncDayTime;
-	public static boolean internalTime;
+	public static boolean individualTime;
 	public static boolean jumpRequiresOp;
 	public static long maxJumpTicks;
 	public static int jumpCooldownTicks = 20;
@@ -171,7 +171,7 @@ public class TimeTravel {
 	//player lifecycle
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
 		TimeHeads h = heads();
-		if (h != null) h.move(pd, internalTime ? pd.getTimeOffset() : h.sharedOffset());
+		if (h != null) h.move(pd, individualTime ? pd.getTimeOffset() : h.sharedOffset());
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
 			TimelineSession s = session();
 			s.visits.beginVisit(player, pd);
@@ -289,7 +289,7 @@ public class TimeTravel {
 
 	public static long personalTick(ServerPlayer player) {
 		TimeHeads h = heads();
-		if (!internalTime || timelineSceneManager == null || h == null) return sharedTick;
+		if (!individualTime || timelineSceneManager == null || h == null) return sharedTick;
 		PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
 		return pd == null ? sharedTick : h.positionOf(pd);
 	}

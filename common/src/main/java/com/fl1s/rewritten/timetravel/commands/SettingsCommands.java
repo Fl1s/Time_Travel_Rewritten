@@ -159,7 +159,7 @@ public class SettingsCommands {
         String text = String.join("\n",
                 "Time Travel settings (/timetravel settings toggles <option> <value>)",
                 "syncDayTime: " + TimeTravel.syncDayTime,
-                "internalTime: " + TimeTravel.internalTime,
+                "individualTime: " + TimeTravel.individualTime,
                 "jumpRequiresOp: " + TimeTravel.jumpRequiresOp,
                 "chainDeath: " + TimeTravel.chainDeath,
                 "trackItems: " + TimeTravel.trackItems,

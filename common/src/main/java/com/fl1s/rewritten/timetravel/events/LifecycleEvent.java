@@ -26,7 +26,7 @@ public class LifecycleEvent {
         TimeTravel.presentTick = Math.max(c.presentTick, c.timelineTick);
         TimeTravel.dayTimeOrigin = c.dayTimeOrigin;
         TimeTravel.syncDayTime = c.syncDayTime;
-        TimeTravel.internalTime = c.internalTime;
+        TimeTravel.individualTime = c.individualTime;
         TimeTravel.jumpRequiresOp = c.jumpRequiresOp;
         TimeTravel.chainDeath = c.chainDeath;
         TimeTravel.jumpCooldownTicks = c.jumpCooldownTicks;

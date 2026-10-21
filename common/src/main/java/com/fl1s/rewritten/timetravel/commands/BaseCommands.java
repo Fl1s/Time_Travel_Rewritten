@@ -101,9 +101,9 @@ public class BaseCommands {
             return 0;
         }
 
-        if (withBring && !TimeTravel.internalTime) {
+        if (withBring && !TimeTravel.individualTime) {
             source.sendSuccess(() -> Component.literal(
-                    "bring had no effect: internalTime is off, so the whole server moved together"), false);
+                    "bring had no effect: individualTime is off, so the whole server moved together"), false);
         } else if (nonPlayers > 0) {
             final int ignored = nonPlayers;
             source.sendSuccess(() -> Component.literal(ignored
@@ -121,13 +121,13 @@ public class BaseCommands {
                 "jump forward <time> | jump back <time> - jump relative to the current time",
                 "jump return - go back to where you were before your last jump",
                 "jump present - jump to the newest point the timeline has reached",
-                "jump join <player> - match another traveller's time (needs internalTime)",
+                "jump join <player> - match another traveller's time (needs individualTime)",
                 "jump <to|forward|back> <time> bring <targets> - take other players along",
                 "mark <name> | unmark <name> | marks | jump mark <name> - bookmark time point",
                 "visits [player] - list a player's recorded visits",
                 "settings - show all settings",
                 "settings toggles <option> [true/false] - turn an option on or off:",
-                "  syncDayTime, internalTime, jumpRequiresOp, chainDeath, trackItems, trackChat,",
+                "  syncDayTime, individualTime, jumpRequiresOp, chainDeath, trackItems, trackChat,",
                 "  hurtClones, showTimer, timerInTicks",
                 "settings maxJump <time> - cap the length of a single jump (0 = no limit)",
                 "settings preload <ticks> - how far ahead past selves are preloaded (0 = off)",
@@ -187,9 +187,9 @@ public class BaseCommands {
             source.sendFailure(Component.literal("Time Travel is not ready yet"));
             return 0;
         }
-        if (!TimeTravel.internalTime) {
+        if (!TimeTravel.individualTime) {
             source.sendFailure(Component.literal(
-                    "Everyone already shares one clock - turn on internalTime to travel separately"));
+                    "Everyone already shares one clock - turn on individualTime to travel separately"));
             return 0;
         }
 
@@ -208,7 +208,7 @@ public class BaseCommands {
 
     private static long positionOf(CommandSourceStack source) {
         TimeHeads heads = TimeTravel.heads();
-        if (!TimeTravel.internalTime || TimeTravel.timelineSceneManager == null || heads == null) {
+        if (!TimeTravel.individualTime || TimeTravel.timelineSceneManager == null || heads == null) {
             return TimeTravel.sharedTick;
         }
         return heads.positionOf(TimeTravel.timelineSceneManager.getRecordingPlayer(source.getTextName()));
@@ -344,8 +344,8 @@ public class BaseCommands {
         long here = positionOf(source);
         String heads = "";
         TimeHeads headRegistry = TimeTravel.heads();
-        if (TimeTravel.internalTime && headRegistry != null) {
-            StringBuilder sb = new StringBuilder("Internal time is on. Heads:\n");
+        if (TimeTravel.individualTime && headRegistry != null) {
+            StringBuilder sb = new StringBuilder("Individual time is on. Heads:\n");
             for (TimeHead head : headRegistry.occupied()) {
                 sb.append("  ").append(TimeFormat.clock(head.position()))
                         .append(head.isPresent() ? " (present)" : " (-" + TimeFormat.clock(head.offset()) + ")")

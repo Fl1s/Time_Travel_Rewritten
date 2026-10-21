@@ -11,7 +11,7 @@ public final class CloneVisibility {
     }
 
     public static boolean visibleTo(Entity entity, ServerPlayer viewer) {
-        if (!TimeTravel.internalTime || !TimeTravel.isLooping) return true;
+        if (!TimeTravel.individualTime || !TimeTravel.isLooping) return true;
         if (entity == null || viewer == null) return true;
         if (!Clones.is(entity)) return true;
 

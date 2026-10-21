@@ -139,7 +139,7 @@ public final class Timeline {
     private String jumpHead(long target, String initiatorName, List<ServerPlayer> bring) {
         TimelineSession s = TimeTravel.session();
         PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(initiatorName);
-        if (pd == null) return "Only recorded players can travel while internalTime is on";
+        if (pd == null) return "Only recorded players can travel while individualTime is on";
 
         long from = s.heads.positionOf(pd);
         target = Math.min(target, TimeTravel.presentTick);
@@ -175,7 +175,7 @@ public final class Timeline {
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
 
-        TimeTravel.TIMELINE_LOGGER.info("Internal time jump by {}: {} -> {} (offset {}, brought {})",
+        TimeTravel.TIMELINE_LOGGER.info("Individual time jump by {}: {} -> {} (offset {}, brought {})",
                 initiatorName, from, target, pd.getTimeOffset(), brought);
         return null;
     }
@@ -189,7 +189,7 @@ public final class Timeline {
         if (!MocapAdapter.isReady()) return "Mocap is not ready yet";
 
         target = Math.max(0, target);
-        if (TimeTravel.internalTime) return jumpHead(target, initiatorName, bring);
+        if (TimeTravel.individualTime) return jumpHead(target, initiatorName, bring);
         if (TimeTravel.maxJumpTicks > 0) {
             long min = Math.max(0, TimeTravel.sharedTick - TimeTravel.maxJumpTicks);
             long max = TimeTravel.sharedTick + TimeTravel.maxJumpTicks;
