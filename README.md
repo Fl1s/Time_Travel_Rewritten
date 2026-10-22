@@ -107,6 +107,12 @@ Blocks you are behind are not just drawn as they were, they behave that way for 
 floor that existed then even if it has since been mined, and you walk straight through a wall that
 was built after you left. Everyone else keeps the present world; the past is only solid for you.
 
+Editing the past cascades forward. Break a block five minutes back and it is broken from that moment
+on, including now: the recorded history of that spot after the moment you changed it is erased,
+because it no longer happened. Anyone standing between your time and the present sees the block
+change under them as the new history reaches them. Breaking something a recorded build still depends
+on is refused instead, as it always was.
+
 Mobs you have history for are rewound the same way: the live mob is hidden from you and a replay of
 its recorded path is streamed to you instead, so an iron golem walks the route it walked back then
 rather than wandering around as if nothing happened. A mob that had not spawned yet at your position
