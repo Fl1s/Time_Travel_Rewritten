@@ -10,16 +10,17 @@ import com.fl1s.rewritten.timetravel.journal.JournalRegistry;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
-import com.fl1s.rewritten.timetravel.net.StopDragonSoundPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Skin;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
+import net.minecraft.network.protocol.game.ClientboundStopSoundPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
@@ -199,15 +200,14 @@ public class TimeTravel {
 		return count;
 	}
 
-	public static void broadcastStopDragonSound() {
-		if (server == null) return;
-		for (ServerPlayer p : new ArrayList<>(server.getPlayerList().getPlayers())) {
-			if (!isClone(p)) TimelineNet.sendToPlayer(p, StopDragonSoundPayload.INSTANCE);
-		}
-	}
-
 	static boolean isClone(ServerPlayer player) {
 		return Clones.is(player);
+	}
+
+	public static boolean isRealPlayer(ServerPlayer player) {
+		MinecraftServer s = server;
+		if (s == null || player == null || Clones.is(player)) return false;
+		return s.getPlayerList().getPlayer(player.getUUID()) == player;
 	}
 
 	public static int visitIdOf(Entity e) {
@@ -250,6 +250,15 @@ public class TimeTravel {
 		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
 			if (isClone(player)) continue;
 			TimelineNet.sendToPlayer(player, payload);
+		}
+	}
+
+	public static void broadcastStopDragonSound() {
+		if (server == null) return;
+		ClientboundStopSoundPacket packet = new ClientboundStopSoundPacket(SoundEvents.ENDER_DRAGON_DEATH.getLocation(), null);
+		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
+			if (isClone(player)) continue;
+			player.connection.send(packet);
 		}
 	}
 
