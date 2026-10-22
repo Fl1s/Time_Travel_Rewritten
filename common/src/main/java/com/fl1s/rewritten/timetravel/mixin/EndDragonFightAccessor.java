@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.mixin;
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.level.dimension.end.DragonRespawnAnimation;
 import net.minecraft.world.level.dimension.end.EndDragonFight;
@@ -24,6 +25,9 @@ public interface EndDragonFightAccessor {
     void tt$setPreviouslyKilled(boolean v);
 
     @Accessor("dragonUUID")
+    UUID tt$getDragonUUID();
+
+    @Accessor("dragonUUID")
     void tt$setDragonUUID(UUID v);
 
     @Accessor("portalLocation")
@@ -31,6 +35,9 @@ public interface EndDragonFightAccessor {
 
     @Accessor("gateways")
     ObjectArrayList<Integer> tt$getGateways();
+
+    @Accessor("respawnStage")
+    DragonRespawnAnimation tt$getRespawnStage();
 
     @Accessor("respawnStage")
     void tt$setRespawnStage(DragonRespawnAnimation v);
@@ -43,6 +50,9 @@ public interface EndDragonFightAccessor {
 
     @Accessor("ticksSinceDragonSeen")
     void tt$setTicksSinceDragonSeen(int v);
+
+    @Accessor("dragonEvent")
+    ServerBossEvent tt$getDragonEvent();
 
     @Invoker("updateCrystalCount")
     void tt$updateCrystalCount();

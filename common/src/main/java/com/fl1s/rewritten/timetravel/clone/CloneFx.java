@@ -23,6 +23,8 @@ public final class CloneFx {
     private final Entity entity;
     public boolean killHandled;
     public long graceUntil = -1;
+    public int attrCursor;
+    public boolean fishInit;
     private boolean hasLast;
     private double lastX, lastZ;
     private double lastY;

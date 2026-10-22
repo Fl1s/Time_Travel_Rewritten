@@ -198,6 +198,7 @@ public final class MobSpawnJournal {
         if (tag.contains("Health") && tag.getFloat("Health") <= 0) tag.remove("Health");
         tag.putShort("DeathTime", (short) 0);
         tag.putShort("HurtTime", (short) 0);
+        tag.putInt("DragonDeathTime", 0);
         tag.remove("DeathLootTable");
         tag.remove("DeathLootTableSeed");
     }

@@ -39,6 +39,9 @@ import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonHeadBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FlowingFluid;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
@@ -109,6 +112,9 @@ public final class BlockJournal {
     private static final List<ContainerWatch> containerWatches = new ArrayList<>();
     private static final List<Watch> watches = new ArrayList<>();
     private static final Map<ServerLevel, Set<BlockPos>> touched = new HashMap<>();
+    private static final Map<ServerLevel, Set<BlockPos>> fluidTouched = new HashMap<>();
+    private static final Map<ServerLevel, Map<BlockPos, Fluid>> drainSeeds = new HashMap<>();
+    private static final int DRAIN_LIMIT = 8192;
     private static final Map<Long, List<Entry>> byPos = new HashMap<>();
     private static boolean applying = false;
     private static boolean replayingLive = false;
@@ -163,7 +169,7 @@ public final class BlockJournal {
 
     public static void watch(ServerPlayer player, BlockPos center) {
         if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
-        if (Clones.is(player)) return;
+        if (!TimeTravel.isRealPlayer(player)) return;
         PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
 
@@ -286,16 +292,102 @@ public final class BlockJournal {
         STORE.markDirty();
     }
 
+    private static boolean isSourceLiquid(BlockState state) {
+        return state.getBlock() instanceof LiquidBlock && state.getFluidState().isSource();
+    }
+
+    private static Fluid sourceOf(FluidState state) {
+        Fluid type = state.getType();
+        return type instanceof FlowingFluid flowing ? flowing.getSource() : type;
+    }
+
     private static boolean shouldTrack(BlockState old, BlockState now) {
         Block a = old.getBlock();
         Block b = now.getBlock();
+        if (a instanceof LiquidBlock || b instanceof LiquidBlock) {
+            if (a instanceof LiquidBlock && b instanceof LiquidBlock) return actionDepth > 0 && (isSourceLiquid(old) || isSourceLiquid(now));
+            if (b instanceof LiquidBlock && !old.isAir()) return true;
+            return actionDepth > 0 && (isSourceLiquid(old) || isSourceLiquid(now));
+        }
         if (a == b && (a instanceof AbstractFurnaceBlock || a instanceof BrewingStandBlock)) return false;
-        if (a instanceof LiquidBlock && (b instanceof LiquidBlock || now.isAir())) return false;
-        if (b instanceof LiquidBlock && old.isAir()) return false;
         if (a instanceof FireBlock && (b instanceof FireBlock || now.isAir())) return false;
         if (b instanceof FireBlock && old.isAir()) return false;
         if (a instanceof LeavesBlock && (a == b || (now.isAir() && actionDepth == 0))) return false;
         return true;
+    }
+
+    private static void nudgeFluids(ServerLevel level, BlockPos pos) {
+        nudgeOne(level, pos);
+        for (Direction d : DIRECTIONS) nudgeOne(level, pos.relative(d));
+    }
+
+    private static void nudgeOne(ServerLevel level, BlockPos pos) {
+        if (!level.isLoaded(pos)) return;
+        FluidState fluid = level.getFluidState(pos);
+        if (!fluid.isEmpty()) level.scheduleTick(pos, fluid.getType(), fluid.getType().getTickDelay(level));
+    }
+
+    private static boolean isFlowingLiquid(BlockState state, Fluid source) {
+        if (!(state.getBlock() instanceof LiquidBlock)) return false;
+        FluidState fs = state.getFluidState();
+        return !fs.isSource() && !fs.isEmpty() && sourceOf(fs) == source;
+    }
+    private static void drainAll() {
+        if (drainSeeds.isEmpty()) return;
+        Map<ServerLevel, Map<BlockPos, Fluid>> copy = new HashMap<>(drainSeeds);
+        drainSeeds.clear();
+        for (Map.Entry<ServerLevel, Map<BlockPos, Fluid>> en : copy.entrySet()) {
+            ServerLevel level = en.getKey();
+            for (Map.Entry<BlockPos, Fluid> seed : en.getValue().entrySet()) {
+                drain(level, seed.getKey(), seed.getValue());
+            }
+        }
+    }
+
+    private static void drain(ServerLevel level, BlockPos origin, Fluid source) {
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        Set<Long> seen = new HashSet<>();
+        List<BlockPos> region = new ArrayList<>();
+        seen.add(origin.asLong());
+        queue.add(origin);
+        while (!queue.isEmpty() && region.size() < DRAIN_LIMIT) {
+            BlockPos cur = queue.poll();
+            for (Direction d : DIRECTIONS) {
+                BlockPos next = cur.relative(d);
+                if (!level.isLoaded(next) || !seen.add(next.asLong())) continue;
+                if (!isFlowingLiquid(level.getBlockState(next), source)) continue;
+                region.add(next);
+                queue.add(next);
+            }
+        }
+        if (region.isEmpty()) return;
+
+        applying = true;
+        try {
+            BlockState air = Blocks.AIR.defaultBlockState();
+            for (BlockPos p : region) level.setBlock(p, air, QUIET_FLAGS);
+        } catch (Exception ex) {
+            TimeTravel.TIMELINE_LOGGER.error("Failed to drain fluid around {}", origin, ex);
+        } finally {
+            applying = false;
+        }
+
+        Set<BlockPos> boundary = new HashSet<>();
+        for (BlockPos p : region) {
+            for (Direction d : DIRECTIONS) boundary.add(p.relative(d));
+        }
+        boundary.add(origin);
+        for (BlockPos p : boundary) nudgeOne(level, p);
+    }
+
+    private static void flushFluids() {
+        drainAll();
+        if (fluidTouched.isEmpty()) return;
+        Map<ServerLevel, Set<BlockPos>> copy = new HashMap<>(fluidTouched);
+        fluidTouched.clear();
+        for (Map.Entry<ServerLevel, Set<BlockPos>> en : copy.entrySet()) {
+            for (BlockPos p : en.getValue()) nudgeFluids(en.getKey(), p);
+        }
     }
 
     public static PlayerData nearestRecorder(ServerLevel level, BlockPos pos) {
@@ -340,7 +432,8 @@ public final class BlockJournal {
             BlockState state = newState(e);
             if (level == null || state == null) return;
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
-            if (level.getBlockState(pos).equals(state)) return;
+            BlockState before = level.getBlockState(pos);
+            if (before.equals(state)) return;
 
             replayingLive = true;
             try {
@@ -363,6 +456,7 @@ public final class BlockJournal {
             } finally {
                 replayingLive = false;
             }
+            if (!before.getFluidState().isEmpty() || !state.getFluidState().isEmpty()) nudgeFluids(level, pos);
             if (state.getBlock() instanceof ButtonBlock && state.getValue(ButtonBlock.POWERED)) {
                 level.scheduleTick(pos, state.getBlock(), state.is(BlockTags.WOODEN_BUTTONS) ? 30 : 20);
             }
@@ -383,6 +477,7 @@ public final class BlockJournal {
             for (Entry e : affected) apply(e, true);
         }
         finishBatch();
+        flushFluids();
         flushJukeboxes();
         rebuildUpcoming();
     }
@@ -413,6 +508,13 @@ public final class BlockJournal {
                 }
                 int flags = (rail && !toNew) ? QUIET_FLAGS : (rail ? Block.UPDATE_ALL : SET_FLAGS);
                 level.setBlock(pos, state, flags);
+                if (!current.getFluidState().isEmpty() || !state.getFluidState().isEmpty()) {
+                    fluidTouched.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
+                }
+                if (!toNew && isSourceLiquid(current) && !isSourceLiquid(state)) {
+                    drainSeeds.computeIfAbsent(level, l -> new HashMap<>())
+                            .put(pos.immutable(), sourceOf(current.getFluidState()));
+                }
                 if (rail) {
                     BlockPos ip = pos.immutable();
                     BlockState after = level.getBlockState(ip);
@@ -700,6 +802,7 @@ public final class BlockJournal {
             if (e.tick <= TimeTravel.timelineTick) apply(e, false);
         }
         finishBatch();
+        flushFluids();
         STORE.entries().removeAll(mine);
         STORE.upcoming().removeAll(mine);
         rebuildIndex();
@@ -725,6 +828,8 @@ public final class BlockJournal {
         byPos.clear();
         setFrames.clear();
         jukeboxes.clear();
+        fluidTouched.clear();
+        drainSeeds.clear();
         STORE.clear();
     }
 }

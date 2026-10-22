@@ -1,5 +1,9 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
+import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.clone.CloneTracks;
+import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.entity.ClonePearlExt;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.entity.EntityStateJournal;
 import com.fl1s.rewritten.timetravel.journal.*;
@@ -8,14 +12,18 @@ import com.fl1s.rewritten.timetravel.vehicle.VehicleJournal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.world.entity.projectile.ThrownEnderpearl;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -56,16 +64,27 @@ public abstract class ServerLevelMixin {
 
     @Inject(method = "addFreshEntity(Lnet/minecraft/world/entity/Entity;)Z", at = @At("HEAD"), cancellable = true)
     private void tt$addEntity(Entity entity, CallbackInfoReturnable<Boolean> cir) {
-        if (EntityJournal.shouldBlock(entity)) {
+        boolean blocked = false;
+        try {
+            blocked = EntityJournal.shouldBlock(entity);
+        } catch (Throwable t) {
+            TimeTravel.TIMELINE_LOGGER.error("Entity block check failed", t);
+        }
+        if (blocked) {
             cir.setReturnValue(false);
             return;
         }
         ServerLevel self = (ServerLevel) (Object) this;
-        EntityJournal.onSpawn(self, entity);
-        MobJournal.onEntitySpawn(self, entity);
-        ItemFlowJournal.onEntitySpawn(self, entity);
-        VehicleJournal.onEntitySpawn(self, entity);
-        EntityStateJournal.onSpawn(self, entity);
+        if (entity instanceof ThrownEnderpearl pearl && pearl.getOwner() instanceof ServerPlayer owner) {
+            if (Clones.is(owner)) ((ClonePearlExt) pearl).tt$markClone();
+            else tt$guard("pearls", () -> CloneTracks.onPearlThrown(owner));
+        }
+        if (entity instanceof FishingHook hook) tt$guard("fishing", () -> CloneTracks.onHookSpawned(hook));
+        tt$guard("entities", () -> EntityJournal.onSpawn(self, entity));
+        tt$guard("mobs", () -> MobJournal.onEntitySpawn(self, entity));
+        tt$guard("item_flow", () -> ItemFlowJournal.onEntitySpawn(self, entity));
+        tt$guard("vehicles", () -> VehicleJournal.onEntitySpawn(self, entity));
+        tt$guard("entity_states", () -> EntityStateJournal.onSpawn(self, entity));
     }
 
     @Inject(method = "sendBlockUpdated", at = @At("HEAD"), cancellable = true)
@@ -73,8 +92,21 @@ public abstract class ServerLevelMixin {
         if (ProcessJournal.isFastSimulating()) { ci.cancel(); return; }
         ServerLevel self = (ServerLevel) (Object) this;
         if (BlockJournal.isApplying() || BlockEntityJournal.isApplying()) return;
-        if (!com.fl1s.rewritten.timetravel.TimeTravel.isLooping) return;
-        BlockEntity be = self.getBlockEntity(pos);
-        if (be != null) BlockEntityJournal.onChanged(be);
+        if (!TimeTravel.isLooping) return;
+        try {
+            BlockEntity be = self.getBlockEntity(pos);
+            if (be != null) BlockEntityJournal.onChanged(be);
+        } catch (Throwable t) {
+            TimeTravel.TIMELINE_LOGGER.error("Block entity change hook failed at {}", pos, t);
+        }
+    }
+
+    @Unique
+    private static void tt$guard(String name, Runnable action) {
+        try {
+            action.run();
+        } catch (Throwable t) {
+            TimeTravel.TIMELINE_LOGGER.error("Journal '{}' failed on entity spawn", name, t);
+        }
     }
 }

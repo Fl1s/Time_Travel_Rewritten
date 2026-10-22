@@ -17,17 +17,24 @@ public final class ConfigOptions {
             new ConfigOption.Bool("display", "displayTimeInTicks",
                     "Show time in ticks instead of minutes and seconds.",
                     false, v -> TimeTravel.displayTimeInTicks = v),
-            new ConfigOption.Bool("display", "knightOfTimeMode",
-                    "links your time travel abilities to a clock and gears or something.. anyways GO READ HOMESTUCK!!! >:[",
-                    false, v -> TimeTravel.knightOfTimeMode = v),
 
-            new ConfigOption.Bool("sounds", "ogSfx",
+            new ConfigOption.Bool("sounds", "oldSfx",
                     "Use the original vanilla-based time travel sounds (v0.8.9 - v0.11.0).",
-                    false, v -> TimeTravel.ogSfx = v),
+                    false, v -> TimeTravel.oldSfx = v),
 
             new ConfigOption.Bool("voice", "showPlayerVoiceIcon",
                     "Show the voice chat icon above players.",
-                    true, v -> TimeTravel.showPlayerVoiceIcon = v)
+                    true, v -> TimeTravel.showPlayerVoiceIcon = v),
+
+            new ConfigOption.Bool("past self", "knightOfTimeMode", "links your time travel abilities to a clock and gears or something.. anyways GO READ HOMESTUCK!!! >:[", false, v -> {
+                TimeTravel.knightOfTimeMode = v;
+                if (v) TimeTravel.flowerManMode = false;
+            }),
+
+            new ConfigOption.Bool("past self", "flowerManMode", "With your powers combined! The TRUE power of friendship!", false, v -> {
+                TimeTravel.flowerManMode = v;
+                if (v) TimeTravel.knightOfTimeMode = false;
+            })
     );
 
     public static final List<ConfigOption> SERVER = List.of(
@@ -91,6 +98,10 @@ public final class ConfigOptions {
     }
 
     public static void afterApply() {
+        if (TimeTravel.knightOfTimeMode && TimeTravel.flowerManMode) {
+            TimeTravel.flowerManMode = false;
+        }
+
         if (!MocapAdapter.isReady()) return;
         MocapAdapter.setInvulnerablePlayback(!TimeTravel.hurtPastSelves, !TimeTravel.hurtPastSelves);
         TimeTravel.updateEntitiesToTrack(TimeTravel.trackItems);

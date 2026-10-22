@@ -70,6 +70,8 @@ public class TimeTravelFabric implements ModInitializer {
 
         PayloadTypeRegistry.playS2C().register(TimelineSyncPayload.TYPE, TimelineSyncPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(WardenAnimPayload.TYPE, WardenAnimPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(DragonDeathPayload.TYPE, DragonDeathPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(StopDragonSoundPayload.TYPE, StopDragonSoundPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ClearChatPayload.TYPE, ClearChatPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(CloneVanishPayload.TYPE, CloneVanishPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(CloneAppearPayload.TYPE, CloneAppearPayload.CODEC);

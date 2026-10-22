@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.util;
 
+import com.fl1s.rewritten.timetravel.data.Clones;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -51,6 +52,13 @@ public final class DoomedFeedback {
             "message.timetravel_rewritten.block.6",
     };
 
+    private static final String[] SADDLE_MESSAGES = {
+            "message.timetravel_rewritten.saddle.1",
+            "message.timetravel_rewritten.saddle.2",
+            "message.timetravel_rewritten.saddle.3",
+            "message.timetravel_rewritten.saddle.4",
+    };
+
     private static final long COOLDOWN_TICKS = 40;
     private static final Map<UUID, Long> lastShown = new HashMap<>();
 
@@ -66,7 +74,12 @@ public final class DoomedFeedback {
         show(player, level, BLOCK_MESSAGES);
     }
 
+    public static void tryShowSaddle(ServerPlayer player, ServerLevel level) {
+        show(player, level, SADDLE_MESSAGES);
+    }
+
     private static void show(ServerPlayer player, ServerLevel level, String[] pool) {
+        if (Clones.is(player)) return;
         long now = level.getGameTime();
         Long last = lastShown.get(player.getUUID());
         if (last != null && now - last < COOLDOWN_TICKS) return;

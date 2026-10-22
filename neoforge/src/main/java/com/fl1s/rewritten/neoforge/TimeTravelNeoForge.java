@@ -131,6 +131,12 @@ public class TimeTravelNeoForge {
         registrar.playToClient(WardenAnimPayload.TYPE, WardenAnimPayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> WardenAnimClient.handle(payload)));
 
+        registrar.playToClient(DragonDeathPayload.TYPE, DragonDeathPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> DragonDeathClient.handle(payload)));
+
+        registrar.playToClient(StopDragonSoundPayload.TYPE, StopDragonSoundPayload.CODEC,
+                (payload, context) -> context.enqueueWork(DragonDeathClient::stopDeathSound));
+
         registrar.playToClient(ClearChatPayload.TYPE, ClearChatPayload.CODEC,
                 (payload, context) -> context.enqueueWork(TimelineClient::onClearChat));
 

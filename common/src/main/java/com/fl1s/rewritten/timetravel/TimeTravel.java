@@ -15,10 +15,12 @@ import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Skin;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
+import net.minecraft.network.protocol.game.ClientboundStopSoundPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
@@ -35,6 +37,7 @@ import java.util.function.BiConsumer;
 public class TimeTravel {
 	public static final String MOD_ID = "timetravel_rewritten";
 	public static final Logger TIMELINE_LOGGER = LoggerFactory.getLogger("TimeTravel");
+	public static final boolean DEBUG = Boolean.getBoolean("timetravel.debug");
 	public static MinecraftServer server;
 	public static ServerLevel serverLevel;
 
@@ -50,9 +53,10 @@ public class TimeTravel {
 
 	public static boolean showTimelineInfo;
 	public static boolean knightOfTimeMode;
+	public static boolean flowerManMode;
 	public static boolean displayTimeInTicks;
 	public static boolean trackItems;
-	public static boolean ogSfx;
+	public static boolean oldSfx;
 	public static int entityTrackingDistance;
 	public static boolean trackChat;
 	public static boolean hurtPastSelves;
@@ -202,6 +206,12 @@ public class TimeTravel {
 		return Clones.is(player);
 	}
 
+	public static boolean isRealPlayer(ServerPlayer player) {
+		MinecraftServer s = server;
+		if (s == null || player == null || Clones.is(player)) return false;
+		return s.getPlayerList().getPlayer(player.getUUID()) == player;
+	}
+
 	public static int visitIdOf(Entity e) {
 		TimelineSession s = session;
 		return s == null ? -1 : s.clones.visitIdOf(e);
@@ -242,6 +252,15 @@ public class TimeTravel {
 		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
 			if (isClone(player)) continue;
 			TimelineNet.sendToPlayer(player, payload);
+		}
+	}
+
+	public static void broadcastStopDragonSound() {
+		if (server == null) return;
+		ClientboundStopSoundPacket packet = new ClientboundStopSoundPacket(SoundEvents.ENDER_DRAGON_DEATH.getLocation(), null);
+		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
+			if (isClone(player)) continue;
+			player.connection.send(packet);
 		}
 	}
 

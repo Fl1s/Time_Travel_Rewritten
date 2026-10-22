@@ -44,7 +44,15 @@
     "WardenAccessor",
     "WardenSpawnTrackerAccessor",
     "BaseSpawnerMixin",
-    "TrialSpawnerMixin"
+    "TrialSpawnerMixin",
+    "TamableAnimalMixin",
+    "PetCollarMixin",
+    "ServerEntityMixin",
+    "TotemMixin",
+    "PlayerInteractMixin",
+    "FishingHookMixin",
+    "ClonePearlMixin",
+    "ProjectileHitMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",

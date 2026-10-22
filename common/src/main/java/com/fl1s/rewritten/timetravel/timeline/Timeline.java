@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.timeline;
 
 import com.fl1s.rewritten.timetravel.*;
+import com.fl1s.rewritten.timetravel.api.TimelineEventBus;
 import com.fl1s.rewritten.timetravel.clone.CloneManager;
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
@@ -58,6 +59,7 @@ public final class Timeline {
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
         TimeTravel.TIMELINE_LOGGER.info("Timeline started at tick {}", TimeTravel.timelineTick);
+        TimelineEventBus.fireStart();
     }
 
     public void stop() {
@@ -80,6 +82,7 @@ public final class Timeline {
         VoicechatInteractionCompat.clearCooldowns();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
+        TimelineEventBus.fireStop();
     }
 
     public void reset() {
@@ -134,6 +137,7 @@ public final class Timeline {
         int dir = target > from ? 1 : -1;
         TimeTravel.TIMELINE_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
+        TimelineEventBus.fireBeforeJump(from, target);
         BlockJournal.flushWatches();
         EntityJournal.fastForward(from, target);
         MobJournal.fastForward(from, target);
@@ -151,6 +155,7 @@ public final class Timeline {
         clones.setIdle(false);
 
         TimeTravel.JOURNALS.onJumpAll(from, target);
+        TimeTravel.broadcastStopDragonSound();
 
         TimeTravel.forEachOnlineRecorded((p, pd) -> s.visits.beginVisit(p, pd, dir));
         clones.rebuild();
@@ -160,6 +165,7 @@ public final class Timeline {
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
+        TimelineEventBus.fireAfterJump(from, target);
 
         String msg = initiatorName + " jumped " + (target > from ? "forward" : "back") + " to "
                 + TimeFormat.format(target, TimeTravel.displayTimeInTicks) + " ("

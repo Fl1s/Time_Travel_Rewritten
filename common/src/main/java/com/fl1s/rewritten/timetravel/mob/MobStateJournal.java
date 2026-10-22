@@ -15,11 +15,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.animal.Cat;
 import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.MushroomCow;
 import net.minecraft.world.entity.animal.Panda;
+import net.minecraft.world.entity.animal.Pig;
 import net.minecraft.world.entity.animal.Sheep;
 import net.minecraft.world.entity.animal.Wolf;
 import net.minecraft.world.entity.animal.allay.Allay;
@@ -28,6 +30,7 @@ import net.minecraft.world.entity.animal.frog.Frog;
 import net.minecraft.world.entity.animal.goat.Goat;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Strider;
 import net.minecraft.world.entity.monster.piglin.Piglin;
 import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.entity.npc.Villager;
@@ -52,6 +55,7 @@ public final class MobStateJournal {
     private static final String[] HORSE_KEYS = {"Variant", "ChestedHorse", "Items", "SaddleItem", "ArmorItem", "DecorItem", "Tame", "Owner", "Bred", "EatingHaystack", "Love", "Age", "Attributes"};
     private static final String[] PANDA_KEYS = {"MainGene", "HiddenGene", "SneezeCounter", "UnhappyCounter"};
     private static final String[] PET_KEYS = {"variant", "CollarColor", "Tame", "Owner", "Sitting", "Angry"};
+    private static final String[] SADDLE_KEYS = {"Saddle"};
     private static final String[] MOOSHROOM_KEYS = {"Type", "StewEffects"};
     private static final String[] AXOLOTL_KEYS = {"Variant", "FromBucket"};
     private static final String[] BEE_KEYS = {"HasNectar", "HasStung", "AngerTime", "HivePos", "FlowerPos"};
@@ -94,6 +98,7 @@ public final class MobStateJournal {
         if (mob instanceof AbstractHorse) return HORSE_KEYS;
         if (mob instanceof Panda) return PANDA_KEYS;
         if (mob instanceof Cat || mob instanceof Wolf) return PET_KEYS;
+        if (mob instanceof Pig || mob instanceof Strider) return SADDLE_KEYS;
         if (mob instanceof MushroomCow) return MOOSHROOM_KEYS;
         if (mob instanceof Axolotl) return AXOLOTL_KEYS;
         if (mob instanceof Bee) return BEE_KEYS;
@@ -179,6 +184,15 @@ public final class MobStateJournal {
         record(level, mob, tick, tick < 0 ? -1 : visitAt(level, mob.blockPosition()), signature(mob, keys));
     }
 
+    public static void beforeChange(Mob mob) {
+        if (Clones.is(mob) || !active()) return;
+        if (!(mob.level() instanceof ServerLevel level)) return;
+        if (mob.isRemoved() || mob.isDeadOrDying()) return;
+        String[] keys = keysFor(mob);
+        if (keys.length == 0 || byUuid.containsKey(mob.getUUID())) return;
+        record(level, mob, -1L, -1, signature(mob, keys));
+    }
+
     public static void onChanged(Mob mob) {
         if (Clones.is(mob) || !active()) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
@@ -249,6 +263,12 @@ public final class MobStateJournal {
             for (String k : keys) tag.remove(k);
             for (String k : cached.getAllKeys()) tag.put(k, cached.get(k).copy());
             mob.load(tag);
+            if (mob instanceof TamableAnimal pet && !cached.contains("Owner")) {
+                pet.setOwnerUUID(null);
+                pet.setTame(false, false);
+                pet.setInSittingPose(false);
+                pet.setOrderedToSit(false);
+            }
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to apply mob state entry", ex);
         } finally {

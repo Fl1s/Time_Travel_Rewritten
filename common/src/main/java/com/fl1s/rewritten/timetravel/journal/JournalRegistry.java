@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.entity.EntityContainerJournal;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.entity.EntityStateJournal;
@@ -19,9 +20,29 @@ import java.util.function.Consumer;
  */
 public final class JournalRegistry {
 
-    private record Entry(String name, Runnable load, Runnable save, Runnable saveIfDirty, Runnable clear,
-                         Runnable rebuildUpcoming, Runnable tick, BiConsumer<Long, Long> onJump,
-                         Consumer<Set<Integer>> eraseVisits) {
+    private static final int MAX_TICK_FAILURES = 5;
+    private static final Runnable NOOP = () -> {
+    };
+
+    private static final class Entry {
+        final String name;
+        final Runnable load, save, saveIfDirty, clear, rebuildUpcoming, tick;
+        final BiConsumer<Long, Long> onJump;
+        final Consumer<Set<Integer>> eraseVisits;
+        int tickFailures;
+        boolean tickDisabled;
+
+        Entry(String name, Runnable load, Runnable save, Runnable saveIfDirty, Runnable clear, Runnable rebuildUpcoming, Runnable tick, BiConsumer<Long, Long> onJump, Consumer<Set<Integer>> eraseVisits) {
+            this.name = name;
+            this.load = load;
+            this.save = save;
+            this.saveIfDirty = saveIfDirty;
+            this.clear = clear;
+            this.rebuildUpcoming = rebuildUpcoming;
+            this.tick = tick;
+            this.onJump = onJump;
+            this.eraseVisits = eraseVisits;
+        }
     }
 
     private final List<Entry> journals = new ArrayList<>();
@@ -41,41 +62,62 @@ public final class JournalRegistry {
         register("advancements", AdvancementTimeline::load, AdvancementTimeline::save, AdvancementTimeline::saveIfDirty, AdvancementTimeline::clear, AdvancementTimeline::rebuildUpcoming, AdvancementTimeline::tick, AdvancementTimeline::onJump, AdvancementTimeline::eraseVisits);
         register("effects", EffectJournal::load, EffectJournal::save, EffectJournal::saveIfDirty, EffectJournal::clear, EffectJournal::rebuildUpcoming, EffectJournal::tick, EffectJournal::onJump, EffectJournal::eraseVisits);
         register("weather", WeatherJournal::load, WeatherJournal::save, WeatherJournal::saveIfDirty, WeatherJournal::clear, WeatherJournal::rebuildUpcoming, WeatherJournal::tick, WeatherJournal::onJump, WeatherJournal::eraseVisits);
+        register("client_fx", NOOP, NOOP, NOOP, NOOP, NOOP, NOOP, (from, to) -> TimeTravel.broadcastStopDragonSound(), ids -> {});
     }
 
     public void register(String name, Runnable load, Runnable save, Runnable saveIfDirty, Runnable clear, Runnable rebuildUpcoming, Runnable tick, BiConsumer<Long, Long> onJump, Consumer<Set<Integer>> eraseVisits) {
         journals.add(new Entry(name, load, save, saveIfDirty, clear, rebuildUpcoming, tick, onJump, eraseVisits));
     }
 
+    private static void guarded(Entry e, String phase, Runnable r) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            TimeTravel.TIMELINE_LOGGER.error("Journal '{}' failed in {}", e.name, phase, t);
+        }
+    }
+
     public void loadAll() {
-        for (Entry e : journals) e.load.run();
+        for (Entry e : journals) guarded(e, "load", e.load);
     }
 
     public void saveAll() {
-        for (Entry e : journals) e.save.run();
+        for (Entry e : journals) guarded(e, "save", e.save);
     }
 
     public void saveIfDirtyAll() {
-        for (Entry e : journals) e.saveIfDirty.run();
+        for (Entry e : journals) guarded(e, "saveIfDirty", e.saveIfDirty);
     }
 
     public void clearAll() {
-        for (Entry e : journals) e.clear.run();
+        for (Entry e : journals) guarded(e, "clear", e.clear);
     }
 
     public void rebuildUpcomingAll() {
-        for (Entry e : journals) e.rebuildUpcoming.run();
+        for (Entry e : journals) guarded(e, "rebuildUpcoming", e.rebuildUpcoming);
     }
 
     public void tickAll() {
-        for (Entry e : journals) e.tick.run();
+        for (Entry e : journals) {
+            if (e.tickDisabled) continue;
+            try {
+                e.tick.run();
+                e.tickFailures = 0;
+            } catch (Throwable t) {
+                TimeTravel.TIMELINE_LOGGER.error("Journal '{}' tick failed", e.name, t);
+                if (++e.tickFailures >= MAX_TICK_FAILURES) {
+                    e.tickDisabled = true;
+                    TimeTravel.TIMELINE_LOGGER.error("Journal '{}' disabled until restart ({} consecutive failures)", e.name, MAX_TICK_FAILURES);
+                }
+            }
+        }
     }
 
     public void onJumpAll(long from, long to) {
-        for (Entry e : journals) e.onJump.accept(from, to);
+        for (Entry e : journals) guarded(e, "onJump", () -> e.onJump.accept(from, to));
     }
 
     public void eraseVisitsAll(Set<Integer> visitIds) {
-        for (Entry e : journals) e.eraseVisits.accept(visitIds);
+        for (Entry e : journals) guarded(e, "eraseVisits", () -> e.eraseVisits.accept(visitIds));
     }
 }

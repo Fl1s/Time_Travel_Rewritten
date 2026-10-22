@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.clone.CloneFx;
+import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.mob.MobSpawnJournal;
@@ -19,6 +20,7 @@ import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -32,6 +34,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
 public abstract class MobHurtMixin {
+
+    @Unique
+    private float tt$hpBefore = -1.0f;
 
     @ModifyVariable(method = "hurt", at = @At("HEAD"), argsOnly = true)
     private float tt$amount(float amount, DamageSource source) {
@@ -49,6 +54,25 @@ public abstract class MobHurtMixin {
             return Math.min(v, cur - 1.0f);
         }
         return v;
+    }
+
+    @Inject(method = "hurt", at = @At("HEAD"))
+    private void tt$hpHead(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        tt$hpBefore = ((LivingEntity) (Object) this).getHealth();
+    }
+
+    @Inject(method = "hurt", at = @At("RETURN"))
+    private void tt$hpTail(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        float before = tt$hpBefore;
+        tt$hpBefore = -1.0f;
+        if (before < 0 || !(self instanceof EnderDragon dragon) || self.level().isClientSide) return;
+        if (!MobTrailJournal.isReplaying()) return;
+        if (!(source.getEntity() instanceof ServerPlayer sp) || Clones.is(sp)) return;
+        Entity direct = source.getDirectEntity();
+        if (direct != null && direct.getTags().contains(EntityJournal.TAG)) return;
+        float lost = before - dragon.getHealth();
+        if (lost > 0.0f) MobTrailJournal.rewriteHealth(dragon.getUUID(), TimeTravel.timelineTick, lost);
     }
 
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
@@ -71,13 +95,16 @@ public abstract class MobHurtMixin {
             return;
         }
 
+        Entity attacker = source.getEntity();
+        Entity direct = source.getDirectEntity();
+        boolean replayShot = direct != null && direct != attacker && direct.getTags().contains(EntityJournal.TAG);
+
         boolean doomed = MobJournal.isDoomed(self);
         boolean replayPuppet = self instanceof Mob mob
                 && MobTrailJournal.isReplaying()
                 && MobTrailJournal.isPuppeted(mob);
         if ((doomed || replayPuppet) && self.getHealth() - amount <= 1.0f) {
-            Entity attacker = source.getEntity();
-            if (attacker instanceof ServerPlayer sp && !Clones.is(sp)
+            if (!replayShot && attacker instanceof ServerPlayer sp && !Clones.is(sp)
                     && self.level() instanceof ServerLevel sl) {
                 DoomedFeedback.tryShow(sp, sl, doomed);
             }
@@ -89,7 +116,7 @@ public abstract class MobHurtMixin {
             return;
         }
 
-        if (self instanceof Mob mob) {
+        if (self instanceof Mob mob && !replayShot) {
             MobBinding.onHurt(mob, source.getEntity());
         }
     }

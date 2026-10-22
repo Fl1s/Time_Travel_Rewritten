@@ -4,16 +4,64 @@ import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.entity.FishingHookExt;
+import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.world.entity.projectile.ThrownEnderpearl;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 
 import java.util.*;
 
 public final class CloneTracks {
     private CloneTracks() {
+    }
+
+    public static final int FISH_CAST = 0;
+    public static final int FISH_BITE = 1;
+    public static final int FISH_REEL = 2;
+
+    private static UUID reeling;
+
+    private static Visit recordedVisit(ServerPlayer player) {
+        if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return null;
+        if (!TimeTravel.isRealPlayer(player)) return null;
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+        if (pd == null || !pd.getActive()) return null;
+        return pd.getCurrentVisit();
+    }
+
+    public static void onPearlThrown(ServerPlayer player) {
+        Visit visit = recordedVisit(player);
+        if (visit == null) return;
+        if (visit.pearls == null) visit.pearls = new ArrayList<>();
+        visit.pearls.add(TimeTravel.timelineTick);
+    }
+
+    private static void applyPearls(Visit visit, ServerPlayer clone, long now) {
+        List<Long> list = visit.pearls;
+        if (list == null || list.isEmpty()) return;
+        if (Collections.binarySearch(list, now) < 0) return;
+        if (!(clone.level() instanceof ServerLevel level)) return;
+        ThrownEnderpearl pearl = new ThrownEnderpearl(level, clone);
+        pearl.setItem(new ItemStack(Items.ENDER_PEARL));
+        pearl.shootFromRotation(clone, clone.getXRot(), clone.getYRot(), 0.0F, 1.5F, 0.0F);
+        level.addFreshEntity(pearl);
     }
 
     public static void poll(ServerPlayer player, PlayerData pd) {
@@ -42,6 +90,11 @@ public final class CloneTracks {
             visit.healths.add(new Visit.HealthChange(tick, health));
             visit.lastHealth = health;
         }
+
+        if (!visit.attrInit) {
+            visit.attrInit = true;
+            for (AttributeInstance inst : player.getAttributes().getSyncableAttributes()) recordAttr(visit, tick, inst);
+        }
     }
 
     public static void pollAll() {
@@ -49,19 +102,87 @@ public final class CloneTracks {
     }
 
     public static void onAttack(ServerPlayer player, Entity target) {
-        if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
-        if (Clones.is(player) || target instanceof Player) return;
-        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
-        if (pd == null || !pd.getActive()) return;
-        Visit visit = pd.getCurrentVisit();
+        if (target instanceof Player) return;
+        Visit visit = recordedVisit(player);
         if (visit == null) return;
         visit.attacks.add(new Visit.AttackEvent(TimeTravel.timelineTick, target.getUUID().toString()));
+    }
+
+    public static void onTotem(ServerPlayer player) {
+        Visit visit = recordedVisit(player);
+        if (visit == null) return;
+        if (visit.totems == null) visit.totems = new ArrayList<>();
+        visit.totems.add(TimeTravel.timelineTick);
+    }
+
+    public static void onAttributesDirty(ServerPlayer player, Collection<AttributeInstance> dirty) {
+        Visit visit = recordedVisit(player);
+        if (visit == null) return;
+        long tick = TimeTravel.timelineTick;
+        for (AttributeInstance inst : dirty) recordAttr(visit, tick, inst);
+    }
+
+    private static void recordAttr(Visit visit, long tick, AttributeInstance inst) {
+        CompoundTag tag = inst.save();
+        String id = tag.getString("id");
+        String nbt = tag.toString();
+        if (visit.attrCache == null) visit.attrCache = new HashMap<>();
+        if (visit.attrs == null) visit.attrs = new ArrayList<>();
+        String prev = visit.attrCache.put(id, nbt);
+        if (nbt.equals(prev)) return;
+        if (prev == null && isPlayerDefault(inst, tag)) return;
+        visit.attrs.add(new Visit.AttrChange(tick, id, nbt));
+    }
+
+    private static boolean isPlayerDefault(AttributeInstance inst, CompoundTag saved) {
+        try {
+            return !saved.contains("modifiers")
+                    && inst.getBaseValue() == DefaultAttributes.getSupplier(EntityType.PLAYER).getBaseValue(inst.getAttribute());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static void onHookSpawned(FishingHook hook) {
+        if (hook.getPlayerOwner() instanceof ServerPlayer sp) addFish(sp, FISH_CAST, 0);
+    }
+
+    public static void onBite(ServerPlayer player) {
+        addFish(player, FISH_BITE, 0);
+    }
+
+    public static void beginReel(UUID hook) {
+        reeling = hook;
+    }
+
+    public static void onHookReeled(UUID hook, ServerPlayer player, int result) {
+        if (hook.equals(reeling)) reeling = null;
+        addFish(player, FISH_REEL, result);
+    }
+
+    public static void onHookRemoved(FishingHook hook) {
+        if (hook.getUUID().equals(reeling)) return;
+        if (hook.getPlayerOwner() instanceof ServerPlayer sp) addFish(sp, FISH_REEL, 0);
+    }
+
+    private static void addFish(ServerPlayer player, int type, int result) {
+        Visit visit = recordedVisit(player);
+        if (visit == null) return;
+        if (visit.fishing == null) visit.fishing = new ArrayList<>();
+        visit.fishing.add(new Visit.FishEvent(TimeTravel.timelineTick, type, result));
     }
 
     public static void replay(Visit visit, ServerPlayer clone, long now) {
         if (visit == null || clone.isRemoved()) return;
         applyMode(visit, clone, now);
         applyRide(visit, clone, now);
+        CloneFx fx = TimeTravel.fxOf(clone);
+        if (fx != null) {
+            applyAttributes(visit, clone, now, fx);
+            applyFishing(visit, clone, now, fx);
+        }
+        applyTotems(visit, clone, now);
+        applyPearls(visit, clone, now);
         applyAttacks(visit, clone, now);
     }
 
@@ -187,5 +308,102 @@ public final class CloneTracks {
             if (d2 > 36.0) continue;
             clone.attack(target);
         }
+    }
+
+    private static void applyTotems(Visit visit, ServerPlayer clone, long now) {
+        List<Long> list = visit.totems;
+        if (list == null || list.isEmpty()) return;
+        if (Collections.binarySearch(list, now) >= 0) {
+            clone.level().broadcastEntityEvent(clone, (byte) 35);
+        }
+    }
+
+    private static void applyAttributes(Visit visit, ServerPlayer clone, long now, CloneFx fx) {
+        List<Visit.AttrChange> list = visit.attrs;
+        if (list == null) return;
+        while (fx.attrCursor < list.size() && list.get(fx.attrCursor).tick <= now) {
+            Visit.AttrChange change = list.get(fx.attrCursor++);
+            try {
+                var holder = BuiltInRegistries.ATTRIBUTE.getHolder(ResourceLocation.parse(change.id));
+                if (holder.isEmpty()) continue;
+                AttributeInstance inst = clone.getAttributes().getInstance(holder.get());
+                if (inst == null) continue;
+                ListTag mods = inst.save().getList("modifiers", Tag.TAG_COMPOUND);
+                for (int i = 0; i < mods.size(); i++) {
+                    ResourceLocation modId = ResourceLocation.tryParse(mods.getCompound(i).getString("id"));
+                    if (modId != null) inst.removeModifier(modId);
+                }
+                inst.load(TagParser.parseTag(change.nbt));
+            } catch (Exception ex) {
+                TimeTravel.TIMELINE_LOGGER.error("Failed to apply attribute change", ex);
+            }
+        }
+    }
+
+    private static void castHook(ServerPlayer clone) {
+        if (!(clone.level() instanceof ServerLevel level)) return;
+        FishingHook old = clone.fishing;
+        if (old != null && !old.isRemoved()) old.discard();
+        level.addFreshEntity(new FishingHook(clone, level, 0, 0));
+    }
+
+    private static void applyFishing(Visit visit, ServerPlayer clone, long now, CloneFx fx) {
+        List<Visit.FishEvent> list = visit.fishing;
+        if (list == null || list.isEmpty()) return;
+
+        if (!fx.fishInit) {
+            fx.fishInit = true;
+            Visit.FishEvent last = null;
+            for (Visit.FishEvent e : list) {
+                if (e.tick >= now) break;
+                last = e;
+            }
+            if (last != null && last.type != FISH_REEL) castHook(clone);
+        }
+
+        int lo = 0;
+        int hi = list.size();
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (list.get(mid).tick < now) lo = mid + 1;
+            else hi = mid;
+        }
+        for (int i = lo; i < list.size() && list.get(i).tick == now; i++) {
+            Visit.FishEvent e = list.get(i);
+            FishingHook hook = clone.fishing;
+            boolean live = hook != null && !hook.isRemoved();
+            switch (e.type) {
+                case FISH_CAST -> castHook(clone);
+                case FISH_BITE -> {
+                    if (live && (Object) hook instanceof FishingHookExt ext) ext.tt$bite();
+                }
+                case FISH_REEL -> {
+                    if (!live) break;
+                    if (e.result > 0 && clone.level() instanceof ServerLevel level) {
+                        level.sendParticles(ParticleTypes.SPLASH, hook.getX(), hook.getY(), hook.getZ(), 8, 0.2, 0.1, 0.2, 0.0);
+                    }
+                    hook.discard();
+                }
+                default -> {
+                }
+            }
+        }
+    }
+
+    public static boolean isReservedByClone(UUID id, long now) {
+        TimelineSceneManager scene = TimeTravel.timelineSceneManager;
+        if (scene == null) return false;
+        String wanted = id.toString();
+        for (PlayerData pd : scene.getRecordingPlayers()) {
+            for (Visit v : pd.getVisits()) {
+                if (v == pd.getCurrentVisit() || v.rides == null) continue;
+                for (int i = 0; i < v.rides.size(); i++) {
+                    if (!wanted.equals(v.rides.get(i).vehicle)) continue;
+                    long end = i + 1 < v.rides.size() ? v.rides.get(i + 1).tick : (v.endTick > 0 ? v.endTick : Long.MAX_VALUE);
+                    if (end > now) return true;
+                }
+            }
+        }
+        return false;
     }
 }
