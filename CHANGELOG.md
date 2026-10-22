@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
- - Combat roll, Better Combat compat
+ - Combat roll, Better Combat and Emotecraft compat
+
+### Fixed
+
+ - Paradox death chain
 
 ## [1.21.1-0.11.2] - 2026-11-22
 

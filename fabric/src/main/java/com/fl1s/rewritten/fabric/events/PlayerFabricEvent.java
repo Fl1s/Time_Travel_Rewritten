@@ -8,4 +8,8 @@ public class PlayerFabricEvent {
     public static void dimensionChange(ServerPlayer player, ServerLevel origin, ServerLevel destination) {
         PlayerEvent.dimensionChange(player);
     }
+
+    public static void respawn(ServerPlayer player) {
+        PlayerEvent.respawn(player);
+    }
 }

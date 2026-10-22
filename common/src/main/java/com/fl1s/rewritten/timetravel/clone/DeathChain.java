@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.data.Visit;
+import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.timeline.ChatTimeline;
@@ -102,6 +103,12 @@ public final class DeathChain {
         PlayerData pd = scene.getRecordingPlayer(playerName);
         if (pd == null) return;
 
+        Visit live = pd.getCurrentVisit();
+        boolean killLive = live != null && live.id >= fromVisitId;
+        if (killLive) {
+            live.doomed = true;
+        }
+
         Set<Integer> ids = new HashSet<>();
         List<Visit> doomedVisits = new ArrayList<>();
         for (Visit v : pd.getVisits()) {
@@ -110,18 +117,18 @@ public final class DeathChain {
                 ids.add(v.id);
             }
         }
-        Visit live = pd.getCurrentVisit();
-        boolean killLive = live != null && live.id >= fromVisitId;
-        if (killLive) {
-            live.doomed = true;
+        if (live != null && live.id >= fromVisitId) {
             ids.add(live.id);
         }
-        if (ids.isEmpty()) return;
 
         CloneManager clones = TimeTravel.session().clones;
         clones.stopFromVisit(playerName, fromVisitId);
         VoicechatCompat.stopPlaybackFrom(playerName, fromVisitId);
         clones.removePendingFrom(playerName, fromVisitId);
+
+        if (live != null) {
+            TimeTravel.session().visits.endVisit(pd);
+        }
 
         for (Visit v : doomedVisits) {
             for (Visit.Piece piece : v.pieces) MocapAdapter.deleteRecording(piece.recording);
@@ -138,7 +145,15 @@ public final class DeathChain {
 
         if (killLive) {
             ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(playerName);
-            if (player != null && player.isAlive()) player.kill();
+            if (player != null && player.isAlive()) {
+                ItemFlowJournal.setSuppressDrop(true);
+                try {
+                    player.getInventory().clearContent();
+                    player.kill();
+                } finally {
+                    ItemFlowJournal.setSuppressDrop(false);
+                }
+            }
         }
         TimeTravel.server.getPlayerList().broadcastSystemMessage(
                 Component.literal("Time paradox: the timeline of " + playerName

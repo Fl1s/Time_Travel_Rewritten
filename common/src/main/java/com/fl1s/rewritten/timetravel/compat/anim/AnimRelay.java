@@ -17,6 +17,7 @@ public final class AnimRelay {
     public static void init() {
         registerIfPresent("net.combat_roll.network.Packets", CombatRollRelay::new);
         registerIfPresent("net.bettercombat.network.Packets$AttackAnimation", BetterCombatRelay::new);
+        registerIfPresent("io.github.kosmx.emotes.common.network.EmotePacket", EmotecraftRelay::new);
     }
 
     private static void registerIfPresent(String className, Supplier<RelayAdapter> supplier) {
