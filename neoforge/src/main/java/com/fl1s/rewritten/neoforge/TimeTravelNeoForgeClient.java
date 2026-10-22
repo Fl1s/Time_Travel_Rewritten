@@ -15,7 +15,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 public class TimeTravelNeoForgeClient {
 
-    @EventBusSubscriber(modid = TimeTravel.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+    @EventBusSubscriber(modid = TimeTravel.MOD_ID, value = Dist.CLIENT)
     public static class ModBus {
         @SubscribeEvent
         public static void onRegisterKeys(RegisterKeyMappingsEvent event) {

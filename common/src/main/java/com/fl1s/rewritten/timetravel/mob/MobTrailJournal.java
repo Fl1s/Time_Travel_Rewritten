@@ -19,6 +19,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase;
@@ -53,6 +54,7 @@ public final class MobTrailJournal {
         public boolean aggressive;
         public boolean usingItem;
         public int useItemRemaining;
+        public boolean angry;
         public String useItemNbt;
         public int activeHand;
         public int swellDir;
@@ -109,6 +111,7 @@ public final class MobTrailJournal {
     public static boolean isPuppeted(Mob mob) {
         return puppets.contains(mob.getUUID());
     }
+    private static boolean angryOf(Mob mob) {return mob instanceof NeutralMob n && n.getRemainingPersistentAngerTime() > 0;}
 
     public static boolean isBoss(Entity entity) {
         return entity instanceof EnderDragon || entity instanceof WitherBoss;
@@ -247,11 +250,11 @@ public final class MobTrailJournal {
     }
 
     private static boolean sameState(Sample a, Sample b) {
-        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell && a.invul == b.invul && a.phase == b.phase && a.pose == b.pose && a.clientAnger == b.clientAnger;
+        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.angry == b.angry && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell && a.invul == b.invul && a.phase == b.phase && a.pose == b.pose && a.clientAnger == b.clientAnger;
     }
 
     private static boolean cheapSameState(Sample a, Mob mob) {
-        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0) && a.invul == (mob instanceof WitherBoss w ? w.getInvulnerableTicks() : 0) && a.phase == phaseOf(mob) && a.pose == WardenSupport.poseOf(mob) && a.clientAnger == WardenSupport.angerOf(mob);
+        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.angry == angryOf(mob) && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0) && a.invul == (mob instanceof WitherBoss w ? w.getInvulnerableTicks() : 0) && a.phase == phaseOf(mob) && a.pose == WardenSupport.poseOf(mob) && a.clientAnger == WardenSupport.angerOf(mob);
     }
 
     private static Sample makeSample(Mob mob, long now) {
@@ -284,6 +287,7 @@ public final class MobTrailJournal {
         s.phase = phaseOf(mob);
         s.pose = WardenSupport.poseOf(mob);
         s.clientAnger = WardenSupport.angerOf(mob);
+        s.angry = angryOf(mob);
         return s;
     }
 
@@ -370,6 +374,14 @@ public final class MobTrailJournal {
         mob.swinging = s.swinging;
         if (s.swinging && mob.swingTime == 0) mob.swingTime = 1;
         mob.setAggressive(s.aggressive);
+        if (mob instanceof NeutralMob n) {
+            if (s.angry) {
+                if (n.getRemainingPersistentAngerTime() < 20) n.setRemainingPersistentAngerTime(40);
+            } else if (n.getRemainingPersistentAngerTime() > 0) {
+                n.setRemainingPersistentAngerTime(0);
+            }
+            n.setPersistentAngerTarget(null);
+        }
 
         applyBossState(mob, s);
         WardenSupport.applyState(mob, s);

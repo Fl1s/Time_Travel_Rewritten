@@ -25,6 +25,7 @@ import net.minecraft.world.entity.projectile.ThrownEnderpearl;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 
@@ -379,8 +380,17 @@ public final class CloneTracks {
                 }
                 case FISH_REEL -> {
                     if (!live) break;
-                    if (e.result > 0 && clone.level() instanceof ServerLevel level) {
-                        level.sendParticles(ParticleTypes.SPLASH, hook.getX(), hook.getY(), hook.getZ(), 8, 0.2, 0.1, 0.2, 0.0);
+                    if (clone.level() instanceof ServerLevel level) {
+                        if (e.result > 0) {
+                            level.sendParticles(ParticleTypes.SPLASH, hook.getX(), hook.getY(), hook.getZ(), 8, 0.2, 0.1, 0.2, 0.0);
+                        }
+                        Entity hooked = hook.getHookedIn();
+                        if (hooked != null && !hooked.isRemoved()) {
+                            Vec3 pull = new Vec3(clone.getX() - hook.getX(), clone.getY() - hook.getY(), clone.getZ() - hook.getZ()).scale(0.1);
+                            hooked.setDeltaMovement(hooked.getDeltaMovement().add(pull));
+                            hooked.hurtMarked = true;
+                            level.broadcastEntityEvent(hook, (byte) 31);
+                        }
                     }
                     hook.discard();
                 }

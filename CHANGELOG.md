@@ -6,10 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+## [1.21.1-0.11.2] - 2026-11-22
+
 ### Added
 
  - Mod API (wip) 
- - Past Selves attribute tracking
+ - Past Selves attribute, fishing and ender pearl tracking
 
 ### Changed
 
@@ -18,7 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
  - Ender Dragon bossbar incorrect update though timeline & unskippable death cutscene
- - Mobs tame/sit/collar rewind
+ - Mobs tame/sit/collar/anger rewind
+ - Saddle remain on horse after travel back in time before taming the horse
 
 ## [1.21.1-0.11.1] - 2026-11-21
 
