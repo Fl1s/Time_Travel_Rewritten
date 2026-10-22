@@ -44,7 +44,9 @@
     "WardenAccessor",
     "WardenSpawnTrackerAccessor",
     "BaseSpawnerMixin",
-    "TrialSpawnerMixin"
+    "TrialSpawnerMixin",
+    "TamableAnimalMixin",
+    "PetCollarMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",
