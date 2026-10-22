@@ -34,6 +34,7 @@ import net.minecraft.world.entity.monster.Strider;
 import net.minecraft.world.entity.monster.piglin.Piglin;
 import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -138,6 +139,17 @@ public final class MobStateJournal {
         }
         if (mob instanceof Warden) WardenSupport.quantizeAnger(out);
         return out.toString();
+    }
+
+    public static boolean hasFutureChange(UUID id, long now) {
+        List<Entry> list = byUuid.get(id);
+        if (list == null || list.isEmpty()) return false;
+        Entry at = stateAtOf(list, now);
+        for (Entry e : list) {
+            if (e.tick <= now) continue;
+            if (at == null || !e.nbt.equals(at.nbt)) return true;
+        }
+        return false;
     }
 
     private static int visitAt(ServerLevel level, BlockPos pos) {
@@ -263,6 +275,9 @@ public final class MobStateJournal {
             for (String k : keys) tag.remove(k);
             for (String k : cached.getAllKeys()) tag.put(k, cached.get(k).copy());
             mob.load(tag);
+            if (mob instanceof AbstractHorse horse && !cached.contains("SaddleItem")) {
+                horse.getSlot(400).set(ItemStack.EMPTY);
+            }
             if (mob instanceof TamableAnimal pet && !cached.contains("Owner")) {
                 pet.setOwnerUUID(null);
                 pet.setTame(false, false);

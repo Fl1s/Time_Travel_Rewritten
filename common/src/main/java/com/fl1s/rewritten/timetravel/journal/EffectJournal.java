@@ -16,16 +16,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.LidBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class EffectJournal {
@@ -35,6 +34,7 @@ public final class EffectJournal {
     private static final int SOUND = 0;
     private static final int LEVEL_EVENT = 1;
     private static final int BLOCK_EVENT = 2;
+    private static final int ENTITY_EVENT = 3;
     private static final double NEAR_SQ = 8.0 * 8.0;
 
     public static final class Entry {
@@ -103,6 +103,17 @@ public final class EffectJournal {
         e.id = BuiltInRegistries.BLOCK.getKey(block).toString();
         e.a = a;
         e.b = b;
+        add(e);
+    }
+
+    public static void recordEntityEvent(ServerLevel level, Entity entity, byte event) {
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
+        if (!(entity instanceof TamableAnimal) || (event != 6 && event != 7)) return;
+        PlayerData pd = recorder(level, null, entity.getX(), entity.getY(), entity.getZ());
+        if (pd == null) return;
+        Entry e = create(ENTITY_EVENT, level, pd, entity.getX(), entity.getY(), entity.getZ());
+        e.id = entity.getUUID().toString();
+        e.a = event;
         add(e);
     }
 
@@ -197,6 +208,10 @@ public final class EffectJournal {
                     if (loc != null) {
                         BuiltInRegistries.BLOCK.getOptional(loc).ifPresent(block -> level.blockEvent(BlockPos.containing(e.x, e.y, e.z), block, e.a, e.b));
                     }
+                }
+                case ENTITY_EVENT -> {
+                    Entity target = level.getEntity(UUID.fromString(e.id));
+                    if (target != null && !target.isRemoved()) level.broadcastEntityEvent(target, (byte) e.a);
                 }
                 default -> {
                 }

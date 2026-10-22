@@ -51,6 +51,11 @@ public abstract class ServerLevelMixin {
         EffectJournal.recordLevelEvent((ServerLevel) (Object) this, except, type, pos, data);
     }
 
+    @Inject(method = "broadcastEntityEvent(Lnet/minecraft/world/entity/Entity;B)V", at = @At("HEAD"))
+    private void tt$entityEvent(Entity entity, byte event, CallbackInfo ci) {
+        EffectJournal.recordEntityEvent((ServerLevel) (Object) this, entity, event);
+    }
+
     @Inject(method = "tick", at = @At("HEAD"))
     private void tt$captureTickLevel(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
         RedstoneJournal.setCurrentLevel((ServerLevel) (Object) this);
