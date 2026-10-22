@@ -52,7 +52,8 @@
     "PlayerInteractMixin",
     "FishingHookMixin",
     "ClonePearlMixin",
-    "ProjectileHitMixin"
+    "ProjectileHitMixin",
+    "ServerCommonPacketListenerMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",
