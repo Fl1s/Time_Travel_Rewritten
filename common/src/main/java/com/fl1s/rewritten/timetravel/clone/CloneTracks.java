@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.clone;
 
+import com.fl1s.rewritten.timetravel.compat.anim.AttackRelay;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Visit;
@@ -103,6 +104,7 @@ public final class CloneTracks {
     }
 
     public static void onAttack(ServerPlayer player, Entity target) {
+        if (AttackRelay.isInsideBcHandler()) return;
         if (target instanceof Player) return;
         Visit visit = recordedVisit(player);
         if (visit == null) return;

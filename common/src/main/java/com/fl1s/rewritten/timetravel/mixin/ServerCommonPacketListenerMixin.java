@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.compat.anim.AnimRelay;
+import com.fl1s.rewritten.timetravel.compat.anim.AttackRelay;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.server.network.ServerCommonPacketListenerImpl;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -16,6 +17,7 @@ public abstract class ServerCommonPacketListenerMixin {
         try {
             if ((Object) this instanceof ServerGamePacketListenerImpl game) {
                 AnimRelay.onIncoming(packet.payload(), game.player);
+                AttackRelay.onIncoming(packet.payload(), game.player);
             }
         } catch (Throwable ignored) {
         }
