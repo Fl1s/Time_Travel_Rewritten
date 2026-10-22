@@ -86,6 +86,7 @@ public abstract class ServerLevelMixin {
         }
         if (entity instanceof FishingHook hook) tt$guard("fishing", () -> CloneTracks.onHookSpawned(hook));
         tt$guard("entities", () -> EntityJournal.onSpawn(self, entity));
+        tt$guard("projectiles", () -> ProjectileJournal.onSpawn(self, entity));
         tt$guard("mobs", () -> MobJournal.onEntitySpawn(self, entity));
         tt$guard("item_flow", () -> ItemFlowJournal.onEntitySpawn(self, entity));
         tt$guard("vehicles", () -> VehicleJournal.onEntitySpawn(self, entity));

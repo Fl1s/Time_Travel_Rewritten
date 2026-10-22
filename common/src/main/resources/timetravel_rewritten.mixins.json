@@ -54,7 +54,8 @@
     "ClonePearlMixin",
     "ProjectileHitMixin",
     "ServerCommonPacketListenerMixin",
-    "BetterCombatAttackSoundMixin"
+    "BetterCombatAttackSoundMixin",
+    "ServerCommonPacketListenerSendMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",

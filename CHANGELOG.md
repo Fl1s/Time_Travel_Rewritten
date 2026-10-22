@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
  - Combat roll, Better Combat and Emotecraft compat
+ - Gliders, Immersive Aircraft and Civillian Aviation compat
+ - Iron's Spells 'n Spellbooks
 
 ### Fixed
 

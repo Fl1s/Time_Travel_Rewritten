@@ -18,6 +18,8 @@ public final class AnimRelay {
         registerIfPresent("net.combat_roll.network.Packets", CombatRollRelay::new);
         registerIfPresent("net.bettercombat.network.Packets$AttackAnimation", BetterCombatRelay::new);
         registerIfPresent("io.github.kosmx.emotes.common.network.EmotePacket", EmotecraftRelay::new);
+        registerIfPresent("io.redspace.ironsspellbooks.network.casting.OnCastStartedPacket", () -> CastRelay.create(true));
+        registerIfPresent("io.redspace.ironsspellbooks.network.casting.OnCastFinishedPacket", () -> CastRelay.create(false));
     }
 
     private static void registerIfPresent(String className, Supplier<RelayAdapter> supplier) {
