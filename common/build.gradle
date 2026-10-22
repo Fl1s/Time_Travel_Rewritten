@@ -28,6 +28,9 @@ dependencies {
     modCompileOnly "maven.modrinth:motion-capture:${mod_mocap_version}-fabric-${minecraft_version}"
 
     compileOnly "org.spongepowered:mixin:0.8.5:processor"
+
+    compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
 }
 
 loom {
