@@ -46,7 +46,10 @@
     "BaseSpawnerMixin",
     "TrialSpawnerMixin",
     "TamableAnimalMixin",
-    "PetCollarMixin"
+    "PetCollarMixin",
+    "ServerEntityMixin",
+    "TotemMixin",
+    "PlayerInteractMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",

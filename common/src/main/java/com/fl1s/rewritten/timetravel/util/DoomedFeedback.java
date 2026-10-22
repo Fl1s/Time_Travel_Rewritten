@@ -52,6 +52,13 @@ public final class DoomedFeedback {
             "message.timetravel_rewritten.block.6",
     };
 
+    private static final String[] SADDLE_MESSAGES = {
+            "message.timetravel_rewritten.saddle.1",
+            "message.timetravel_rewritten.saddle.2",
+            "message.timetravel_rewritten.saddle.3",
+            "message.timetravel_rewritten.saddle.4",
+    };
+
     private static final long COOLDOWN_TICKS = 40;
     private static final Map<UUID, Long> lastShown = new HashMap<>();
 
@@ -65,6 +72,10 @@ public final class DoomedFeedback {
 
     public static void tryShowBlock(ServerPlayer player, ServerLevel level) {
         show(player, level, BLOCK_MESSAGES);
+    }
+
+    public static void tryShowSaddle(ServerPlayer player, ServerLevel level) {
+        show(player, level, SADDLE_MESSAGES);
     }
 
     private static void show(ServerPlayer player, ServerLevel level, String[] pool) {

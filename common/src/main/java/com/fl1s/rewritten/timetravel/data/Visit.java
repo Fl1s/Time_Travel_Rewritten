@@ -1,7 +1,9 @@
 package com.fl1s.rewritten.timetravel.data;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Visit {
     public int id;
@@ -19,11 +21,16 @@ public class Visit {
     public List<ModeChange> modes = new ArrayList<>();
     public List<RideChange> rides = new ArrayList<>();
     public List<AttackEvent> attacks = new ArrayList<>();
+    public List<Long> totems = new ArrayList<>();
+    public List<AttrChange> attrs = new ArrayList<>();
+    public List<FishEvent> fishing = new ArrayList<>();
     public transient boolean wasDead;
     public transient boolean doomed;
     public transient int lastMode = -1;
     public transient boolean lastFlying;
     public transient String lastVehicle;
+    public transient boolean attrInit;
+    public transient Map<String, String> attrCache = new HashMap<>();
     public List<HealthChange> healths = new ArrayList<>();
     public float lastHealth = -1.0f;
 
@@ -91,6 +98,34 @@ public class Visit {
         public AttackEvent(long tick, String target) {
             this.tick = tick;
             this.target = target;
+        }
+    }
+
+    public static final class AttrChange {
+        public long tick;
+        public String id;
+        public String nbt;
+
+        public AttrChange() {}
+
+        public AttrChange(long tick, String id, String nbt) {
+            this.tick = tick;
+            this.id = id;
+            this.nbt = nbt;
+        }
+    }
+
+    public static final class FishEvent {
+        public long tick;
+        public int type;
+        public int result;
+
+        public FishEvent() {}
+
+        public FishEvent(long tick, int type, int result) {
+            this.tick = tick;
+            this.type = type;
+            this.result = result;
         }
     }
 }
