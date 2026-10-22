@@ -51,7 +51,7 @@ public final class CloneTracks {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.pearls == null) visit.pearls = new ArrayList<>();
-        visit.pearls.add(TimeTravel.timelineTick);
+        visit.pearls.add(TimeTravel.personalTick(player));
     }
 
     private static void applyPearls(Visit visit, ServerPlayer clone, long now) {
@@ -113,13 +113,13 @@ public final class CloneTracks {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.totems == null) visit.totems = new ArrayList<>();
-        visit.totems.add(TimeTravel.timelineTick);
+        visit.totems.add(TimeTravel.personalTick(player));
     }
 
     public static void onAttributesDirty(ServerPlayer player, Collection<AttributeInstance> dirty) {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
-        long tick = TimeTravel.timelineTick;
+        long tick = TimeTravel.personalTick(player);
         for (AttributeInstance inst : dirty) recordAttr(visit, tick, inst);
     }
 
@@ -170,7 +170,7 @@ public final class CloneTracks {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.fishing == null) visit.fishing = new ArrayList<>();
-        visit.fishing.add(new Visit.FishEvent(TimeTravel.timelineTick, type, result));
+        visit.fishing.add(new Visit.FishEvent(TimeTravel.personalTick(player), type, result));
     }
 
     public static void replay(Visit visit, ServerPlayer clone, long now) {
