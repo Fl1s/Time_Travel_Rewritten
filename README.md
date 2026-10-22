@@ -102,6 +102,10 @@ were at your own position, and as your clock advances you watch the recorded cha
 of you. Recorded explosions, sounds and chest lids replay to you at the moment you reach them. None
 of this touches anyone else's world: a player at the present sees the present.
 
+Blocks you are behind are not just drawn as they were, they behave that way for you: you stand on a
+floor that existed then even if it has since been mined, and you walk straight through a wall that
+was built after you left. Everyone else keeps the present world; the past is only solid for you.
+
 Mobs you have history for are rewound the same way: the live mob is hidden from you and a replay of
 its recorded path is streamed to you instead, so an iron golem walks the route it walked back then
 rather than wandering around as if nothing happened. A mob that had not spawned yet at your position

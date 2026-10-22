@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.journal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.time.HeadScope;
 import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import net.minecraft.core.BlockPos;
@@ -11,6 +12,7 @@ import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -33,6 +35,23 @@ public final class HeadWorldView {
 
     public static void clear() {
         views.clear();
+    }
+
+    public static boolean hasOverlay() {
+        return !views.isEmpty();
+    }
+
+    public static BlockState resolve(Level level, BlockPos pos) {
+        long head = HeadScope.current();
+        if (head <= 0 || level == null) return null;
+        return overlayAt(head, Levels.canonicalId(level), pos.asLong());
+    }
+
+    public static BlockState overlayAt(long head, String dim, long packedPos) {
+        if (views.isEmpty()) return null;
+        Map<Key, BlockState> view = views.get(head);
+        if (view == null || view.isEmpty()) return null;
+        return view.get(new Key(dim, packedPos));
     }
 
     private static boolean enabled() {
