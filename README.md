@@ -97,14 +97,20 @@ What changes for a player in the past:
 - `jump join <player>` matches another traveller's time, and `jump ... bring <targets>` takes players
   with you.
 
-What does **not** change: **the world itself stays shared and live.** Blocks, mobs and weather are at
-the present for everyone, so jumping back five minutes will not un-break a block you broke in those
-five minutes. One position in the world can hold only one state, so per-player world state would mean
-a separate dimension per era, which this mod deliberately does not create. If you want the world to
-rewind as well, leave `individualTime` off and let the server move together.
+The static world rewinds **for the traveller only**. Blocks you are behind are shown to you as they
+were at your own position, and as your clock advances you watch the recorded changes happen in front
+of you. Recorded explosions, sounds and chest lids replay to you at the moment you reach them. None
+of this touches anyone else's world: a player at the present sees the present.
 
-Only players carry a time offset. Mobs, items and vehicles live in the shared world, which is why
-`bring` reports non-player targets as ignored.
+What does **not** rewind: **mobs, items and vehicles stay shared and live.** A single block position
+can hold only one state server-side, which is why the past world is shown to you as a view rather
+than built for real - and the same trick cannot work for a creature, because one mob cannot chase you
+in the past while standing still in the present. Chest *contents* are read from the server when you
+open the chest, so those are the present contents even though the chest block and its lid are not.
+If you want the whole world to rewind for everybody, leave `individualTime` off and let the server
+move together.
+
+Only players carry a time offset, which is why `bring` reports non-player targets as ignored.
 
 # Support
 

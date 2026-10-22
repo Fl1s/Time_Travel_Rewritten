@@ -67,6 +67,11 @@ public final class Journal<E> {
         cursors.remove(head);
     }
 
+    public void addUpcoming(long head, E entry) {
+        PriorityQueue<E> q = cursors.get(head);
+        if (q != null) q.add(entry);
+    }
+
     public long nextSeq() {
         return nextSeq++;
     }

@@ -5,6 +5,7 @@
   "mixins": [
     "TrackedEntityMixin",
     "ChunkMapAccessor",
+    "PlayerChunkSenderMixin",
     "EntityInteractionMixin",
     "ServerLevelMixin",
     "LevelMixin",

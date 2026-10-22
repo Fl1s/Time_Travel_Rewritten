@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -177,7 +178,7 @@ public final class BlockJournal {
         BlockState current = level.getBlockState(pos);
         if (current.is(requested.getBlock())) return false;
         String dim = Levels.canonicalId(level);
-        long now = TimeContext.now();
+        long now = positionOf(nearestRecorder(level, pos));
         for (Entry e : list) {
             if (!e.build || e.tick <= now || !e.dim.equals(dim)) continue;
             BlockState old = oldState(e);
@@ -275,17 +276,16 @@ public final class BlockJournal {
         boolean derived = actionDepth == 0 && mechanical;
         if (actionDepth == 0 && old.getBlock() == now.getBlock() && RedstoneJournal.isOutput(now)) return;
         if (derived && ReplayState.isReplaying()) return;
-        long tick = TimeContext.now();
         Map<Long, MovingOrigin> inFlight = moving.computeIfAbsent(level, l -> new HashMap<>());
         if (now.is(Blocks.MOVING_PISTON)) {
-            if (!old.is(Blocks.MOVING_PISTON)) inFlight.put(pos.asLong(), new MovingOrigin(old, tick));
+            if (!old.is(Blocks.MOVING_PISTON)) inFlight.put(pos.asLong(), new MovingOrigin(old, positionOf(nearestRecorder(level, pos))));
             return;
         }
+        MovingOrigin origin = null;
         if (old.is(Blocks.MOVING_PISTON)) {
-            MovingOrigin origin = inFlight.remove(pos.asLong());
+            origin = inFlight.remove(pos.asLong());
             if (origin == null) return;
             old = origin.state();
-            tick = origin.tick();
         }
         if (old.equals(now) || !shouldTrack(old, now)) return;
 
@@ -308,6 +308,7 @@ public final class BlockJournal {
         String dim = Levels.canonicalId(level);
         String oldS = serialize(old);
         String newS = serialize(now);
+        long tick = origin != null ? origin.tick() : positionOf(pd);
 
         List<Entry> same = byPos.get(pos.asLong());
         if (same != null) {
@@ -342,6 +343,30 @@ public final class BlockJournal {
         STORE.entries().add(entry);
         index(entry);
         STORE.markDirty();
+        HeadWorldView.onRecord(entry);
+    }
+
+    static long positionOf(PlayerData pd) {
+        if (!TimeTravel.individualTime || pd == null) return TimeContext.now();
+        TimeHeads heads = TimeTravel.heads();
+        return heads == null ? TimeContext.now() : heads.positionOf(pd);
+    }
+
+    static Journal<Entry> store() {
+        return STORE;
+    }
+
+    static List<Entry> allEntries() {
+        return STORE.entries();
+    }
+
+    static boolean hasChangeAfter(String dim, long packedPos, long position) {
+        List<Entry> list = byPos.get(packedPos);
+        if (list == null) return false;
+        for (Entry e : list) {
+            if (e.tick > position && e.dim.equals(dim)) return true;
+        }
+        return false;
     }
 
     private static boolean isSourceLiquid(BlockState state) {
@@ -704,12 +729,12 @@ public final class BlockJournal {
         }
     }
 
-    private static BlockState oldState(Entry e) {
+    static BlockState oldState(Entry e) {
         if (e.oldParsed == null) e.oldParsed = parse(e.oldState);
         return e.oldParsed;
     }
 
-    private static BlockState newState(Entry e) {
+    static BlockState newState(Entry e) {
         if (e.newParsed == null) e.newParsed = parse(e.newState);
         return e.newParsed;
     }
