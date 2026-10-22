@@ -103,13 +103,19 @@ were at your own position, and as your clock advances you watch the recorded cha
 of you. Recorded explosions, sounds and chest lids replay to you at the moment you reach them. None
 of this touches anyone else's world: a player at the present sees the present.
 
-What does **not** rewind: **mobs, items and vehicles stay shared and live.** A single block position
-can hold only one state server-side, which is why the past world is shown to you as a view rather
-than built for real - and the same trick cannot work for a creature, because one mob cannot chase you
-in the past while standing still in the present. Chest *contents* are read from the server when you
-open the chest, so those are the present contents even though the chest block and its lid are not.
-If you want the whole world to rewind for everybody, leave `individualTime` off and let the server
-move together.
+Mobs you have history for are rewound the same way: the live mob is hidden from you and a replay of
+its recorded path is streamed to you instead, so an iron golem walks the route it walked back then
+rather than wandering around as if nothing happened. A mob that had not spawned yet at your position
+is simply absent.
+
+What does **not** rewind: a replayed mob is **scenery**. It cannot be hit and cannot hurt you, because
+it is a replay sent to your client rather than a real creature - one mob cannot chase you in the past
+while standing still in someone else's present. Mobs that died before your position do not come back
+yet, and mobs that were never recorded (too far from any player to be tracked) are shown live. Chest
+*contents* are read from the server when you open the chest, so those are the present contents even
+though the chest block and its lid are not. Items and vehicles stay shared and live. If you want the
+whole world to rewind for everybody, including creatures you can fight, leave `individualTime` off
+and let the server move together.
 
 Only players carry a time offset, which is why `bring` reports non-player targets as ignored.
 

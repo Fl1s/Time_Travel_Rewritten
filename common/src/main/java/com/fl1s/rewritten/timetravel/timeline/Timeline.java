@@ -96,6 +96,7 @@ public final class Timeline {
         TimeTravel.config.isLooping = false;
         TravelFx.clear();
         HeadWorldView.clear();
+        HeadMobView.clear();
         HeadTracking.markDirty();
         TimeTravel.config.timelineTick = TimeTravel.sharedTick;
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
@@ -141,6 +142,7 @@ public final class Timeline {
         if (player != null) {
             TravelFx.onTravel(player, fromOffset, toOffset, dir);
             HeadWorldView.onTravel(player, fromOffset, toOffset);
+            HeadMobView.onTravel(player);
             s.visits.beginVisit(player, pd, dir);
             TimeTravel.sendSync(player);
         }
@@ -275,8 +277,9 @@ public final class Timeline {
 
         BlockJournal.flushWatches();
         TravelFx.tick();
-        HeadWorldView.tick();
         HeadTracking.refreshIfDirty();
+        HeadWorldView.tick();
+        HeadMobView.tick();
 
         if (!TimeTravel.isLooping || !MocapAdapter.isReady()) return;
 
