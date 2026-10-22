@@ -15,6 +15,7 @@ import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.journal.*;
 import com.fl1s.rewritten.timetravel.mob.*;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.time.HeadScope;
 import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TimeFormat;
@@ -275,6 +276,7 @@ public final class Timeline {
             }
         }
 
+        HeadScope.reset();
         BlockJournal.flushWatches();
         TravelFx.tick();
         HeadTracking.refreshIfDirty();
