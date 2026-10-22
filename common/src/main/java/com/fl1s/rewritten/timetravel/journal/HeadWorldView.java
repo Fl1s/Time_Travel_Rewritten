@@ -4,6 +4,7 @@ import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
+import com.fl1s.rewritten.timetravel.timeline.ChatTimeline;
 import com.fl1s.rewritten.timetravel.time.HeadScope;
 import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
@@ -80,6 +81,7 @@ public final class HeadWorldView {
             advance(head.offset(), head.position(), view, viewers);
             EffectJournal.tickHead(head.offset(), head.position(), viewers);
             EntityJournal.tickHead(head.offset(), head.position());
+            ChatTimeline.tickHead(head.offset(), head.position(), viewers);
         }
 
         List<Long> stale = new ArrayList<>();
@@ -89,6 +91,7 @@ public final class HeadWorldView {
             BlockJournal.store().dropCursor(head);
             EffectJournal.dropHead(head);
             EntityJournal.dropHead(head);
+            ChatTimeline.dropHead(head);
         }
     }
 
@@ -98,6 +101,7 @@ public final class HeadWorldView {
         BlockJournal.store().rebuildUpcoming(head, position);
         EffectJournal.openHead(head, position);
         EntityJournal.openHead(head, position);
+        ChatTimeline.openHead(head, position);
         return view;
     }
 
