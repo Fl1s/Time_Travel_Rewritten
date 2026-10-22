@@ -50,6 +50,28 @@ public final class TimelineNet {
         }
     }
 
+    public static void handleReturnToPresent(ServerPlayer player) {
+        if (TimeTravel.config == null || TimeTravel.timelineSceneManager == null) return;
+
+        if (TimeTravel.jumpRequiresOp && !player.hasPermissions(2)) {
+            player.displayClientMessage(Component.translatable("message.timetravel_rewritten.no_permission"), true);
+            return;
+        }
+
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
+        if (pd == null || !pd.getActive()) return;
+
+        if (TimeTravel.presentTick <= TimeTravel.personalTick(player)) {
+            player.displayClientMessage(Component.translatable("message.timetravel_rewritten.already_present"), true);
+            return;
+        }
+
+        String error = TimeTravel.jumpTo(TimeTravel.presentTick, player.getName().getString());
+        player.displayClientMessage(error != null
+                ? Component.literal(error)
+                : Component.translatable("message.timetravel_rewritten.returning"), true);
+    }
+
     public static void handleJumpRequest(ServerPlayer player, long targetTick) {
         if (TimeTravel.config == null || TimeTravel.timelineSceneManager == null) return;
 

@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.net.JumpRequestPayload;
+import com.fl1s.rewritten.timetravel.net.ReturnPresentPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.ToggleTimelinePayload;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
@@ -31,7 +32,9 @@ public final class TimelineClient {
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_APOSTROPHE, CATEGORY);
     public static final KeyMapping KEY_TOGGLE = new KeyMapping("key.timetravel_rewritten.toggle",
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_BACKSLASH, CATEGORY);
-    public static final KeyMapping[] ALL_KEYS = {KEY_TOGGLE, KEY_RETURN, KEY_BACK, KEY_FORWARD, KEY_CONFIRM, KEY_CANCEL};
+    public static final KeyMapping KEY_PRESENT = new KeyMapping("key.timetravel_rewritten.present",
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_SEMICOLON, CATEGORY);
+    public static final KeyMapping[] ALL_KEYS = {KEY_TOGGLE, KEY_RETURN, KEY_PRESENT, KEY_BACK, KEY_FORWARD, KEY_CONFIRM, KEY_CANCEL};
 
     private static final long NO_PREVIEW = -1L;
     private static boolean running = false;
@@ -39,6 +42,7 @@ public final class TimelineClient {
     private static boolean showHud = true;
     private static long displayTick = 0;
     private static long serverTick = 0;
+    private static long presentTick = 0;
     private static boolean individualTime = false;
     private static long previewTick = NO_PREVIEW;
     private static long returnTick = NO_PREVIEW;
@@ -56,6 +60,7 @@ public final class TimelineClient {
         synced = true;
         displayTick = payload.tick();
         serverTick = payload.serverTick();
+        presentTick = payload.presentTick();
         if (!running) previewTick = NO_PREVIEW;
     }
 
@@ -69,6 +74,7 @@ public final class TimelineClient {
         running = false;
         displayTick = 0;
         serverTick = 0;
+        presentTick = 0;
         individualTime = false;
         previewTick = NO_PREVIEW;
         holdBack = holdForward = 0;
@@ -114,6 +120,7 @@ public final class TimelineClient {
         if (running && !mc.isPaused()) {
             displayTick++;
             serverTick++;
+            presentTick++;
         }
         if (flashTicks > 0) flashTicks--;
 
@@ -138,6 +145,10 @@ public final class TimelineClient {
             }
         }
 
+        while (KEY_PRESENT.consumeClick()) {
+            returnToPresent();
+        }
+
         while (KEY_CANCEL.consumeClick()) {
             previewTick = NO_PREVIEW;
         }
@@ -149,6 +160,17 @@ public final class TimelineClient {
                 flashTicks = 20;
             }
         }
+    }
+
+    public static boolean canReturnToPresent() {
+        return running && synced && presentTick > displayTick;
+    }
+
+    public static void returnToPresent() {
+        if (!canReturnToPresent()) return;
+        TimelineNet.sendToServer(ReturnPresentPayload.INSTANCE);
+        previewTick = NO_PREVIEW;
+        flashTicks = 20;
     }
 
     public static void render(GuiGraphics graphics, DeltaTracker deltaTracker) {

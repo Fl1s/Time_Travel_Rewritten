@@ -153,6 +153,13 @@ public class TimeTravelNeoForge {
                         TimelineNet.handleJumpRequest(player, payload.targetTick());
                     }
                 }));
+
+        registrar.playToServer(ReturnPresentPayload.TYPE, ReturnPresentPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        TimelineNet.handleReturnToPresent(player);
+                    }
+                }));
     }
 
     // Command registration handler

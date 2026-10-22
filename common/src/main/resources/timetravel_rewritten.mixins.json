@@ -58,6 +58,7 @@
     "ProjectileHitMixin"
   ],
   "client": [
+    "PauseScreenMixin",
     "LivingEntityRendererMixin",
     "AgeableListModelMixin",
     "HumanoidArmorLayerMixin",
