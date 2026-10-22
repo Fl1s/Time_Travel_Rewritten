@@ -103,6 +103,7 @@ public final class ProjectileJournal {
 
     public static void onRemoved(Entity entity) {
         if (!TimeTravel.isLooping || !(entity instanceof Projectile)) return;
+        if (puppets.containsKey(entity.getUUID())) return;
         if (skip(entity)) return;
         if (!tracked.contains(entity.getUUID())) return;
         if (!(entity.level() instanceof ServerLevel level)) return;
@@ -121,9 +122,7 @@ public final class ProjectileJournal {
     }
 
     private static void sample() {
-        if (!tracked.isEmpty() || TimeTravel.server == null) {
-            if (TimeTravel.server == null) return;
-        }
+        if (TimeTravel.server == null || tracked.isEmpty()) return;
         long now = TimeTravel.timelineTick;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = level.dimension().location().toString();
@@ -180,17 +179,11 @@ public final class ProjectileJournal {
             if (level == null) return;
             CompoundTag tag = TagParser.parseTag(spawn.nbt);
             Entity created = EntityType.loadEntityRecursive(tag, level, entity -> entity);
-            if (created == null) {
-                TimeTravel.TIMELINE_LOGGER.warn("[TT-PROJ] failed to load {}", spawn.uuid);
-                return;
-            }
+            if (created == null) return;
             created.moveTo(spawn.x, spawn.y, spawn.z, spawn.yRot, spawn.xRot);
             created.setDeltaMovement(spawn.vx, spawn.vy, spawn.vz);
             created.addTag(EntityJournal.TAG);
-            if (!level.addFreshEntity(created)) {
-                TimeTravel.TIMELINE_LOGGER.warn("[TT-PROJ] addFreshEntity refused {}", spawn.uuid);
-                return;
-            }
+            if (!level.addFreshEntity(created)) return;
             Puppet p = new Puppet();
             p.entity = created;
             p.uuid = spawn.uuid;
@@ -229,16 +222,15 @@ public final class ProjectileJournal {
     }
 
     private static Map<UUID, List<Entry>> getTrails() {
-        if (trails == null) {
-            trails = new HashMap<>();
-            for (Entry e : STORE.entries()) {
-                if (e.kind == KIND_SAMPLE) {
-                    trails.computeIfAbsent(e.uuid, k -> new ArrayList<>()).add(e);
-                }
+        if (trails != null) return trails;
+        trails = new HashMap<>();
+        for (Entry e : STORE.entries()) {
+            if (e.kind == KIND_SAMPLE) {
+                trails.computeIfAbsent(e.uuid, k -> new ArrayList<>()).add(e);
             }
-            for (List<Entry> l : trails.values()) {
-                l.sort(Comparator.comparingLong(en -> en.tick));
-            }
+        }
+        for (List<Entry> l : trails.values()) {
+            l.sort(Comparator.comparingLong(en -> en.tick));
         }
         return trails;
     }
@@ -254,11 +246,8 @@ public final class ProjectileJournal {
         Map<UUID, Entry> lastSpawn = new HashMap<>();
         Map<UUID, Entry> lastEnd = new HashMap<>();
         for (Entry e : STORE.entries()) {
-            if (e.kind == KIND_SPAWN) {
-                lastSpawn.merge(e.uuid, e, (a, b) -> a.tick >= b.tick ? a : b);
-            } else if (e.kind == KIND_END) {
-                lastEnd.merge(e.uuid, e, (a, b) -> a.tick >= b.tick ? a : b);
-            }
+            if (e.kind == KIND_SPAWN) lastSpawn.merge(e.uuid, e, (a, b) -> a.tick >= b.tick ? a : b);
+            else if (e.kind == KIND_END) lastEnd.merge(e.uuid, e, (a, b) -> a.tick >= b.tick ? a : b);
         }
         for (Map.Entry<UUID, Entry> en : lastSpawn.entrySet()) {
             Entry spawn = en.getValue();

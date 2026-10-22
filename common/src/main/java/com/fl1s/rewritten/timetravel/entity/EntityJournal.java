@@ -191,8 +191,8 @@ public final class EntityJournal {
             if (fuse > 0) tag.putShort("fuse", (short) fuse);
             tag.putBoolean("DropItem", false);
             Entity entity = EntityType.loadEntityRecursive(tag, level, en -> en);
-            if (entity == null) return;
             if (entity instanceof Projectile) return;
+            if (entity == null) return;
             entity.addTag(TAG);
             if (level.addFreshEntity(entity)) {
                 e.uuid = entity.getUUID();

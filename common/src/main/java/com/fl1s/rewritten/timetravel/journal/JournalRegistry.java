@@ -64,6 +64,7 @@ public final class JournalRegistry {
         register("anims", AnimJournal::load, AnimJournal::save, AnimJournal::saveIfDirty, AnimJournal::clear, AnimJournal::rebuildUpcoming, AnimJournal::tick, AnimJournal::onJump, AnimJournal::eraseVisits);
         register("attacks", AttackJournal::load, AttackJournal::save, AttackJournal::saveIfDirty, AttackJournal::clear, AttackJournal::rebuildUpcoming, AttackJournal::tick, AttackJournal::onJump, AttackJournal::eraseVisits);
         register("projectiles", ProjectileJournal::load, ProjectileJournal::save, ProjectileJournal::saveIfDirty, ProjectileJournal::clear, ProjectileJournal::rebuildUpcoming, ProjectileJournal::tick, ProjectileJournal::onJump, ProjectileJournal::eraseVisits);
+        register("tracked_entities", TrackedEntityJournal::load, TrackedEntityJournal::save, TrackedEntityJournal::saveIfDirty, TrackedEntityJournal::clear, TrackedEntityJournal::rebuildUpcoming, TrackedEntityJournal::tick, TrackedEntityJournal::onJump, TrackedEntityJournal::eraseVisits);
         register("weather", WeatherJournal::load, WeatherJournal::save, WeatherJournal::saveIfDirty, WeatherJournal::clear, WeatherJournal::rebuildUpcoming, WeatherJournal::tick, WeatherJournal::onJump, WeatherJournal::eraseVisits);
         register("client_fx", NOOP, NOOP, NOOP, NOOP, NOOP, NOOP, (from, to) -> TimeTravel.broadcastStopDragonSound(), ids -> {});
     }

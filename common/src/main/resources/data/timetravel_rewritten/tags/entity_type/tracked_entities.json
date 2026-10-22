@@ -1,0 +1,49 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "irons_spellbooks:portal",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:shield_entity",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:ice_tomb",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:ender_chain",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:root",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:ray_of_frost_visual_entity",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:eldritch_blast_visual_entity",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:spectral_hammer",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:target_area_entity",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:void_tentacle",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:wall_of_fire_entity",
+      "required": false
+    }
+  ]
+}
