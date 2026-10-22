@@ -79,6 +79,7 @@ public class TimeTravelFabric implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(HurtFlashPayload.TYPE, HurtFlashPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(JumpRequestPayload.TYPE, JumpRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ToggleTimelinePayload.TYPE, ToggleTimelinePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(ReturnPresentPayload.TYPE, ReturnPresentPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(ToggleTimelinePayload.TYPE,
                 (payload, context) -> TimelineNet.handleToggleRequest(context.player()));
 
@@ -93,6 +94,9 @@ public class TimeTravelFabric implements ModInitializer {
 
         ServerPlayNetworking.registerGlobalReceiver(JumpRequestPayload.TYPE,
                 (payload, context) -> TimelineNet.handleJumpRequest(context.player(), payload.targetTick()));
+
+        ServerPlayNetworking.registerGlobalReceiver(ReturnPresentPayload.TYPE,
+                (payload, context) -> TimelineNet.handleReturnToPresent(context.player()));
 
         TimelineNet.toPlayerSender = (player, payload) -> {
             if (ServerPlayNetworking.canSend(player, payload.type())) {

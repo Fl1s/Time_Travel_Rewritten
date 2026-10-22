@@ -307,7 +307,7 @@ public class TimeTravel {
 	}
 
 	private static TimelineSyncPayload syncFor(ServerPlayer player) {
-		return new TimelineSyncPayload(personalTick(player), sharedTick, isLooping,
+		return new TimelineSyncPayload(personalTick(player), sharedTick, presentTick, isLooping,
 				displayTimeInTicks, showTimelineInfo, individualTime);
 	}
 

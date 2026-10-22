@@ -35,6 +35,10 @@ Use `/timetravel` or `/tt` to control the timeline.
 
 Time can be specified in ticks (`t`), seconds (`s`), minutes (`m`), hours (`h`), or days (`d`). For example, `5m`, `30s`, or `1200t`.
 
+A **Return to the Present** button appears in the pause menu whenever you are behind the present, and
+the same jump is bound to `;` by default (rebindable under Controls). Both confirm with
+`Returning to the present...`.
+
 ## Settings
 
 Use `/tt settings` to view the current settings.
