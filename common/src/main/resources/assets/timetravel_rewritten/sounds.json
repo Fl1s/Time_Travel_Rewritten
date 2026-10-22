@@ -1,26 +1,38 @@
 {
-  "travel_forward": {
-    "subtitle": "subtitles.timetravel_rewritten.travel_forward",
+  "travel_forward_default": {
+    "subtitle": "subtitles.timetravel_rewritten.travel_forward_default",
     "sounds": [
-      "timetravel_rewritten:travel_forward_1"
+      "timetravel_rewritten:travel_forward_default"
     ]
   },
-  "travel_backward": {
-    "subtitle": "subtitles.timetravel_rewritten.travel_back",
+  "travel_backward_default": {
+    "subtitle": "subtitles.timetravel_rewritten.travel_backward_default",
     "sounds": [
-      "timetravel_rewritten:travel_backward_1"
+      "timetravel_rewritten:travel_backward_default"
     ]
   },
-  "aspect_travel_forward": {
-    "subtitle": "subtitles.timetravel_rewritten.aspect_travel_forward",
+  "travel_forward_aspect": {
+    "subtitle": "subtitles.timetravel_rewritten.travel_forward_aspect",
     "sounds": [
-      "timetravel_rewritten:travel_forward_2"
+      "timetravel_rewritten:travel_forward_aspect"
     ]
   },
-  "aspect_travel_backward": {
-    "subtitle": "subtitles.timetravel_rewritten.aspect_travel_back",
+  "travel_backward_aspect": {
+    "subtitle": "subtitles.timetravel_rewritten.travel_backward_aspect",
     "sounds": [
-      "timetravel_rewritten:travel_backward_2"
+      "timetravel_rewritten:travel_backward_aspect"
+    ]
+  },
+  "travel_forward_flower": {
+    "subtitle": "subtitles.timetravel_rewritten.travel_forward_flower",
+    "sounds": [
+      "timetravel_rewritten:travel_forward_flower"
+    ]
+  },
+  "travel_backward_flower": {
+    "subtitle": "subtitles.timetravel_rewritten.travel_backward_flower",
+    "sounds": [
+      "timetravel_rewritten:travel_backward_flower"
     ]
   }
 }

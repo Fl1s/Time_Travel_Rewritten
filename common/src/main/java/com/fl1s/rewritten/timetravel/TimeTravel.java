@@ -37,6 +37,7 @@ import java.util.function.BiConsumer;
 public class TimeTravel {
 	public static final String MOD_ID = "timetravel_rewritten";
 	public static final Logger TIMELINE_LOGGER = LoggerFactory.getLogger("TimeTravel");
+	public static final boolean DEBUG = Boolean.getBoolean("timetravel.debug");
 	public static MinecraftServer server;
 	public static ServerLevel serverLevel;
 
@@ -52,6 +53,7 @@ public class TimeTravel {
 
 	public static boolean showTimelineInfo;
 	public static boolean knightOfTimeMode;
+	public static boolean flowerManMode;
 	public static boolean displayTimeInTicks;
 	public static boolean trackItems;
 	public static boolean oldSfx;

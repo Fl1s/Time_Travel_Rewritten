@@ -21,6 +21,9 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.world.entity.projectile.ThrownEnderpearl;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 
 import java.util.*;
@@ -41,6 +44,24 @@ public final class CloneTracks {
         PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
         if (pd == null || !pd.getActive()) return null;
         return pd.getCurrentVisit();
+    }
+
+    public static void onPearlThrown(ServerPlayer player) {
+        Visit visit = recordedVisit(player);
+        if (visit == null) return;
+        if (visit.pearls == null) visit.pearls = new ArrayList<>();
+        visit.pearls.add(TimeTravel.timelineTick);
+    }
+
+    private static void applyPearls(Visit visit, ServerPlayer clone, long now) {
+        List<Long> list = visit.pearls;
+        if (list == null || list.isEmpty()) return;
+        if (Collections.binarySearch(list, now) < 0) return;
+        if (!(clone.level() instanceof ServerLevel level)) return;
+        ThrownEnderpearl pearl = new ThrownEnderpearl(level, clone);
+        pearl.setItem(new ItemStack(Items.ENDER_PEARL));
+        pearl.shootFromRotation(clone, clone.getXRot(), clone.getYRot(), 0.0F, 1.5F, 0.0F);
+        level.addFreshEntity(pearl);
     }
 
     public static void poll(ServerPlayer player, PlayerData pd) {
@@ -161,6 +182,7 @@ public final class CloneTracks {
             applyFishing(visit, clone, now, fx);
         }
         applyTotems(visit, clone, now);
+        applyPearls(visit, clone, now);
         applyAttacks(visit, clone, now);
     }
 

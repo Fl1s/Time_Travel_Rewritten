@@ -6,6 +6,7 @@ import com.fl1s.rewritten.timetravel.net.CloneVanishPayload;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LightTexture;
@@ -15,13 +16,16 @@ import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 public final class CloneVanishFx {
@@ -30,6 +34,7 @@ public final class CloneVanishFx {
 
     private static final ResourceLocation GEARS_TEXTURE = ResourceLocation.fromNamespaceAndPath(TimeTravel.MOD_ID, "textures/effect/time_gears.png");
     private static final ResourceLocation CLOCK_TEXTURE = ResourceLocation.fromNamespaceAndPath(TimeTravel.MOD_ID, "textures/effect/time_clock.png");
+    private static final ResourceLocation PETAL_TEXTURE = ResourceLocation.fromNamespaceAndPath(TimeTravel.MOD_ID, "textures/effect/petal.png");
 
     private static final int GEAR_FRAMES = 9;
     private static final int CLOCK_FRAMES = 14;
@@ -64,11 +69,16 @@ public final class CloneVanishFx {
     private static final float APPEAR_SPRITE_SPAN = (CLOCK_FRAMES - 1) * FRAME_MS;
     private static final Map<Integer, Effect> appears = new HashMap<>();
 
+    private static final int PETAL_BURST = 15;
+    private static final int PETAL_LIMIT = 600;
+    private static final float RAINBOW_PERIOD_MS = 3000.0F;
+
     private static final class Effect {
         final int entityId;
         final float startTick;
         Vec3 chest;
         Vec3 anchor;
+        boolean petals;
 
         Effect(int entityId, float startTick) {
             this.entityId = entityId;
@@ -76,19 +86,31 @@ public final class CloneVanishFx {
         }
     }
 
+    private static final class Petal {
+        float x, y, z;
+        float vx, vy, vz;
+        float rot, rotSpeed;
+        float hue, seed, size;
+        float age, life;
+    }
+
     private static final Map<Integer, Effect> effects = new HashMap<>();
+    private static final List<Petal> petals = new ArrayList<>();
     private static ClientLevel lastLevel;
+    private static long lastRenderMs;
 
     private static boolean active;
     private static float bodyAlpha;
     private static float tintGb;
     private static float flash;
+    private static float hueOffset;
 
     public static void handle(CloneVanishPayload payload) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         if (level != lastLevel) {
             effects.clear();
+            petals.clear();
             lastLevel = level;
         }
         Effect effect = new Effect(payload.entityId(), level.getGameTime() + payload.remainingTicks() - FADE_START_MS / MS_PER_TICK);
@@ -100,6 +122,7 @@ public final class CloneVanishFx {
     public static void clear() {
         effects.clear();
         appears.clear();
+        petals.clear();
         active = false;
     }
 
@@ -118,6 +141,7 @@ public final class CloneVanishFx {
         if (level != lastLevel) {
             effects.clear();
             appears.clear();
+            petals.clear();
             lastLevel = level;
         }
         appears.put(payload.entityId(), new Effect(payload.entityId(), level.getGameTime() + payload.delayTicks()));
@@ -130,6 +154,11 @@ public final class CloneVanishFx {
     private static float smooth(float x) {
         x = Mth.clamp(x, 0.0F, 1.0F);
         return x * x * (3.0F - 2.0F * x);
+    }
+
+    private static float hue(float shift) {
+        float h = (Util.getMillis() % (long) RAINBOW_PERIOD_MS) / RAINBOW_PERIOD_MS + hueOffset + shift;
+        return h - (float) Math.floor(h);
     }
 
     public static void beginShadow(Entity entity, float partialTick) {
@@ -162,6 +191,8 @@ public final class CloneVanishFx {
         if (effects.isEmpty() && appears.isEmpty()) return;
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null || level != lastLevel) return;
+
+        hueOffset = (entity.getId() * 0.137F) % 1.0F;
 
         Effect appear = appears.get(entity.getId());
         if (appear != null) {
@@ -211,6 +242,21 @@ public final class CloneVanishFx {
         int g = (original >> 8) & 255;
         int b = original & 255;
         a = Math.round(a * bodyAlpha);
+        if (TimeTravel.flowerManMode) {
+            float s = Mth.clamp((1.0F - tintGb) * 2.0F, 0.0F, 1.0F);
+            int rainbow = Mth.hsvToRgb(hue(0.0F), 0.6F, 1.0F);
+            r = Math.round(Mth.lerp(s, r, r * 0.3F + ((rainbow >> 16) & 255) * 0.7F));
+            g = Math.round(Mth.lerp(s, g, g * 0.3F + ((rainbow >> 8) & 255) * 0.7F));
+            b = Math.round(Mth.lerp(s, b, b * 0.3F + (rainbow & 255) * 0.7F));
+            if (flash > 0.0F) {
+                int glow = Mth.hsvToRgb(hue(0.5F), 0.45F, 1.0F);
+                float f = flash * 0.7F;
+                r = Math.round(Mth.lerp(f, r, (glow >> 16) & 255));
+                g = Math.round(Mth.lerp(f, g, (glow >> 8) & 255));
+                b = Math.round(Mth.lerp(f, b, glow & 255));
+            }
+            return (a << 24) | (r << 16) | (g << 8) | b;
+        }
         if (TimeTravel.knightOfTimeMode) {
             g = Math.round(g * tintGb);
             b = Math.round(b * tintGb);
@@ -233,16 +279,85 @@ public final class CloneVanishFx {
         return OverlayTexture.pack(OverlayTexture.u(flash), OverlayTexture.v(false));
     }
 
+    private static void spawnPetals(Vec3 center, RandomSource random) {
+        for (int i = 0; i < PETAL_BURST && petals.size() < PETAL_LIMIT; i++) {
+            Petal p = new Petal();
+            p.x = (float) center.x + (random.nextFloat() - 0.5F) * 1.2F;
+            p.y = (float) center.y + (random.nextFloat() - 0.3F) * 1.2F;
+            p.z = (float) center.z + (random.nextFloat() - 0.5F) * 1.2F;
+            p.vx = (random.nextFloat() - 0.5F) * 0.8F;
+            p.vy = random.nextFloat() * 0.6F;
+            p.vz = (random.nextFloat() - 0.5F) * 0.8F;
+            p.rot = random.nextFloat() * 360.0F;
+            p.rotSpeed = (random.nextFloat() - 0.5F) * 360.0F;
+            p.hue = random.nextFloat();
+            p.seed = random.nextFloat() * Mth.TWO_PI;
+            p.size = 0.10F + 0.10F * random.nextFloat();
+            p.life = 2.2F + 1.6F * random.nextFloat();
+            petals.add(p);
+        }
+    }
+
+    private static boolean drawPetals(PoseStack poseStack, MultiBufferSource buffer, Vec3 camera, float dt) {
+        boolean drew = false;
+        Iterator<Petal> it = petals.iterator();
+        while (it.hasNext()) {
+            Petal p = it.next();
+            p.age += dt;
+            if (p.age >= p.life) {
+                it.remove();
+                continue;
+            }
+            p.vy = Mth.lerp(Math.min(1.0F, dt * 2.0F), p.vy, -0.7F);
+            p.vx *= 1.0F - Math.min(1.0F, dt * 1.5F);
+            p.vz *= 1.0F - Math.min(1.0F, dt * 1.5F);
+            p.x += (p.vx + Mth.sin(p.age * 2.5F + p.seed) * 0.35F) * dt;
+            p.z += (p.vz + Mth.cos(p.age * 2.1F + p.seed) * 0.35F) * dt;
+            p.y += p.vy * dt;
+            p.rot += p.rotSpeed * dt;
+
+            float life = p.age / p.life;
+            int alpha = Math.round((life > 0.7F ? 1.0F - (life - 0.7F) / 0.3F : 1.0F) * 255.0F);
+            if (alpha <= 0) continue;
+            int rgb = Mth.hsvToRgb((p.hue + p.age * 0.3F) % 1.0F, 0.55F, 1.0F);
+
+            poseStack.pushPose();
+            poseStack.translate(p.x - camera.x, p.y - camera.y, p.z - camera.z);
+            poseStack.mulPose(Minecraft.getInstance().getEntityRenderDispatcher().cameraOrientation());
+            poseStack.mulPose(Axis.ZP.rotationDegrees(p.rot));
+            VertexConsumer vc = buffer.getBuffer(RenderType.entityTranslucentEmissive(PETAL_TEXTURE));
+            Matrix4f m = poseStack.last().pose();
+            float h = p.size * 0.5F;
+            int r = (rgb >> 16) & 255;
+            int g = (rgb >> 8) & 255;
+            int b = rgb & 255;
+            colored(vc, m, -h, h, 0.0F, 0.0F, 0.0F, r, g, b, alpha);
+            colored(vc, m, -h, -h, 0.0F, 0.0F, 1.0F, r, g, b, alpha);
+            colored(vc, m, h, -h, 0.0F, 1.0F, 1.0F, r, g, b, alpha);
+            colored(vc, m, h, h, 0.0F, 1.0F, 0.0F, r, g, b, alpha);
+            poseStack.popPose();
+            drew = true;
+        }
+        return drew;
+    }
+
     public static void renderWorld(PoseStack poseStack, Vec3 camera, float partialTick) {
-        if (effects.isEmpty() && appears.isEmpty()) return;
+        long nowMs = Util.getMillis();
+        float dt = lastRenderMs == 0L ? 0.0F : Math.min(0.1F, (nowMs - lastRenderMs) / 1000.0F);
+        lastRenderMs = nowMs;
+        if (effects.isEmpty() && appears.isEmpty() && petals.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null || level != lastLevel) {
             effects.clear();
+            appears.clear();
+            petals.clear();
             return;
         }
         boolean spritesEnabled = TimeTravel.knightOfTimeMode && poseStack != null;
-        MultiBufferSource.BufferSource buffer = spritesEnabled ? mc.renderBuffers().bufferSource() : null;
+        boolean flowerEnabled = TimeTravel.flowerManMode && poseStack != null;
+        if (!TimeTravel.flowerManMode) petals.clear();
+        MultiBufferSource.BufferSource buffer = (spritesEnabled || flowerEnabled) ? mc.renderBuffers().bufferSource() : null;
         float now = level.getGameTime() + partialTick;
         boolean drew = false;
 
@@ -254,14 +369,18 @@ public final class CloneVanishFx {
                 it.remove();
                 continue;
             }
-            if (!spritesEnabled) continue;
+            if (!spritesEnabled && !flowerEnabled) continue;
             if (effect.anchor == null) {
                 Entity entity = level.getEntity(effect.entityId);
                 if (entity != null) effect.chest = chestOf(entity, partialTick);
                 if (ms >= FLASH_START_MS && effect.chest != null) effect.anchor = effect.chest;
             }
             if (effect.anchor == null || ms < FLASH_START_MS) continue;
-            drew |= drawSprites(poseStack, buffer, camera, effect.anchor, ms - FLASH_START_MS);
+            if (flowerEnabled && !effect.petals) {
+                effect.petals = true;
+                spawnPetals(effect.anchor, level.random);
+            }
+            if (spritesEnabled) drew |= drawSprites(poseStack, buffer, camera, effect.anchor, ms - FLASH_START_MS);
         }
 
         Iterator<Effect> ait = appears.values().iterator();
@@ -269,12 +388,19 @@ public final class CloneVanishFx {
             Effect a = ait.next();
             float ms = (now - a.startTick) * MS_PER_TICK;
             if (ms > APPEAR_MS + CLEANUP_MS) { ait.remove(); continue; }
-            if (!spritesEnabled || ms < 0.0F || ms > APPEAR_MS) continue;
+            if ((!spritesEnabled && !flowerEnabled) || ms < 0.0F) continue;
             Entity entity = level.getEntity(a.entityId);
             if (entity == null) continue;
+            if (flowerEnabled && !a.petals) {
+                a.petals = true;
+                spawnPetals(chestOf(entity, partialTick), level.random);
+            }
+            if (!spritesEnabled || ms > APPEAR_MS) continue;
             float t = (1.0F - ms / APPEAR_MS) * APPEAR_SPRITE_SPAN;
             drew |= drawSprites(poseStack, buffer, camera, chestOf(entity, partialTick), t);
         }
+
+        if (flowerEnabled && !petals.isEmpty()) drew |= drawPetals(poseStack, buffer, camera, dt);
         if (drew) buffer.endBatch();
     }
 
@@ -328,6 +454,10 @@ public final class CloneVanishFx {
     }
 
     private static void vertex(VertexConsumer vc, Matrix4f m, float x, float y, float z, float u, float v, int alpha) {
-        vc.addVertex(m, x, y, z).setColor(255, 255, 255, alpha).setUv(u, v).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(0.0F, 0.0F, 1.0F);
+        colored(vc, m, x, y, z, u, v, 255, 255, 255, alpha);
+    }
+
+    private static void colored(VertexConsumer vc, Matrix4f m, float x, float y, float z, float u, float v, int r, int g, int b, int alpha) {
+        vc.addVertex(m, x, y, z).setColor(r, g, b, alpha).setUv(u, v).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(0.0F, 0.0F, 1.0F);
     }
 }

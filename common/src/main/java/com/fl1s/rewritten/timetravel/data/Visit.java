@@ -24,6 +24,7 @@ public class Visit {
     public List<Long> totems = new ArrayList<>();
     public List<AttrChange> attrs = new ArrayList<>();
     public List<FishEvent> fishing = new ArrayList<>();
+    public List<Long> pearls = new ArrayList<>();
     public transient boolean wasDead;
     public transient boolean doomed;
     public transient int lastMode = -1;

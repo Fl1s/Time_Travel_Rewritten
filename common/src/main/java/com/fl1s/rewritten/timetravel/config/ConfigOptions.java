@@ -26,9 +26,15 @@ public final class ConfigOptions {
                     "Show the voice chat icon above players.",
                     true, v -> TimeTravel.showPlayerVoiceIcon = v),
 
-            new ConfigOption.Bool("past self", "knightOfTimeMode",
-                    "links your time travel abilities to a clock and gears or something.. anyways GO READ HOMESTUCK!!! >:[",
-                    false, v -> TimeTravel.knightOfTimeMode = v)
+            new ConfigOption.Bool("past self", "knightOfTimeMode", "links your time travel abilities to a clock and gears or something.. anyways GO READ HOMESTUCK!!! >:[", false, v -> {
+                TimeTravel.knightOfTimeMode = v;
+                if (v) TimeTravel.flowerManMode = false;
+            }),
+
+            new ConfigOption.Bool("past self", "flowerManMode", "With your powers combined! The TRUE power of friendship!", false, v -> {
+                TimeTravel.flowerManMode = v;
+                if (v) TimeTravel.knightOfTimeMode = false;
+            })
     );
 
     public static final List<ConfigOption> SERVER = List.of(
@@ -92,6 +98,10 @@ public final class ConfigOptions {
     }
 
     public static void afterApply() {
+        if (TimeTravel.knightOfTimeMode && TimeTravel.flowerManMode) {
+            TimeTravel.flowerManMode = false;
+        }
+
         if (!MocapAdapter.isReady()) return;
         MocapAdapter.setInvulnerablePlayback(!TimeTravel.hurtPastSelves, !TimeTravel.hurtPastSelves);
         TimeTravel.updateEntitiesToTrack(TimeTravel.trackItems);

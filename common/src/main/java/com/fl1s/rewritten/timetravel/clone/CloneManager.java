@@ -37,9 +37,12 @@ public final class CloneManager {
     public static final int CLONE_SYNC_SKIP_LIMIT = 8000;
     public static final int CLONE_SKIP_PER_TICK = 40;
     public static final int VANISH_LEAD_TICKS = 32;
+    public static final int FLOWER_VANISH_LEAD_TICKS = 64;
+
     public static final int APPEAR_SOUND_LEAD_TICKS = 0;
     public static final int VANISH_SOUND_LEAD_TICKS = 25;
     public static final int OG_VANISH_SOUND_LEAD_TICKS = 5;
+    public static final int FLOWER_VANISH_SOUND_LEAD_TICKS = 10;
     private static final float APPEAR_SOUND_PITCH = 1.8f;
 
     public record PendingPiece(long startTick, String recording, String playerName, int skipTicks,
@@ -119,7 +122,14 @@ public final class CloneManager {
                             visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id, true));
                 }
                 if (visit.departDir != 0 && visit.endDim != null && visit.endTick > now) {
-                    int lead = TimeTravel.oldSfx ? OG_VANISH_SOUND_LEAD_TICKS : VANISH_SOUND_LEAD_TICKS;
+                    int lead;
+                    if (TimeTravel.oldSfx) {
+                        lead = OG_VANISH_SOUND_LEAD_TICKS;
+                    } else if (TimeTravel.flowerManMode) {
+                        lead = FLOWER_VANISH_SOUND_LEAD_TICKS;
+                    } else {
+                        lead = VANISH_SOUND_LEAD_TICKS;
+                    }
                     long soundTick = visit.endTick - lead;
                     if (soundTick < now) soundTick = now;
                     pendingSounds.add(new PendingSound(soundTick, visit.endDim,
@@ -292,7 +302,8 @@ public final class CloneManager {
     private static void announceVanish(Clone g, long now) {
         if (g.vanishSent || g.endTick < 0 || g.pendingSkip > 0) return;
         long remaining = g.endTick - now;
-        if (remaining > VANISH_LEAD_TICKS) return;
+        int lead = TimeTravel.flowerManMode ? FLOWER_VANISH_LEAD_TICKS : VANISH_LEAD_TICKS;
+        if (remaining > lead) return;
         g.vanishSent = true;
         if (remaining <= 0) return;
         Entity entity = g.fx.entity();

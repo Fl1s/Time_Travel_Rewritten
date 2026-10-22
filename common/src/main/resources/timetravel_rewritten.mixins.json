@@ -49,7 +49,10 @@
     "PetCollarMixin",
     "ServerEntityMixin",
     "TotemMixin",
-    "PlayerInteractMixin"
+    "PlayerInteractMixin",
+    "FishingHookMixin",
+    "ClonePearlMixin",
+    "ProjectileHitMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",
