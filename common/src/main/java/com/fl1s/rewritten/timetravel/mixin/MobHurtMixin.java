@@ -78,7 +78,7 @@ public abstract class MobHurtMixin {
         Entity direct = source.getDirectEntity();
         if (direct != null && direct.getTags().contains(EntityJournal.TAG)) return;
         float lost = before - dragon.getHealth();
-        if (lost > 0.0f) MobTrailJournal.rewriteHealth(dragon.getUUID(), TimeTravel.sharedTick, lost);
+        if (lost > 0.0f) MobTrailJournal.rewriteHealth(dragon.getUUID(), TimeTravel.personalTick(sp), lost);
     }
 
     @Unique
