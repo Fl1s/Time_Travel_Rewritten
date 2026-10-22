@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Runtime manager for past-self ("clone") playback: queued pieces, active
@@ -468,34 +469,34 @@ public final class CloneManager {
         try {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim()));
             if (level == null) return;
-
-            if (TimeTravel.oldSfx) {
-                playOldSfx(level, s, head);
-                return;
-            }
-
-            SoundEvent sound = TTSounds.travel(s.dir() > 0);
-            float pitch = s.appear() ? APPEAR_SOUND_PITCH : 1.0f;
-            emit(level, head, s, sound, 1.6f, pitch);
+            emitTravel(level, s.x(), s.y(), s.z(), s.dir(), s.appear(),
+                    TimeTravel.individualTime ? listener -> TimeTravel.headOffsetOf(listener) == head : null);
         } catch (Exception e) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to play time sound", e);
         }
     }
 
-    private static void playOldSfx(ServerLevel level, PendingSound s, long head) {
-        if (s.dir() > 0) {
-            emit(level, head, s, SoundEvents.ENDERMAN_TELEPORT, 1.6f, 1.7f);
-            emit(level, head, s, SoundEvents.AMETHYST_BLOCK_CHIME, 1.4f, 1.5f);
-        } else {
-            emit(level, head, s, SoundEvents.ENDERMAN_TELEPORT, 1.6f, 0.6f);
-            emit(level, head, s, SoundEvents.AMETHYST_BLOCK_RESONATE, 1.4f, 0.5f);
+    public static void emitTravel(ServerLevel level, double x, double y, double z, int dir,
+                                  boolean appear, Predicate<ServerPlayer> audience) {
+        if (TimeTravel.oldSfx) {
+            if (dir > 0) {
+                emit(level, x, y, z, audience, SoundEvents.ENDERMAN_TELEPORT, 1.6f, 1.7f);
+                emit(level, x, y, z, audience, SoundEvents.AMETHYST_BLOCK_CHIME, 1.4f, 1.5f);
+            } else {
+                emit(level, x, y, z, audience, SoundEvents.ENDERMAN_TELEPORT, 1.6f, 0.6f);
+                emit(level, x, y, z, audience, SoundEvents.AMETHYST_BLOCK_RESONATE, 1.4f, 0.5f);
+            }
+            return;
         }
+        emit(level, x, y, z, audience, TTSounds.travel(dir > 0), 1.6f,
+                appear ? APPEAR_SOUND_PITCH : 1.0f);
     }
 
-    private static void emit(ServerLevel level, long head, PendingSound s,
-                             SoundEvent sound, float volume, float pitch) {
-        if (!TimeTravel.individualTime) {
-            level.playSound(null, s.x(), s.y(), s.z(), sound, SoundSource.PLAYERS, volume, pitch);
+    private static void emit(ServerLevel level, double x, double y, double z,
+                             Predicate<ServerPlayer> audience, SoundEvent sound,
+                             float volume, float pitch) {
+        if (audience == null) {
+            level.playSound(null, x, y, z, sound, SoundSource.PLAYERS, volume, pitch);
             return;
         }
 
@@ -503,12 +504,12 @@ public final class CloneManager {
         double radiusSq = radius * radius;
         ClientboundSoundPacket packet = new ClientboundSoundPacket(
                 BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), SoundSource.PLAYERS,
-                s.x(), s.y(), s.z(), volume, pitch, level.getRandom().nextLong());
+                x, y, z, volume, pitch, level.getRandom().nextLong());
 
         for (ServerPlayer listener : level.players()) {
             if (Clones.is(listener)) continue;
-            if (TimeTravel.headOffsetOf(listener) != head) continue;
-            if (listener.distanceToSqr(s.x(), s.y(), s.z()) > radiusSq) continue;
+            if (!audience.test(listener)) continue;
+            if (listener.distanceToSqr(x, y, z) > radiusSq) continue;
             listener.connection.send(packet);
         }
     }

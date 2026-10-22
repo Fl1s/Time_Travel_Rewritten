@@ -4,6 +4,7 @@ import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.api.TimelineEventBus;
 import com.fl1s.rewritten.timetravel.clone.CloneManager;
 import com.fl1s.rewritten.timetravel.clone.HeadTracking;
+import com.fl1s.rewritten.timetravel.clone.TravelFx;
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
@@ -93,6 +94,7 @@ public final class Timeline {
 
         TimeTravel.isLooping = false;
         TimeTravel.config.isLooping = false;
+        TravelFx.clear();
         HeadTracking.markDirty();
         TimeTravel.config.timelineTick = TimeTravel.sharedTick;
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
@@ -132,8 +134,11 @@ public final class Timeline {
         ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
         if (pd.getCurrentVisit() != null) s.visits.endVisit(pd, dir);
         pd.setLastJumpOrigin(from);
-        s.heads.move(pd, Math.max(0, TimeTravel.presentTick - target));
+        long fromOffset = pd.getTimeOffset();
+        long toOffset = Math.max(0, TimeTravel.presentTick - target);
+        s.heads.move(pd, toOffset);
         if (player != null) {
+            TravelFx.onTravel(player, fromOffset, toOffset, dir);
             s.visits.beginVisit(player, pd, dir);
             TimeTravel.sendSync(player);
         }
@@ -271,6 +276,7 @@ public final class Timeline {
         }
 
         BlockJournal.flushWatches();
+        TravelFx.tick();
         HeadTracking.refreshIfDirty();
 
         if (!TimeTravel.isLooping || !MocapAdapter.isReady()) return;
