@@ -343,7 +343,44 @@ public final class BlockJournal {
         STORE.entries().add(entry);
         index(entry);
         STORE.markDirty();
+        cascade(entry);
         HeadWorldView.onRecord(entry);
+    }
+
+    private static void cascade(Entry written) {
+        if (!TimeTravel.individualTime) return;
+        if (written.tick >= TimeTravel.presentTick) return;
+
+        long packed = BlockPos.asLong(written.x, written.y, written.z);
+        List<Entry> list = byPos.get(packed);
+        if (list == null) return;
+
+        Set<Entry> overwritten = new HashSet<>();
+        for (Entry e : list) {
+            if (e == written || !e.dim.equals(written.dim)) continue;
+            if (e.tick > written.tick || (e.tick == written.tick && e.seq > written.seq)) overwritten.add(e);
+        }
+        if (overwritten.isEmpty()) return;
+
+        list.removeIf(overwritten::contains);
+        STORE.entries().removeIf(overwritten::contains);
+        STORE.removeUpcoming(overwritten::contains);
+        STORE.markDirty();
+
+        TimeTravel.TIMELINE_LOGGER.info("Changed the past at {} {} {} - erased {} later record(s)",
+                written.x, written.y, written.z, overwritten.size());
+        HeadWorldView.onCascade(written.dim, packed);
+    }
+
+    static BlockState pastStateAt(String dim, long packedPos, long position) {
+        List<Entry> list = byPos.get(packedPos);
+        if (list == null) return null;
+        Entry best = null;
+        for (Entry e : list) {
+            if (!e.dim.equals(dim) || e.tick <= position) continue;
+            if (best == null || e.tick < best.tick || (e.tick == best.tick && e.seq < best.seq)) best = e;
+        }
+        return best == null ? null : oldState(best);
     }
 
     static long positionOf(PlayerData pd) {

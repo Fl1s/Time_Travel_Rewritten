@@ -159,6 +159,32 @@ public final class HeadWorldView {
         }
     }
 
+    public static void onCascade(String dim, long packedPos) {
+        if (!enabled() || views.isEmpty()) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+
+        Key key = new Key(dim, packedPos);
+        for (TimeHead head : heads.occupied()) {
+            if (head.offset() <= 0 || head.isEmpty()) continue;
+            Map<Key, BlockState> view = views.get(head.offset());
+            if (view == null) continue;
+
+            BlockState past = BlockJournal.pastStateAt(dim, packedPos, head.position());
+            if (past == null) {
+                if (view.remove(key) == null) continue;
+                ServerLevel level = TimeTravel.server == null ? null
+                        : TimeTravel.server.getLevel(Levels.key(dim));
+                if (level == null) continue;
+                BlockState present = level.getBlockState(BlockPos.of(packedPos));
+                for (ServerPlayer viewer : viewersOf(head.offset())) send(viewer, key, present);
+            } else if (!past.equals(view.get(key))) {
+                view.put(key, past);
+                for (ServerPlayer viewer : viewersOf(head.offset())) send(viewer, key, past);
+            }
+        }
+    }
+
     public static void onTravel(ServerPlayer player, long fromOffset, long toOffset) {
         if (!enabled() || player == null) return;
 
