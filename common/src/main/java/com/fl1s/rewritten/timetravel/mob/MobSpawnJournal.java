@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.compat.ironsspells.IrSpellsCompat;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
@@ -53,6 +54,7 @@ public final class MobSpawnJournal {
 
     static void registerInitial(ServerLevel level, Mob mob, CompoundTag tag, long tick) {
         sanitize(tag);
+        IrSpellsCompat.onRecord(mob, tag);
         if (canon.containsKey(mob.getUUID())) return;
         if (!TimeTravel.isLooping) return;
 
@@ -97,6 +99,7 @@ public final class MobSpawnJournal {
         CompoundTag tag = new CompoundTag();
         if (!mob.save(tag)) return;
         sanitize(tag);
+        IrSpellsCompat.onRecord(mob, tag);
 
         PlayerData pd = BlockJournal.nearestRecorder(level, mob.blockPosition());
 
@@ -189,6 +192,7 @@ public final class MobSpawnJournal {
             if (at == null) at = new Vec3(e.x, e.y, e.z);
             revived.moveTo(at.x, at.y, at.z, revived.getYRot(), revived.getXRot());
             level.addFreshEntity(revived);
+            IrSpellsCompat.onPuppetSpawned(revived, tag, level);
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to revive mob {}", e.uuid, ex);
         }

@@ -55,7 +55,8 @@
     "ProjectileHitMixin",
     "ServerCommonPacketListenerMixin",
     "BetterCombatAttackSoundMixin",
-    "ServerCommonPacketListenerSendMixin"
+    "ServerCommonPacketListenerSendMixin",
+    "WispMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",
