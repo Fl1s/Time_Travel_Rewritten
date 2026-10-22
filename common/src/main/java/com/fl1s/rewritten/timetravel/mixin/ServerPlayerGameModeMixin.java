@@ -87,6 +87,9 @@ public abstract class ServerPlayerGameModeMixin {
     private void tt$enterUseItemOn(ServerPlayer player, Level level, ItemStack stack, InteractionHand hand, BlockHitResult hitResult, CallbackInfoReturnable<InteractionResult> cir) {
         if (tt$isRealPlayer()) BlockJournal.enterAction();
         tt$scopedUseItemOn = tt$openScope();
+        if (tt$scopedUseItemOn) {
+            BlockJournal.materialize(player.serverLevel(), hitResult.getBlockPos());
+        }
     }
 
     @Inject(method = "useItemOn", at = @At("RETURN"))
@@ -136,6 +139,7 @@ public abstract class ServerPlayerGameModeMixin {
         BlockJournal.enterAction();
         tt$enteredDestroy = true;
         tt$scopedDestroy = tt$openScope();
+        if (tt$scopedDestroy) BlockJournal.materialize(player.serverLevel(), pos);
     }
 
     @Inject(method = "destroyBlock", at = @At("RETURN"))

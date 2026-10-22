@@ -372,6 +372,18 @@ public final class BlockJournal {
         HeadWorldView.onCascade(written.dim, packed);
     }
 
+    public static void materialize(ServerLevel level, BlockPos pos) {
+        if (level == null) return;
+        BlockState past = HeadWorldView.resolve(level, pos);
+        if (past == null || level.getBlockState(pos).equals(past)) return;
+        applying = true;
+        try {
+            level.setBlock(pos, past, QUIET_FLAGS);
+        } finally {
+            applying = false;
+        }
+    }
+
     static BlockState pastStateAt(String dim, long packedPos, long position) {
         List<Entry> list = byPos.get(packedPos);
         if (list == null) return null;
