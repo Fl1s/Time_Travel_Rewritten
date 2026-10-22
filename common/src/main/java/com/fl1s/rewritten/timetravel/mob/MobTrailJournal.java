@@ -591,6 +591,21 @@ public final class MobTrailJournal {
         return t == null ? null : t.samples;
     }
 
+    public static Sample sampleOf(UUID id, long tick) {
+        Track t = tracks.get(id);
+        if (t == null || t.samples.isEmpty()) return null;
+        return sampleAt(t.samples, tick);
+    }
+
+    public static boolean tracked(UUID id) {
+        Track t = tracks.get(id);
+        return t != null && !t.samples.isEmpty();
+    }
+
+    public static Set<UUID> trackedIds() {
+        return new HashSet<>(tracks.keySet());
+    }
+
     public static Vec3 positionAt(UUID id, long tick) {
         Track t = tracks.get(id);
         if (t == null || t.samples.isEmpty()) return null;
