@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -155,7 +156,7 @@ public final class BlockJournal {
         BlockState current = level.getBlockState(pos);
         if (current.is(requested.getBlock())) return false;
         String dim = Levels.canonicalId(level);
-        long now = TimeContext.now();
+        long now = positionOf(nearestRecorder(level, pos));
         for (Entry e : list) {
             if (!e.build || e.tick <= now || !e.dim.equals(dim)) continue;
             BlockState old = oldState(e);
@@ -262,12 +263,13 @@ public final class BlockJournal {
         String dim = Levels.canonicalId(level);
         String oldS = serialize(old);
         String newS = serialize(now);
+        long at = positionOf(pd);
 
         List<Entry> same = byPos.get(pos.asLong());
         if (same != null) {
             for (Entry e : same) {
                 if (!e.dim.equals(dim)) continue;
-                if (Math.abs(e.tick - TimeContext.now()) > DEDUP_TICKS) continue;
+                if (Math.abs(e.tick - at) > DEDUP_TICKS) continue;
                 if (!oldS.equals(e.oldState) || !newS.equals(e.newState)) continue;
                 return;
             }
@@ -282,7 +284,7 @@ public final class BlockJournal {
         entry.newState = newS;
         entry.oldParsed = old;
         entry.newParsed = now;
-        entry.tick = TimeContext.now();
+        entry.tick = at;
         entry.seq = STORE.nextSeq();
         entry.visit = visit;
         entry.root = actionDepth > 0
@@ -291,6 +293,30 @@ public final class BlockJournal {
         STORE.entries().add(entry);
         index(entry);
         STORE.markDirty();
+        HeadWorldView.onRecord(entry);
+    }
+
+    static long positionOf(PlayerData pd) {
+        if (!TimeTravel.individualTime || pd == null) return TimeContext.now();
+        TimeHeads heads = TimeTravel.heads();
+        return heads == null ? TimeContext.now() : heads.positionOf(pd);
+    }
+
+    static Journal<Entry> store() {
+        return STORE;
+    }
+
+    static List<Entry> allEntries() {
+        return STORE.entries();
+    }
+
+    static boolean hasChangeAfter(String dim, long packedPos, long position) {
+        List<Entry> list = byPos.get(packedPos);
+        if (list == null) return false;
+        for (Entry e : list) {
+            if (e.tick > position && e.dim.equals(dim)) return true;
+        }
+        return false;
     }
 
     private static boolean isSourceLiquid(BlockState state) {
@@ -586,12 +612,12 @@ public final class BlockJournal {
         }
     }
 
-    private static BlockState oldState(Entry e) {
+    static BlockState oldState(Entry e) {
         if (e.oldParsed == null) e.oldParsed = parse(e.oldState);
         return e.oldParsed;
     }
 
-    private static BlockState newState(Entry e) {
+    static BlockState newState(Entry e) {
         if (e.newParsed == null) e.newParsed = parse(e.newState);
         return e.newParsed;
     }

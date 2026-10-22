@@ -9,6 +9,11 @@ import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.mob.WardenEventJournal;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
+import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.network.protocol.game.ClientboundLevelEventPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
@@ -154,7 +159,7 @@ public final class EffectJournal {
         e.x = x;
         e.y = y;
         e.z = z;
-        e.tick = TimeContext.now();
+        e.tick = BlockJournal.positionOf(pd);
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         return e;
@@ -163,6 +168,71 @@ public final class EffectJournal {
     private static void add(Entry e) {
         STORE.entries().add(e);
         STORE.markDirty();
+        HeadWorldView.onEffect(e);
+    }
+
+    static void addUpcoming(long head, Entry e) {
+        STORE.addUpcoming(head, e);
+    }
+
+    static void openHead(long head, long position) {
+        STORE.rebuildUpcoming(head, position);
+    }
+
+    static void dropHead(long head) {
+        STORE.dropCursor(head);
+    }
+
+    static long tickOf(Entry e) {
+        return e.tick;
+    }
+
+    static void tickHead(long head, long position, List<ServerPlayer> viewers) {
+        if (viewers.isEmpty()) return;
+        STORE.tick(head, position, e -> playFor(e, viewers));
+    }
+
+    private static void playFor(Entry e, List<ServerPlayer> viewers) {
+        if (e.kind == SOUND && isPlayerHurt(e.id)) return;
+        ServerLevel level = TimeTravel.server == null ? null : TimeTravel.server.getLevel(Levels.key(e.dim));
+        if (level == null) return;
+        BlockPos pos = BlockPos.containing(e.x, e.y, e.z);
+
+        switch (e.kind) {
+            case SOUND -> {
+                ResourceLocation loc = cachedLocation(e);
+                if (loc == null) return;
+                BuiltInRegistries.SOUND_EVENT.getOptional(loc).ifPresent(sound -> {
+                    ClientboundSoundPacket packet = new ClientboundSoundPacket(
+                            BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), SoundSource.valueOf(e.source),
+                            e.x, e.y, e.z, e.volume, e.pitch, level.getRandom().nextLong());
+                    dispatch(viewers, e.dim, packet);
+                });
+            }
+            case LEVEL_EVENT -> dispatch(viewers, e.dim, new ClientboundLevelEventPacket(e.a, pos, e.b, false));
+            case ENTITY_EVENT -> {
+                Entity target = level.getEntity(UUID.fromString(e.id));
+                if (target != null && !target.isRemoved()) {
+                    dispatch(viewers, e.dim, new ClientboundEntityEventPacket(target, (byte) e.a));
+                }
+            }
+            case BLOCK_EVENT -> {
+                ResourceLocation loc = cachedLocation(e);
+                if (loc == null) return;
+                BuiltInRegistries.BLOCK.getOptional(loc).ifPresent(block ->
+                        dispatch(viewers, e.dim, new ClientboundBlockEventPacket(pos, block, e.a, e.b)));
+            }
+            default -> {
+            }
+        }
+    }
+
+    private static void dispatch(List<ServerPlayer> viewers, String dim, Packet<?> packet) {
+        for (ServerPlayer viewer : viewers) {
+            if (viewer.connection == null) continue;
+            if (!Levels.canonicalId(viewer.level()).equals(dim)) continue;
+            viewer.connection.send(packet);
+        }
     }
 
     public static void tick() {
