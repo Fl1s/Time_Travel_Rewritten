@@ -113,6 +113,12 @@ because it no longer happened. Anyone standing between your time and the present
 change under them as the new history reaches them. Breaking something a recorded build still depends
 on is refused instead, as it always was.
 
+Items a past self drops come back as real items when your clock reaches the moment they were dropped,
+so you can pick up what your past self mined just as you can with the whole server moving together.
+They are real entities in the shared world rather than something only you can see, which is what lets
+you pick them up - so a player at the present watches them appear too, and the copy your past self
+originally collected still exists.
+
 Mobs you have history for are rewound the same way: the live mob is hidden from you and a replay of
 its recorded path is streamed to you instead, so an iron golem walks the route it walked back then
 rather than wandering around as if nothing happened. A mob that had not spawned yet at your position

@@ -1,6 +1,8 @@
 package com.fl1s.rewritten.timetravel.entity;
 
 import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHead;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -123,6 +125,7 @@ public final class EntityJournal {
             if (owner != null && !(owner instanceof Player)) e.owner = owner.getUUID().toString();
         }
         STORE.entries().add(e);
+        publishToTrailingHeads(e);
         live.put(entity.getUUID(), e.dim);
         if (entity instanceof AbstractArrow) flying.put(entity.getUUID(), e);
         STORE.markDirty();
@@ -131,6 +134,39 @@ public final class EntityJournal {
     public static void tick() {
         STORE.tick(e -> spawn(e, e.fuse, e.nbt));
         trackLanding();
+    }
+
+    public static void openHead(long head, long position) {
+        STORE.rebuildUpcoming(head, position);
+    }
+
+    public static void dropHead(long head) {
+        STORE.dropCursor(head);
+    }
+
+    public static void tickHead(long head, long position) {
+        STORE.tick(head, position, EntityJournal::spawnIfAbsent);
+    }
+
+    private static void spawnIfAbsent(Entry e) {
+        ServerLevel level = levelOf(e.dim);
+        if (level == null) return;
+        if (e.uuid != null) {
+            Entity existing = findLoaded(level, e.uuid);
+            if (existing != null && !existing.isRemoved()) return;
+        }
+        spawn(e, e.fuse, e.nbt);
+    }
+
+    private static void publishToTrailingHeads(Entry e) {
+        if (!TimeTravel.individualTime) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (head.offset() <= 0 || head.isEmpty()) continue;
+            if (head.position() >= e.tick) continue;
+            STORE.addUpcoming(head.offset(), e);
+        }
     }
 
     private static void trackLanding() {
