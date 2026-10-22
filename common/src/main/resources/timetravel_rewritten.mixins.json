@@ -9,6 +9,8 @@
     "LevelChunkMixin",
     "EntityMoveMixin",
     "ServerGamePacketMoveMixin",
+    "PlayerListChatMixin",
+    "ServerPlayerChatMixin",
     "EntityInteractionMixin",
     "ServerLevelMixin",
     "LevelMixin",

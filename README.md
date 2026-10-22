@@ -113,6 +113,12 @@ because it no longer happened. Anyone standing between your time and the present
 change under them as the new history reaches them. Breaking something a recorded build still depends
 on is refused instead, as it always was.
 
+Chat belongs to a moment. What you say is recorded at your own time rather than the server's, so a
+line typed five minutes back becomes part of that moment's history and reaches anyone whose clock
+later passes through it. You hear what is said at your time, and arriving somewhere reloads that
+era's chat log. Players in other times do not hear you live, and you do not hear them - use
+`jump join` to share a time if you want to talk.
+
 Items a past self drops come back as real items when your clock reaches the moment they were dropped,
 so you can pick up what your past self mined just as you can with the whole server moving together.
 They are real entities in the shared world rather than something only you can see, which is what lets

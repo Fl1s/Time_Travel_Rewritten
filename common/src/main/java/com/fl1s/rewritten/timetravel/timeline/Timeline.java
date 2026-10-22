@@ -146,6 +146,7 @@ public final class Timeline {
             HeadMobView.onTravel(player);
             s.visits.beginVisit(player, pd, dir);
             TimeTravel.sendSync(player);
+            ChatTimeline.resendFor(player);
         }
     }
 
