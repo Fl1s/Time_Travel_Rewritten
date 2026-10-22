@@ -17,7 +17,8 @@ public final class HeadVisibility {
 
         long head = HeadInteraction.headOf(entity);
         if (head == HeadInteraction.UNBOUND) return true;
+        if (head == TimeTravel.headOffsetOf(viewer)) return true;
 
-        return head == TimeTravel.headOffsetOf(viewer);
+        return TravelFx.fading(entity, viewer);
     }
 }
