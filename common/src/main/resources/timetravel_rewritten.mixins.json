@@ -53,7 +53,8 @@
     "FishingHookMixin",
     "ClonePearlMixin",
     "ProjectileHitMixin",
-    "ServerCommonPacketListenerMixin"
+    "ServerCommonPacketListenerMixin",
+    "BetterCombatAttackSoundMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",

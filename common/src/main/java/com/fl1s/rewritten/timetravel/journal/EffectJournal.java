@@ -223,6 +223,21 @@ public final class EffectJournal {
         }
     }
 
+    public static void recordCompatSound(ServerLevel level, Player except, double x, double y, double z, ResourceLocation soundId, SoundSource source, float volume, float pitch) {
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || WardenEventJournal.suppressesEffects())
+            return;
+        PlayerData pd = recorder(level, except, x, y, z);
+        if (pd == null) return;
+        String idStr = soundId.toString();
+        if (isPlayerHurt(idStr)) return;
+        Entry e = create(SOUND, level, pd, x, y, z);
+        e.id = idStr;
+        e.source = source.name();
+        e.volume = volume;
+        e.pitch = pitch;
+        add(e);
+    }
+
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.eraseVisits(visitIds);
     }
