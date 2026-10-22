@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.clone.CloneManager;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.compat.anim.AnimRelay;
 import com.fl1s.rewritten.timetravel.compat.anim.AttackRelay;
+import com.fl1s.rewritten.timetravel.compat.anim.BetterCombatIdleRelay;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;

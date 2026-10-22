@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.clone;
 
 import com.fl1s.rewritten.timetravel.compat.anim.AttackRelay;
+import com.fl1s.rewritten.timetravel.compat.anim.BetterCombatIdleRelay;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Visit;
@@ -187,6 +188,7 @@ public final class CloneTracks {
         applyTotems(visit, clone, now);
         applyPearls(visit, clone, now);
         applyAttacks(visit, clone, now);
+        BetterCombatIdleRelay.apply(clone);
     }
 
     private static Visit.HealthChange healthAt(Visit visit, long now) {
