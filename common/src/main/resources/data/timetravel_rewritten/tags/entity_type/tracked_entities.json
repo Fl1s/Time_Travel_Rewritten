@@ -1,0 +1,157 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "irons_spellbooks:portal",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:shield",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:ice_tomb",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:ender_chain",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:ray_of_frost",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:eldritch_blast",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:spectral_hammer",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:target_area",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:wall_of_fire",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:fire_field",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:fire_eruption",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:healing_aoe",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:sunbeam",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:blizzard_aoe",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:ice_spike",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:frost_field",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:chain_lightning",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:arrow_volley",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:fang_swirl",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:gust",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:black_hole",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:poison_cloud",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:dragon_breath_pool",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:poison_splash",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:stomp_aoe",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:earthquake_aoe",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:lightning_strike",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:echoing_strike",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:ominous_fire_orb",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:undead_rift",
+      "required": false
+    },
+    {
+      "id": "minecraft:evoker_fangs",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:devour_jaw",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:echoing_sword",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:visual_falling_block",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:frozen_humanoid",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:sculk_tentacle",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:root",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:dead_king_soul",
+      "required": false
+    }
+  ]
+}

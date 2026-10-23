@@ -7,4 +7,5 @@ public class PlayerNeoForgeEvent {
     public static void dimensionChange(ServerPlayer player) {
         PlayerEvent.dimensionChange(player);
     }
+    public static void respawn(ServerPlayer player) {PlayerEvent.respawn(player);}
 }

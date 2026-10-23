@@ -3,6 +3,9 @@ package com.fl1s.rewritten.timetravel;
 import com.fl1s.rewritten.timetravel.clone.CloneFx;
 import com.fl1s.rewritten.timetravel.clone.CloneManager;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
+import com.fl1s.rewritten.timetravel.compat.anim.AnimRelay;
+import com.fl1s.rewritten.timetravel.compat.anim.AttackRelay;
+import com.fl1s.rewritten.timetravel.compat.anim.BetterCombatIdleRelay;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
@@ -40,6 +43,7 @@ public class TimeTravel {
 	public static final boolean DEBUG = Boolean.getBoolean("timetravel.debug");
 	public static MinecraftServer server;
 	public static ServerLevel serverLevel;
+	public static boolean isDarkHud;
 
 	public static boolean isLooping;
 	public static long timelineTick;
@@ -60,6 +64,11 @@ public class TimeTravel {
 	public static int entityTrackingDistance;
 	public static boolean trackChat;
 	public static boolean hurtPastSelves;
+
+	public static float hudScale = 1.0f;
+	public static boolean hudAtBottom = false;
+	public static boolean compactHud = false;
+	public static int maxHistorySize;
 
 	public static boolean voiceChatLoaded;
 	public static boolean voiceInteractionLoaded;
@@ -105,6 +114,8 @@ public class TimeTravel {
 
 	public static void init() {
 		TIMELINE_LOGGER.info("Initializing TimeTravel mod (Common)");
+		AnimRelay.init();
+		AttackRelay.init();
 	}
 
 	//timeline contol

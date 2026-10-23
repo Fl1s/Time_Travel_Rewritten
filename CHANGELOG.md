@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Added
+
+ - Combat roll, Better Combat and Emotecraft compat
+ - Gliders, Immersive Aircraft and Civillian Aviation compat
+ - Iron's Spells 'n Spellbooks (huge wip, much bugs)
+
+### Changed
+
+ - Timeline hud
+
+### Fixed
+
+ - Paradox death chain
+ - oldSfx delay
+
 ## [1.21.1-0.11.2] - 2026-11-22
 
 ### Added

@@ -52,7 +52,14 @@
     "PlayerInteractMixin",
     "FishingHookMixin",
     "ClonePearlMixin",
-    "ProjectileHitMixin"
+    "ProjectileHitMixin",
+    "ServerCommonPacketListenerMixin",
+    "BetterCombatAttackSoundMixin",
+    "ServerCommonPacketListenerSendMixin",
+    "WispMixin",
+    "SpectralHammerMixin",
+    "IronSpellsEntityTickMixin",
+    "MagicManagerMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",

@@ -1,25 +1,33 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
+import com.fl1s.rewritten.timetravel.TimeTravel;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.vehicle.AbstractMinecart;
 import net.minecraft.world.entity.vehicle.Boat;
 
 import java.util.Set;
 
 public final class VehicleJournal {
-    private VehicleJournal() {}
+    private VehicleJournal() {
+    }
+
+    public static final TagKey<EntityType<?>> TRACKED_VEHICLES = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(TimeTravel.MOD_ID, "tracked_vehicles"));
 
     public static boolean isTracked(Entity e) {
-        return e instanceof AbstractMinecart
-                || e instanceof Boat;
+        if (e == null) return false;
+        if (e instanceof AbstractMinecart || e instanceof Boat) return true;
+        return e.getType().is(TRACKED_VEHICLES);
     }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
         if (!isTracked(entity)) return;
         VehicleSpawnJournal.onSpawn(level, entity);
-        VehicleTrailJournal.onSpawnSeen(entity.getUUID(),
-                level.dimension().location().toString());
+        VehicleTrailJournal.onSpawnSeen(entity.getUUID(), level.dimension().location().toString());
     }
 
     public static void onRemoved(Entity e, Entity.RemovalReason reason) {

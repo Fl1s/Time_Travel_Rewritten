@@ -71,9 +71,6 @@ public final class EntityJournal {
         if (e instanceof ExperienceOrb) return true;
         if (e instanceof PrimedTnt) return true;
         if (e instanceof ItemEntity item) return !(item.getOwner() instanceof Player);
-        if (e instanceof Projectile) {
-            return !(e instanceof ThrownEnderpearl || e instanceof FishingHook || e instanceof FireworkRocketEntity);
-        }
         return false;
     }
 
@@ -194,7 +191,9 @@ public final class EntityJournal {
             if (fuse > 0) tag.putShort("fuse", (short) fuse);
             tag.putBoolean("DropItem", false);
             Entity entity = EntityType.loadEntityRecursive(tag, level, en -> en);
+            if (entity instanceof Projectile) return;
             if (entity == null) return;
+            entity.setUUID(e.uuid);
             entity.addTag(TAG);
             if (level.addFreshEntity(entity)) {
                 e.uuid = entity.getUUID();

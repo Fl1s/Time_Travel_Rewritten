@@ -10,6 +10,7 @@ import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundStopSoundPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -58,7 +59,8 @@ public final class EffectJournal {
     private static boolean replaying = false;
 
     public static void recordSound(ServerLevel level, Player except, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch) {
-        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || WardenEventJournal.suppressesEffects()) return;
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || WardenEventJournal.suppressesEffects())
+            return;
         PlayerData pd = recorder(level, except, x, y, z);
         if (pd == null) return;
         Optional<ResourceKey<SoundEvent>> key = sound.unwrapKey();
@@ -108,7 +110,9 @@ public final class EffectJournal {
 
     public static void recordEntityEvent(ServerLevel level, Entity entity, byte event) {
         if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
-        if (!(entity instanceof TamableAnimal) || (event != 6 && event != 7)) return;
+        boolean tameableEvent = entity instanceof TamableAnimal && (event == 6 || event == 7);
+        boolean hurtFlash = event == 2 && entity instanceof net.minecraft.world.entity.player.Player && !Clones.is(entity);
+        if (!tameableEvent && !hurtFlash) return;
         PlayerData pd = recorder(level, null, entity.getX(), entity.getY(), entity.getZ());
         if (pd == null) return;
         Entry e = create(ENTITY_EVENT, level, pd, entity.getX(), entity.getY(), entity.getZ());
@@ -157,6 +161,27 @@ public final class EffectJournal {
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         return e;
+    }
+
+    public static void onJumpBack(long to) {
+        if (TimeTravel.server == null) return;
+        Set<String> ids = new HashSet<>();
+        for (Entry e : STORE.entries()) {
+            if (e.kind != SOUND) continue;
+            if (e.tick <= to) continue;
+            if (e.id == null) continue;
+            ids.add(e.id);
+        }
+        if (ids.isEmpty()) return;
+        for (String id : ids) {
+            ResourceLocation loc = ResourceLocation.tryParse(id);
+            if (loc == null) continue;
+            ClientboundStopSoundPacket packet = new ClientboundStopSoundPacket(loc, null);
+            for (var p : TimeTravel.server.getPlayerList().getPlayers()) {
+                if (Clones.is(p)) continue;
+                p.connection.send(packet);
+            }
+        }
     }
 
     private static void add(Entry e) {
@@ -210,7 +235,21 @@ public final class EffectJournal {
                     }
                 }
                 case ENTITY_EVENT -> {
-                    Entity target = level.getEntity(UUID.fromString(e.id));
+                    UUID id;
+                    try {
+                        id = UUID.fromString(e.id);
+                    } catch (Exception ex) {
+                        return;
+                    }
+                    Entity target = level.getEntity(id);
+                    if (target == null || target.isRemoved()) {
+                        for (ServerPlayer p : level.players()) {
+                            if (p.getUUID().equals(id)) {
+                                target = p;
+                                break;
+                            }
+                        }
+                    }
                     if (target != null && !target.isRemoved()) level.broadcastEntityEvent(target, (byte) e.a);
                 }
                 default -> {
@@ -221,6 +260,21 @@ public final class EffectJournal {
         } finally {
             replaying = false;
         }
+    }
+
+    public static void recordCompatSound(ServerLevel level, Player except, double x, double y, double z, ResourceLocation soundId, SoundSource source, float volume, float pitch) {
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || WardenEventJournal.suppressesEffects())
+            return;
+        PlayerData pd = recorder(level, except, x, y, z);
+        if (pd == null) return;
+        String idStr = soundId.toString();
+        if (isPlayerHurt(idStr)) return;
+        Entry e = create(SOUND, level, pd, x, y, z);
+        e.id = idStr;
+        e.source = source.name();
+        e.volume = volume;
+        e.pitch = pitch;
+        add(e);
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

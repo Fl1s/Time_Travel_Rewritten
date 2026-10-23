@@ -42,6 +42,8 @@
   "key.timetravel_rewritten.cancel": "Cancel time jump",
   "hud.timetravel_rewritten.time": "Server time: %s",
   "hud.timetravel_rewritten.target": "Jump to: %s (%s)",
+  "hud.timetravel_rewritten.target.past": "◀ %s  (%s)",
+  "hud.timetravel_rewritten.target.future": "%s  (%s) ▶",
   "message.timetravel_rewritten.no_permission": "Only operators can travel in time on this server",
   "neoforge.configuration.section.timetravel_rewritten.client.title": "Client",
   "neoforge.configuration.section.timetravel_rewritten.server.title": "Server",

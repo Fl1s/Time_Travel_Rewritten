@@ -216,6 +216,13 @@ public class TimeTravelNeoForge {
         }
     }
 
+    @SubscribeEvent
+    public void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (event.getEntity() instanceof ServerPlayer sp) {
+            PlayerNeoForgeEvent.respawn(sp);
+        }
+    }
+
     // FIXME - remove when mocap updates as it implements its own EmbeddedChannel
     @SubscribeEvent
     public void onEntityJoinLevel(EntityJoinLevelEvent event) {

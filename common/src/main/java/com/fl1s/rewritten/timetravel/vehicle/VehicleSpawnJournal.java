@@ -200,6 +200,7 @@ public final class VehicleSpawnJournal {
             CompoundTag tag = TagParser.parseTag(e.nbt);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (revived == null) return;
+            revived.setUUID(e.uuid);
             Vec3 at = VehicleTrailJournal.positionAt(e.uuid, now);
             if (at == null) at = new Vec3(e.x, e.y, e.z);
             revived.moveTo(at.x, at.y, at.z, revived.getYRot(), revived.getXRot());

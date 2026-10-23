@@ -61,8 +61,14 @@ public final class JournalRegistry {
         register("chat", ChatTimeline::load, ChatTimeline::save, ChatTimeline::saveIfDirty, ChatTimeline::clear, ChatTimeline::rebuildUpcoming, ChatTimeline::tick, ChatTimeline::onJump, ChatTimeline::eraseVisits);
         register("advancements", AdvancementTimeline::load, AdvancementTimeline::save, AdvancementTimeline::saveIfDirty, AdvancementTimeline::clear, AdvancementTimeline::rebuildUpcoming, AdvancementTimeline::tick, AdvancementTimeline::onJump, AdvancementTimeline::eraseVisits);
         register("effects", EffectJournal::load, EffectJournal::save, EffectJournal::saveIfDirty, EffectJournal::clear, EffectJournal::rebuildUpcoming, EffectJournal::tick, EffectJournal::onJump, EffectJournal::eraseVisits);
+        register("anims", AnimJournal::load, AnimJournal::save, AnimJournal::saveIfDirty, AnimJournal::clear, AnimJournal::rebuildUpcoming, AnimJournal::tick, AnimJournal::onJump, AnimJournal::eraseVisits);
+        register("attacks", AttackJournal::load, AttackJournal::save, AttackJournal::saveIfDirty, AttackJournal::clear, AttackJournal::rebuildUpcoming, AttackJournal::tick, AttackJournal::onJump, AttackJournal::eraseVisits);
+        register("projectiles", ProjectileJournal::load, ProjectileJournal::save, ProjectileJournal::saveIfDirty, ProjectileJournal::clear, ProjectileJournal::rebuildUpcoming, ProjectileJournal::tick, ProjectileJournal::onJump, ProjectileJournal::eraseVisits);
+        register("tracked_entities", TrackedEntityJournal::load, TrackedEntityJournal::save, TrackedEntityJournal::saveIfDirty, TrackedEntityJournal::clear, TrackedEntityJournal::rebuildUpcoming, TrackedEntityJournal::tick, TrackedEntityJournal::onJump, TrackedEntityJournal::eraseVisits);
+        register("particles", ParticleJournal::load, ParticleJournal::save, ParticleJournal::saveIfDirty, ParticleJournal::clear, ParticleJournal::rebuildUpcoming, ParticleJournal::tick, ParticleJournal::onJump, ParticleJournal::eraseVisits);
         register("weather", WeatherJournal::load, WeatherJournal::save, WeatherJournal::saveIfDirty, WeatherJournal::clear, WeatherJournal::rebuildUpcoming, WeatherJournal::tick, WeatherJournal::onJump, WeatherJournal::eraseVisits);
-        register("client_fx", NOOP, NOOP, NOOP, NOOP, NOOP, NOOP, (from, to) -> TimeTravel.broadcastStopDragonSound(), ids -> {});
+        register("client_fx", NOOP, NOOP, NOOP, NOOP, NOOP, NOOP, (from, to) -> TimeTravel.broadcastStopDragonSound(), ids -> {
+        });
     }
 
     public void register(String name, Runnable load, Runnable save, Runnable saveIfDirty, Runnable clear, Runnable rebuildUpcoming, Runnable tick, BiConsumer<Long, Long> onJump, Consumer<Set<Integer>> eraseVisits) {
