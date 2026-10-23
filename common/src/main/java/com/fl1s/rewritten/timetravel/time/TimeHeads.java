@@ -7,6 +7,7 @@ import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +98,45 @@ public final class TimeHeads {
         return count;
     }
 
+    public void shiftAll(long delta) {
+        if (delta <= 0) return;
+        List<TimeHead> previous = new ArrayList<>(heads.values());
+        heads.clear();
+        for (TimeHead head : previous) {
+            if (head.isEmpty()) continue;
+            TimeHead moved = of(head.offset() + delta);
+            for (String name : head.occupants()) moved.add(name);
+        }
+        if (TimeTravel.timelineSceneManager != null) {
+            TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.setTimeOffset(pd.getTimeOffset() + delta));
+        }
+        if (TimeTravel.config != null) TimeTravel.config.headShift += delta;
+        HeadTracking.markDirty();
+    }
+
+    public static long shifted(long head, long delta) {
+        return head >= 0 ? head + delta : head;
+    }
+
+    public static <V> void shiftKeys(Map<Long, V> map, long delta) {
+        Map<Long, V> moved = new HashMap<>();
+        for (Map.Entry<Long, V> entry : map.entrySet()) moved.put(shifted(entry.getKey(), delta), entry.getValue());
+        map.clear();
+        map.putAll(moved);
+    }
+
+    public static long toTag(long head) {
+        return head - storedShift();
+    }
+
+    public static long fromTag(long value) {
+        return value + storedShift();
+    }
+
+    private static long storedShift() {
+        return TimeTravel.config == null ? 0 : TimeTravel.config.headShift;
+    }
+
     public void collapseToShared() {
         moveAll(sharedOffset);
     }
@@ -105,6 +145,7 @@ public final class TimeHeads {
         HeadTracking.markDirty();
         heads.clear();
         sharedOffset = 0;
+        if (TimeTravel.config != null) TimeTravel.config.headShift = 0;
         if (TimeTravel.timelineSceneManager != null) {
             TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.setTimeOffset(0));
         }

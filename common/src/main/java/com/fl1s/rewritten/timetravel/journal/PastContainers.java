@@ -7,6 +7,7 @@ import com.fl1s.rewritten.timetravel.mixin.CompoundContainerAccessor;
 import com.fl1s.rewritten.timetravel.mixin.SlotAccessor;
 import com.fl1s.rewritten.timetravel.time.HeadScope;
 import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
@@ -35,10 +36,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class PastContainers {
 
@@ -251,6 +254,26 @@ public final class PastContainers {
 
     public static void dropHead(long head) {
         edits.remove(head);
+    }
+
+    public static void shiftHeads(long delta) {
+        TimeHeads.shiftKeys(edits, delta);
+        if (TimeTravel.server == null) return;
+        Set<PastContainer> open = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (ServerPlayer player : TimeTravel.server.getPlayerList().getPlayers()) {
+            for (Slot slot : player.containerMenu.slots) collect(slot.container, open);
+        }
+        for (PastContainer past : open) past.shift(delta);
+    }
+
+    private static void collect(Container container, Set<PastContainer> out) {
+        if (container instanceof PastContainer past) {
+            out.add(past);
+        } else if (container instanceof CompoundContainer compound) {
+            CompoundContainerAccessor parts = (CompoundContainerAccessor) compound;
+            collect(parts.tt$first(), out);
+            collect(parts.tt$second(), out);
+        }
     }
 
     public static void clear() {

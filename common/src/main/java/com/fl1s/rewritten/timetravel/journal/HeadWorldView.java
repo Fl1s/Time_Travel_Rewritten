@@ -43,6 +43,10 @@ public final class HeadWorldView {
         return !views.isEmpty();
     }
 
+    public static void shiftHeads(long delta) {
+        TimeHeads.shiftKeys(views, delta);
+    }
+
     public static BlockState resolve(Level level, BlockPos pos) {
         long head = HeadScope.current();
         if (head <= 0 || level == null) return null;

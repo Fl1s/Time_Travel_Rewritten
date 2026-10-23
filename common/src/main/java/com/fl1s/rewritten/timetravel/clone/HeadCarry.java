@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.clone;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -37,6 +38,11 @@ public final class HeadCarry {
 
     public static boolean isCarried(UUID id) {
         return carried.containsKey(id);
+    }
+
+    public static void shiftHeads(long delta) {
+        carried.replaceAll((id, carry) -> new Carry(TimeHeads.shifted(carry.head(), delta), carry.level()));
+        trips.replaceAll((id, carry) -> new Carry(TimeHeads.shifted(carry.head(), delta), carry.level()));
     }
 
     public static long headOf(Entity entity) {
@@ -115,7 +121,7 @@ public final class HeadCarry {
     private static void carry(Entity entity, long head) {
         if (head <= 0) carried.remove(entity.getUUID());
         else if (entity.level() instanceof ServerLevel level) carried.put(entity.getUUID(), new Carry(head, level));
-        retag(entity, CARRY_PREFIX, head > 0 ? head : null);
+        retag(entity, CARRY_PREFIX, head > 0 ? TimeHeads.toTag(head) : null);
         follow(entity, head);
         HeadTracking.markDirty();
     }
@@ -192,7 +198,7 @@ public final class HeadCarry {
 
     private static long parseHead(String text) {
         try {
-            return Long.parseLong(text);
+            return TimeHeads.fromTag(Long.parseLong(text));
         } catch (NumberFormatException ex) {
             return NONE;
         }

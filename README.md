@@ -99,6 +99,11 @@ What changes for a player in the past:
 - `jump join <player>` matches another traveller's time, and `jump ... bring <targets>` takes players
   with you.
 
+Jumping forward past the present works too, and takes the present with you. Everyone at the present,
+online or not, skips ahead to where you land, and lit TNT, fusing creepers and furnaces catch up on the
+skipped time just as they do when the whole server jumps. Players already in the past keep their own
+time, which leaves them further behind the present than before.
+
 The static world rewinds **for the traveller only**. Blocks you are behind are shown to you as they
 were at your own position, and as your clock advances you watch the recorded changes happen in front
 of you. Recorded explosions, sounds and chest lids replay to you at the moment you reach them. None

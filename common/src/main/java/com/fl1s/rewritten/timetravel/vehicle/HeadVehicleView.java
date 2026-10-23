@@ -68,6 +68,11 @@ public final class HeadVehicleView {
         return entity.getTags().contains(TAG) && !copies.containsKey(entity.getUUID());
     }
 
+    public static void shiftHeads(long delta) {
+        for (Copy copy : copies.values()) copy.head = TimeHeads.shifted(copy.head, delta);
+        TimeHeads.shiftKeys(byHead, delta);
+    }
+
     public static boolean visibleTo(Entity entity, ServerPlayer viewer) {
         if (!enabled() || !VehicleJournal.isTracked(entity) || Clones.is(viewer)) return true;
         Copy copy = copies.get(entity.getUUID());
@@ -139,7 +144,7 @@ public final class HeadVehicleView {
         long head;
         UUID original;
         try {
-            head = Long.parseLong(parts[0]);
+            head = TimeHeads.fromTag(Long.parseLong(parts[0]));
             original = UUID.fromString(parts[1]);
         } catch (IllegalArgumentException ex) {
             return false;
@@ -170,7 +175,7 @@ public final class HeadVehicleView {
     private static void retag(Entity entity, long head, UUID original) {
         String old = copyTagOf(entity);
         if (old != null) entity.removeTag(old);
-        if (head > 0) entity.addTag(COPY_PREFIX + head + "/" + original);
+        if (head > 0) entity.addTag(COPY_PREFIX + TimeHeads.toTag(head) + "/" + original);
     }
 
     private static boolean existsAt(VehicleSpawnJournal.Entry e, long position) {
@@ -250,7 +255,7 @@ public final class HeadVehicleView {
         if (at == null) at = new Vec3(e.x, e.y, e.z);
         if (!level.hasChunkAt(BlockPos.containing(at))) return null;
 
-        UUID id = UUID.nameUUIDFromBytes(("vehicle/" + head + "/" + e.uuid).getBytes(StandardCharsets.UTF_8));
+        UUID id = UUID.nameUUIDFromBytes(("vehicle/" + TimeHeads.toTag(head) + "/" + e.uuid).getBytes(StandardCharsets.UTF_8));
         Entity stale = level.getEntity(id);
         if (stale != null && isOrphan(stale)) {
             if (adopt(stale)) return null;

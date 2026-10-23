@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 
 import java.lang.reflect.Type;
@@ -31,6 +32,8 @@ import java.util.function.ToIntFunction;
 public final class Journal<E> {
     public static final long SHARED_CURSOR = Long.MIN_VALUE;
 
+    private static final List<Journal<?>> ALL = new ArrayList<>();
+
     private final List<E> entries = new ArrayList<>();
     private final Map<Long, PriorityQueue<E>> cursors = new HashMap<>();
     private final Comparator<E> order;
@@ -49,6 +52,11 @@ public final class Journal<E> {
         this.seqFn = seqFn;
         this.visitFn = visitFn;
         this.order = Comparator.comparingLong(tickFn).thenComparingLong(seqFn);
+        ALL.add(this);
+    }
+
+    public static void shiftAllHeads(long delta) {
+        for (Journal<?> journal : ALL) TimeHeads.shiftKeys(journal.cursors, delta);
     }
 
     public List<E> entries() {

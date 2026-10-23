@@ -20,6 +20,7 @@ public class TimeTravelConfig {
     public long timelineTick = 0;
     public long presentTick = 0;
     public long dayTimeOrigin = 0;
+    public long headShift = 0;
     public int nextVisitId = 1;
     public int configVersion = 0;
 
