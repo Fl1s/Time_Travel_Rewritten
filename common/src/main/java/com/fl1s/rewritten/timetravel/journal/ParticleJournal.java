@@ -84,9 +84,7 @@ public final class ParticleJournal {
         if (ReplayState.SUPPRESS) return;
         if (replaying) return;
         if (TimeTravel.timelineSceneManager == null) return;
-        // count == 0 is valid: the client spawns one particle and uses dx/dy/dz as its velocity
         if (count < 0 || options == null) return;
-        // A replayed mob (Wisp...) ticks on its own and emits particles that are already in the journal
         if (PuppetGuard.isTickingPuppetMob()) return;
 
         PlayerData pd = BlockJournal.nearestRecorder(level, BlockPos.containing(x, y, z));
