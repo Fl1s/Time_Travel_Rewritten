@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
+import com.fl1s.rewritten.timetravel.journal.HeadItemView;
 import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -15,7 +16,7 @@ public abstract class ItemEntityMergeMixin {
     private void tt$noMergeTracked(CallbackInfoReturnable<Boolean> cir) {
         if (!TimeTravel.isLooping) return;
         ItemEntity self = (ItemEntity) (Object) this;
-        if (ItemFlowJournal.isTracked(self.getUUID())) {
+        if (ItemFlowJournal.isTracked(self.getUUID()) || HeadItemView.isCopy(self)) {
             cir.setReturnValue(false);
         }
     }

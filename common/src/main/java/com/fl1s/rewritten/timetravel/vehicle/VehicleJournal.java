@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
+import com.fl1s.rewritten.timetravel.data.Levels;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.vehicle.AbstractMinecart;
@@ -16,10 +17,10 @@ public final class VehicleJournal {
     }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
-        if (!isTracked(entity)) return;
+        if (!isTracked(entity) || HeadVehicleView.isCopy(entity)) return;
         VehicleSpawnJournal.onSpawn(level, entity);
         VehicleTrailJournal.onSpawnSeen(entity.getUUID(),
-                level.dimension().location().toString());
+                Levels.canonicalId(level));
     }
 
     public static void onRemoved(Entity e, Entity.RemovalReason reason) {

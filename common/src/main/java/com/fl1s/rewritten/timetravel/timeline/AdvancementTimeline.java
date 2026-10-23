@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.timeline;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -44,7 +45,7 @@ public final class AdvancementTimeline {
         if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return;
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = pd.getNickname();

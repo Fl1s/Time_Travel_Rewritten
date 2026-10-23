@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
@@ -30,7 +31,7 @@ public abstract class PlayerAttackMixin {
                 ci.cancel();
                 return;
             }
-            long now = TimeTravel.timelineTick;
+            long now = TimeContext.positionIn(sp.level());
             if (VehicleSpawnJournal.isProtected(target.getUUID(), now) || VehicleTrailJournal.hasFutureSamples(target.getUUID(), now)) {
                 if (target.level() instanceof ServerLevel sl) DoomedFeedback.tryShowVehicle(sp, sl);
                 ci.cancel();

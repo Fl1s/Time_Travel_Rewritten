@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import net.minecraft.core.BlockPos;
@@ -53,7 +54,7 @@ public final class ProcessJournal {
     }
 
     private static Key key(ServerLevel level, BlockPos pos) {
-        return new Key(level.dimension().location().toString(), pos.asLong());
+        return new Key(Levels.canonicalId(level), pos.asLong());
     }
 
     private static ServerLevel levelOf(Key k) {
@@ -111,7 +112,7 @@ public final class ProcessJournal {
 
         Snap s = new Snap();
         s.key = k;
-        s.tick = TimeTravel.timelineTick;
+        s.tick = TimeContext.now();
         s.seq = nextSeq++;
         s.nbt = nbt;
         s.event = event;
@@ -171,7 +172,7 @@ public final class ProcessJournal {
     }
 
     public static void tick() {
-        while (!upcomingEvents.isEmpty() && upcomingEvents.peek().tick <= TimeTravel.timelineTick) {
+        while (!upcomingEvents.isEmpty() && upcomingEvents.peek().tick <= TimeContext.now()) {
             Snap s = upcomingEvents.poll();
             ServerLevel level = levelOf(s.key);
             if (level == null) continue;
@@ -225,10 +226,10 @@ public final class ProcessJournal {
             }
         }
 
-        if (!tracked.isEmpty() && pendingSim.isEmpty() && TimeTravel.timelineTick % 20 == 0) {
+        if (!tracked.isEmpty() && pendingSim.isEmpty() && TimeTravel.sharedTick % 20 == 0) {
             snapshotAll();
         }
-        if (!tracked.isEmpty() && TimeTravel.timelineTick % 1200 == 0) {
+        if (!tracked.isEmpty() && TimeTravel.sharedTick % 1200 == 0) {
             pruneTracked();
         }
     }
@@ -322,7 +323,7 @@ public final class ProcessJournal {
         upcomingEvents.clear();
         for (List<Snap> list : snaps.values()) {
             for (Snap s : list) {
-                if (s.event && s.tick > TimeTravel.timelineTick) upcomingEvents.add(s);
+                if (s.event && s.tick > TimeContext.now()) upcomingEvents.add(s);
             }
         }
     }

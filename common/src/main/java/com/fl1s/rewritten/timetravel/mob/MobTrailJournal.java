@@ -1,5 +1,8 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.clone.HeadCarry;
+import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.BossFightJournal;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
@@ -173,9 +176,9 @@ public final class MobTrailJournal {
 
     public static void seedInitial() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             for (Entity entity : level.getAllEntities()) {
                 if (!(entity instanceof Mob mob) || Clones.is(mob)) continue;
                 seedFor(mob, dim, now);
@@ -193,7 +196,7 @@ public final class MobTrailJournal {
 
     private static void sample(boolean onlyOutOfTime) {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
 
         if (now % 100 == 0) discoverBosses();
         sampledThisTick.clear();
@@ -201,13 +204,13 @@ public final class MobTrailJournal {
         double r2 = r * r;
 
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             List<ServerPlayer> viewers = new ArrayList<>(level.players());
             if (viewers.isEmpty()) continue;
 
             for (ServerPlayer p : viewers) {
                 for (Mob mob : candidates(level, p, r)) {
-                    if (Clones.is(mob)) continue;
+                    if (Clones.is(mob) || HeadCarry.isCarried(mob.getUUID())) continue;
                     if (mob.isDeadOrDying()) continue;
                     UUID id = mob.getUUID();
                     if (isBoss(mob)) bosses.add(id);
@@ -293,7 +296,7 @@ public final class MobTrailJournal {
 
     public static void apply() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
 
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             UUID id = en.getKey();
@@ -494,6 +497,21 @@ public final class MobTrailJournal {
         return t == null ? null : t.samples;
     }
 
+    public static Sample sampleOf(UUID id, long tick) {
+        Track t = tracks.get(id);
+        if (t == null || t.samples.isEmpty()) return null;
+        return sampleAt(t.samples, tick);
+    }
+
+    public static boolean tracked(UUID id) {
+        Track t = tracks.get(id);
+        return t != null && !t.samples.isEmpty();
+    }
+
+    public static Set<UUID> trackedIds() {
+        return new HashSet<>(tracks.keySet());
+    }
+
     public static Vec3 positionAt(UUID id, long tick) {
         Track t = tracks.get(id);
         if (t == null || t.samples.isEmpty()) return null;
@@ -521,14 +539,14 @@ public final class MobTrailJournal {
                 releaseAllPuppets();
                 wasReplaying = false;
             }
-            if (TimeTravel.timelineTick % 100 == 0) sweepStrayPuppets(false);
+            if (TimeTravel.sharedTick % 100 == 0) sweepStrayPuppets(false);
             sample();
         }
     }
 
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         lastBossHealth.clear();
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             Track t = en.getValue();

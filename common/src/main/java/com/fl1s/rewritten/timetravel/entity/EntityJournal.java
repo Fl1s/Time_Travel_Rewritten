@@ -1,5 +1,8 @@
 package com.fl1s.rewritten.timetravel.entity;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHead;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -96,7 +99,7 @@ public final class EntityJournal {
         if (orb && ItemFlowJournal.isCloneKill()) return;
         if (MobJournal.isApplying()) return;
         if (entity instanceof AreaEffectCloud) {
-            clouds.put(entity.getUUID(), new CloudRef(level.dimension().location().toString(), TimeTravel.timelineTick));
+            clouds.put(entity.getUUID(), new CloudRef(Levels.canonicalId(level), TimeContext.now()));
             return;
         }
         if (!isTracked(entity)) return;
@@ -109,10 +112,10 @@ public final class EntityJournal {
         tag.remove("UUID");
 
         Entry e = new Entry();
-        e.dim = level.dimension().location().toString();
+        e.dim = Levels.canonicalId(level);
         e.nbt = tag.toString();
         e.item = entity instanceof ItemEntity;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.uuid = entity.getUUID();
@@ -122,6 +125,7 @@ public final class EntityJournal {
             if (owner != null && !(owner instanceof Player)) e.owner = owner.getUUID().toString();
         }
         STORE.entries().add(e);
+        publishToTrailingHeads(e);
         live.put(entity.getUUID(), e.dim);
         if (entity instanceof AbstractArrow) flying.put(entity.getUUID(), e);
         STORE.markDirty();
@@ -130,6 +134,40 @@ public final class EntityJournal {
     public static void tick() {
         STORE.tick(e -> spawn(e, e.fuse, e.nbt));
         trackLanding();
+    }
+
+    public static void openHead(long head, long position) {
+        STORE.rebuildUpcoming(head, position);
+    }
+
+    public static void dropHead(long head) {
+        STORE.dropCursor(head);
+    }
+
+    public static void tickHead(long head, long position) {
+        STORE.tick(head, position, EntityJournal::spawnIfAbsent);
+    }
+
+    private static void spawnIfAbsent(Entry e) {
+        if (e.item) return;
+        ServerLevel level = levelOf(e.dim);
+        if (level == null) return;
+        if (e.uuid != null) {
+            Entity existing = findLoaded(level, e.uuid);
+            if (existing != null && !existing.isRemoved()) return;
+        }
+        spawn(e, e.fuse, e.nbt);
+    }
+
+    private static void publishToTrailingHeads(Entry e) {
+        if (!TimeTravel.individualTime) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (head.offset() <= 0 || head.isEmpty()) continue;
+            if (head.position() >= e.tick) continue;
+            STORE.addUpcoming(head.offset(), e);
+        }
     }
 
     private static void trackLanding() {
@@ -148,7 +186,7 @@ public final class EntityJournal {
             if (arrow.save(t) && t.getBoolean("inGround")) {
                 t.remove("UUID");
                 e.landNbt = t.toString();
-                e.landTick = TimeTravel.timelineTick;
+                e.landTick = TimeContext.now();
                 STORE.markDirty();
                 it.remove();
             }
@@ -212,7 +250,7 @@ public final class EntityJournal {
 
     public static void onJump() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
 
         for (Entry e : STORE.entries()) {
             ServerLevel level = levelOf(e.dim);
@@ -279,7 +317,7 @@ public final class EntityJournal {
     }
 
     private static void discardClouds() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         Iterator<Map.Entry<UUID, CloudRef>> it = clouds.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<UUID, CloudRef> en = it.next();
@@ -308,17 +346,15 @@ public final class EntityJournal {
         Set<UUID> seen = new HashSet<>();
         collect(from, to, q, seen);
         int guard = 0;
-        try {
-            while (!q.isEmpty() && guard++ < 512) {
-                Due d = q.poll();
-                if (d.tnt().isRemoved()) continue;
-                TimeTravel.timelineTick = d.tick();
+        while (!q.isEmpty() && guard++ < 512) {
+            Due d = q.poll();
+            if (d.tnt().isRemoved()) continue;
+            long at = d.tick();
+            TimeContext.runAt(at, () -> {
                 d.tnt().setFuse(1);
                 d.tnt().tick();
-                collect(d.tick(), to, q, seen);
-            }
-        } finally {
-            TimeTravel.timelineTick = from;
+            });
+            collect(at, to, q, seen);
         }
     }
 

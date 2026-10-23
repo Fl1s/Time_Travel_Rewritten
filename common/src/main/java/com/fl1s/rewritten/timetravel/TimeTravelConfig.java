@@ -18,13 +18,18 @@ public class TimeTravelConfig {
     public boolean firstStart = true;
     public boolean isLooping = false;
     public long timelineTick = 0;
+    public long presentTick = 0;
     public long dayTimeOrigin = 0;
+    public long headShift = 0;
     public int nextVisitId = 1;
     public int configVersion = 0;
 
     public boolean syncDayTime = true;
+    public boolean individualTime = false;
+    private Boolean internalTime;
     public boolean jumpRequiresOp = false;
     public boolean chainDeath = true;
+    public boolean noDuplication = false;
     public int jumpCooldownTicks = 20;
     public Map<String, Long> marks = new java.util.LinkedHashMap<>();
     public long maxJumpTicks = 0;
@@ -76,6 +81,11 @@ public class TimeTravelConfig {
             config.recordingPlayers = new HashMap<>();
         }
 
+        if (config.internalTime != null) {
+            config.individualTime = config.internalTime;
+            config.internalTime = null;
+        }
+
         config.recordingPlayers.values().forEach(PlayerData::initTransients);
 
         if (config.configVersion < 1) {
@@ -91,6 +101,7 @@ public class TimeTravelConfig {
         if (config.marks == null) config.marks = new java.util.LinkedHashMap<>();
         if (config.cloneLookaheadTicks < 0 || config.cloneLookaheadTicks > 100) config.cloneLookaheadTicks = 0;
         if (config.timelineTick < 0) config.timelineTick = 0;
+        if (config.presentTick < config.timelineTick) config.presentTick = config.timelineTick;
         if (config.nextVisitId < 1) config.nextVisitId = 1;
         if (config.entityTrackingDistance < 1) config.entityTrackingDistance = 32;
         if (config.voiceInteractionThresholdDb < -127 || config.voiceInteractionThresholdDb > 0) {

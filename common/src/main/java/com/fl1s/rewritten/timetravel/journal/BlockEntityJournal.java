@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.api.TimelineApi;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -81,12 +82,12 @@ public final class BlockEntityJournal {
 
     public static void snapshotInitial() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         Set<String> visitedDims = new HashSet<>();
         for (ServerPlayer player : TimeTravel.server.getPlayerList().getPlayers()) {
             if (Clones.is(player)) continue;
             ServerLevel level = player.serverLevel();
-            String dimId = level.dimension().location().toString();
+            String dimId = Levels.canonicalId(level);
             if (!visitedDims.add(dimId)) continue;
 
             ChunkPos center = player.chunkPosition();
@@ -106,7 +107,7 @@ public final class BlockEntityJournal {
     }
 
     private static void recordInitial(ServerLevel level, BlockEntity be, long tick) {
-        String dim = level.dimension().location().toString().intern();
+        String dim = Levels.canonicalId(level);
         String nbt = be.saveWithoutMetadata(TimeTravel.server.registryAccess()).toString();
         if (nbt.length() > MAX_NBT_LENGTH) return;
         long key = keyOf(dim, be.getBlockPos());
@@ -135,7 +136,7 @@ public final class BlockEntityJournal {
         BlockPos pos = be.getBlockPos();
         if (!level.isLoaded(pos)) return;
 
-        String dim = level.dimension().location().toString().intern();
+        String dim = Levels.canonicalId(level);
         long key = keyOf(dim, pos);
         if (last.containsKey(key)) return;
 
@@ -149,7 +150,7 @@ public final class BlockEntityJournal {
         e.z = pos.getZ();
         e.oldNbt = nbt;
         e.newNbt = nbt;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = -1;
         STORE.entries().add(e);
@@ -167,7 +168,7 @@ public final class BlockEntityJournal {
         BlockPos pos = be.getBlockPos();
         if (!level.isLoaded(pos)) return;
 
-        String dim = level.dimension().location().toString().intern();
+        String dim = Levels.canonicalId(level);
         long key = keyOf(dim, pos);
         Entry prev = last.get(key);
 
@@ -188,7 +189,7 @@ public final class BlockEntityJournal {
             base.z = pos.getZ();
             base.oldNbt = nbt;
             base.newNbt = nbt;
-            base.tick = TimeTravel.timelineTick;
+            base.tick = TimeContext.now();
             base.seq = STORE.nextSeq();
             base.visit = -1;
             STORE.entries().add(base);
@@ -206,7 +207,7 @@ public final class BlockEntityJournal {
         e.z = pos.getZ();
         e.oldNbt = prev.newNbt;
         e.newNbt = nbt;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         STORE.entries().add(e);
@@ -279,7 +280,7 @@ public final class BlockEntityJournal {
 
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
-        STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
+        STORE.removeUpcoming(e -> visitIds.contains(e.visit));
         STORE.markDirty();
         rebuildLastIndex();
     }

@@ -16,8 +16,14 @@ public final class Levels {
     }
 
     private static final Map<String, ResourceKey<Level>> CACHE = new ConcurrentHashMap<>();
+    private static final Map<ResourceKey<Level>, String> IDS = new ConcurrentHashMap<>();
 
     public static ResourceKey<Level> key(String dim) {
         return CACHE.computeIfAbsent(dim, d -> ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(d)));
+    }
+
+    public static String canonicalId(Level level) {
+        if (level == null) return "";
+        return IDS.computeIfAbsent(level.dimension(), k -> k.location().toString().intern());
     }
 }

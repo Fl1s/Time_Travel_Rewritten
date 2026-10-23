@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.commands;
 
+import com.fl1s.rewritten.timetravel.clone.HeadTracking;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
@@ -21,6 +22,14 @@ public class TogglesCommands {
             TimeTravel.config.syncDayTime = v;
         }));
 
+        togglesNode.then(toggle("individualTime", () -> TimeTravel.individualTime, v -> {
+            TimeTravel.individualTime = v;
+            TimeTravel.config.individualTime = v;
+            if (!v && TimeTravel.heads() != null) TimeTravel.heads().collapseToShared();
+            HeadTracking.markDirty();
+            TimeTravel.broadcastSync();
+        }));
+
         togglesNode.then(toggle("jumpRequiresOp", () -> TimeTravel.jumpRequiresOp, v -> {
             TimeTravel.jumpRequiresOp = v;
             TimeTravel.config.jumpRequiresOp = v;
@@ -29,6 +38,11 @@ public class TogglesCommands {
         togglesNode.then(toggle("chainDeath", () -> TimeTravel.chainDeath, v -> {
             TimeTravel.chainDeath = v;
             TimeTravel.config.chainDeath = v;
+        }));
+
+        togglesNode.then(toggle("noDuplication", () -> TimeTravel.noDuplication, v -> {
+            TimeTravel.noDuplication = v;
+            TimeTravel.config.noDuplication = v;
         }));
 
         togglesNode.then(toggle("trackItems", () -> TimeTravel.trackItems, v -> {

@@ -1,5 +1,7 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.clone.HeadVisibility;
+import net.minecraft.server.level.ServerPlayer;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
@@ -26,6 +28,7 @@ public final class MobBinding {
 
     public static boolean allows(Mob mob, LivingEntity target) {
         if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.timelineSceneManager == null) return true;
+        if (target instanceof ServerPlayer player && !HeadVisibility.visibleTo(mob, player)) return false;
         if (MobSpawnJournal.isOutOfTime(mob.getUUID()) && !MobTrailJournal.isPuppeted(mob)) return !Clones.is(target);
         int visit = TimeTravel.visitIdOf(target);
         if (visit < 0) return true;

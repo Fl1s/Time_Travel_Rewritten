@@ -1,5 +1,7 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
@@ -93,6 +95,8 @@ public final class BlockJournal {
         final BlockState before;
         final BlockState requested;
         boolean notified;
+        String items;
+        int size;
 
         SetFrame(ServerLevel level, long pos, BlockState before, BlockState requested) {
             this.level = level;
@@ -153,8 +157,8 @@ public final class BlockJournal {
         if (list == null) return false;
         BlockState current = level.getBlockState(pos);
         if (current.is(requested.getBlock())) return false;
-        String dim = level.dimension().location().toString();
-        long now = TimeTravel.timelineTick;
+        String dim = Levels.canonicalId(level);
+        long now = positionOf(nearestRecorder(level, pos));
         for (Entry e : list) {
             if (!e.build || e.tick <= now || !e.dim.equals(dim)) continue;
             BlockState old = oldState(e);
@@ -195,7 +199,36 @@ public final class BlockJournal {
 
     public static void beginSet(ServerLevel level, BlockPos pos, BlockState requested) {
         if (!TimeTravel.isLooping) return;
-        setFrames.push(new SetFrame(level, pos.asLong(), level.getBlockState(pos), requested));
+        SetFrame frame = new SetFrame(level, pos.asLong(), level.getBlockState(pos), requested);
+        if (!applying && !replayingLive && !frame.before.is(requested.getBlock())
+                && level.getBlockEntity(pos) instanceof Container container
+                && !(container instanceof JukeboxBlockEntity)
+                && !(container instanceof BlockEntity be && ProcessJournal.isProcess(be))
+                && !container.isEmpty()) {
+            frame.items = serializeItems(copyOf(container));
+            frame.size = container.getContainerSize();
+        }
+        setFrames.push(frame);
+    }
+
+    private static void recordEmptied(SetFrame frame, BlockPos pos) {
+        if (frame.items == null) return;
+        String items = frame.items;
+        frame.items = null;
+        PlayerData pd = nearestRecorder(frame.level, pos);
+        Entry entry = new Entry();
+        entry.dim = Levels.canonicalId(frame.level);
+        entry.x = pos.getX();
+        entry.y = pos.getY();
+        entry.z = pos.getZ();
+        entry.oldItems = items;
+        entry.newItems = serializeItems(NonNullList.withSize(frame.size, ItemStack.EMPTY));
+        entry.tick = positionOf(pd);
+        entry.seq = STORE.nextSeq();
+        entry.visit = pd != null && pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
+        STORE.entries().add(entry);
+        index(entry);
+        STORE.markDirty();
     }
 
     public static void endSet(ServerLevel level, BlockPos pos, boolean changed) {
@@ -207,7 +240,9 @@ public final class BlockJournal {
                 || TimeTravel.timelineSceneManager == null) return;
 
         BlockState now = level.getBlockState(pos);
-        if (!now.equals(top.before)) record(level, pos, top.before, now);
+        if (now.equals(top.before)) return;
+        recordEmptied(top, pos);
+        record(level, pos, top.before, now);
     }
 
     public static void flushWatches() {
@@ -229,6 +264,7 @@ public final class BlockJournal {
         SetFrame top = setFrames.peek();
         if (top != null && top.pos == pos.asLong() && top.level == level && top.requested.equals(now)) {
             top.notified = true;
+            recordEmptied(top, pos);
         }
         for (SetFrame f : setFrames) {
             if (!f.notified && f.pos == pos.asLong() && f.level == level
@@ -258,15 +294,16 @@ public final class BlockJournal {
             visit = -1;
         }
 
-        String dim = level.dimension().location().toString().intern();
+        String dim = Levels.canonicalId(level);
         String oldS = serialize(old);
         String newS = serialize(now);
+        long at = positionOf(pd);
 
         List<Entry> same = byPos.get(pos.asLong());
         if (same != null) {
             for (Entry e : same) {
                 if (!e.dim.equals(dim)) continue;
-                if (Math.abs(e.tick - TimeTravel.timelineTick) > DEDUP_TICKS) continue;
+                if (Math.abs(e.tick - at) > DEDUP_TICKS) continue;
                 if (!oldS.equals(e.oldState) || !newS.equals(e.newState)) continue;
                 return;
             }
@@ -281,7 +318,7 @@ public final class BlockJournal {
         entry.newState = newS;
         entry.oldParsed = old;
         entry.newParsed = now;
-        entry.tick = TimeTravel.timelineTick;
+        entry.tick = at;
         entry.seq = STORE.nextSeq();
         entry.visit = visit;
         entry.root = actionDepth > 0
@@ -290,6 +327,96 @@ public final class BlockJournal {
         STORE.entries().add(entry);
         index(entry);
         STORE.markDirty();
+        cascade(entry);
+        HeadWorldView.onRecord(entry);
+    }
+
+    private static void cascade(Entry written) {
+        if (!TimeTravel.individualTime) return;
+        if (written.tick >= TimeTravel.presentTick) return;
+
+        long packed = BlockPos.asLong(written.x, written.y, written.z);
+        List<Entry> list = byPos.get(packed);
+        if (list == null) return;
+
+        Set<Entry> overwritten = new HashSet<>();
+        for (Entry e : list) {
+            if (e == written || !e.dim.equals(written.dim)) continue;
+            if (e.tick > written.tick || (e.tick == written.tick && e.seq > written.seq)) overwritten.add(e);
+        }
+        if (overwritten.isEmpty()) return;
+
+        list.removeIf(overwritten::contains);
+        STORE.entries().removeIf(overwritten::contains);
+        STORE.removeUpcoming(overwritten::contains);
+        STORE.markDirty();
+
+        TimeTravel.TIMELINE_LOGGER.info("Changed the past at {} {} {} - erased {} later record(s)",
+                written.x, written.y, written.z, overwritten.size());
+        HeadWorldView.onCascade(written.dim, packed);
+    }
+
+    public static void materialize(ServerLevel level, BlockPos pos) {
+        if (level == null) return;
+        BlockState past = HeadWorldView.resolve(level, pos);
+        if (past == null || level.getBlockState(pos).equals(past)) return;
+        applying = true;
+        try {
+            level.setBlock(pos, past, QUIET_FLAGS);
+        } finally {
+            applying = false;
+        }
+    }
+
+    static BlockState pastStateAt(String dim, long packedPos, long position) {
+        List<Entry> list = byPos.get(packedPos);
+        if (list == null) return null;
+        Entry best = null;
+        for (Entry e : list) {
+            if (!e.dim.equals(dim) || e.tick <= position) continue;
+            if (best == null || e.tick < best.tick || (e.tick == best.tick && e.seq < best.seq)) best = e;
+        }
+        return best == null ? null : oldState(best);
+    }
+
+    static long positionOf(PlayerData pd) {
+        if (!TimeTravel.individualTime || pd == null) return TimeContext.now();
+        TimeHeads heads = TimeTravel.heads();
+        return heads == null ? TimeContext.now() : heads.positionOf(pd);
+    }
+
+    private static long stampFor(ServerPlayer player) {
+        if (!TimeTravel.individualTime || TimeTravel.timelineSceneManager == null) return TimeContext.now();
+        return positionOf(TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString()));
+    }
+
+    static List<Entry> containerChangesAfter(String dim, BlockPos pos, long position) {
+        List<Entry> out = new ArrayList<>();
+        List<Entry> list = byPos.get(pos.asLong());
+        if (list == null) return out;
+        for (Entry e : list) {
+            if (e.oldItems == null || e.newItems == null || e.tick <= position || !dim.equals(e.dim)) continue;
+            out.add(e);
+        }
+        out.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
+        return out;
+    }
+
+    static Journal<Entry> store() {
+        return STORE;
+    }
+
+    static List<Entry> allEntries() {
+        return STORE.entries();
+    }
+
+    static boolean hasChangeAfter(String dim, long packedPos, long position) {
+        List<Entry> list = byPos.get(packedPos);
+        if (list == null) return false;
+        for (Entry e : list) {
+            if (e.tick > position && e.dim.equals(dim)) return true;
+        }
+        return false;
     }
 
     private static boolean isSourceLiquid(BlockState state) {
@@ -585,17 +712,18 @@ public final class BlockJournal {
         }
     }
 
-    private static BlockState oldState(Entry e) {
+    static BlockState oldState(Entry e) {
         if (e.oldParsed == null) e.oldParsed = parse(e.oldState);
         return e.oldParsed;
     }
 
-    private static BlockState newState(Entry e) {
+    static BlockState newState(Entry e) {
         if (e.newParsed == null) e.newParsed = parse(e.newState);
         return e.newParsed;
     }
 
     private static BlockState parse(String s) {
+        if (s == null) return null;
         try {
             return BlockStateParser.parseForBlock(TimeTravel.server.registryAccess().lookupOrThrow(Registries.BLOCK), s, false).blockState();
         } catch (Exception ex) {
@@ -628,7 +756,7 @@ public final class BlockJournal {
         Iterator<ContainerWatch> it = containerWatches.iterator();
         while (it.hasNext()) {
             ContainerWatch w = it.next();
-            String dim = w.level().dimension().location().toString();
+            String dim = Levels.canonicalId(w.level());
 
             for (Map.Entry<BlockPos, List<ItemStack>> e : w.last().entrySet()) {
                 BlockEntity be = w.level().getBlockEntity(e.getKey());
@@ -650,7 +778,7 @@ public final class BlockJournal {
                 entry.z = e.getKey().getZ();
                 entry.oldItems = serializeItems(e.getValue());
                 entry.newItems = serializeItems(now);
-                entry.tick = TimeTravel.timelineTick;
+                entry.tick = stampFor(w.player());
                 entry.seq = STORE.nextSeq();
                 entry.visit = w.visit();
                 entry.root = true;
@@ -674,13 +802,13 @@ public final class BlockJournal {
         if (pd == null) return;
 
         Entry entry = new Entry();
-        entry.dim = level.dimension().location().toString();
+        entry.dim = Levels.canonicalId(level);
         entry.x = pos.getX();
         entry.y = pos.getY();
         entry.z = pos.getZ();
         entry.oldItems = serializeItems(before);
         entry.newItems = serializeItems(now);
-        entry.tick = TimeTravel.timelineTick;
+        entry.tick = TimeContext.now();
         entry.seq = STORE.nextSeq();
         entry.visit = pd.getCurrentVisit().id;
         entry.root = false;
@@ -799,12 +927,12 @@ public final class BlockJournal {
         mine.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
 
         for (Entry e : mine) {
-            if (e.tick <= TimeTravel.timelineTick) apply(e, false);
+            if (e.tick <= TimeContext.now()) apply(e, false);
         }
         finishBatch();
         flushFluids();
         STORE.entries().removeAll(mine);
-        STORE.upcoming().removeAll(mine);
+        STORE.removeUpcoming(mine::contains);
         rebuildIndex();
         STORE.markDirty();
     }

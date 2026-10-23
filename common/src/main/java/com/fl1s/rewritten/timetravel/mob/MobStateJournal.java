@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -164,7 +165,7 @@ public final class MobStateJournal {
 
     private static void record(ServerLevel level, Mob mob, long tick, int visit, String nbt) {
         Entry e = new Entry();
-        e.dim = level.dimension().location().toString();
+        e.dim = Levels.canonicalId(level);
         e.uuid = mob.getUUID();
         e.nbt = nbt;
         e.tick = tick;
@@ -208,7 +209,7 @@ public final class MobStateJournal {
     public static void onChanged(Mob mob) {
         if (Clones.is(mob) || !active()) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
-        check(level, mob, TimeTravel.timelineTick);
+        check(level, mob, TimeContext.now());
     }
 
     private static void check(ServerLevel level, Mob mob, long now) {
@@ -229,7 +230,7 @@ public final class MobStateJournal {
     }
 
     private static void sample() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         if (now % SAMPLE_STEP != 0 || !active()) return;
         sampledThisTick.clear();
         double r = TimeTravel.entityTrackingDistance;
@@ -293,7 +294,7 @@ public final class MobStateJournal {
 
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (List<Entry> list : byUuid.values()) {
             if (list.isEmpty()) continue;
             Entry at = stateAtOf(list, now);

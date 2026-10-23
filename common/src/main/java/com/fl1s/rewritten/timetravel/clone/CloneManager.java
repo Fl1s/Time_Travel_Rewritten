@@ -8,8 +8,12 @@ import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.CloneAppearPayload;
 import com.fl1s.rewritten.timetravel.net.CloneVanishPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
+import com.fl1s.rewritten.timetravel.time.TimeHead;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TTSounds;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
@@ -21,8 +25,13 @@ import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Runtime manager for past-self ("clone") playback: queued pieces, active
@@ -57,29 +66,53 @@ public final class CloneManager {
         final int visitId;
         final CloneFx fx;
         final Visit visit;
+        long head;
         int pendingSkip;
         boolean shielded;
         boolean wasInvulnerable;
         long endTick = -1;
         boolean vanishSent;
 
-        Clone(ClonePlayback root, String playerName, int visitId, CloneFx fx, int pendingSkip, Visit visit) {
+        Clone(ClonePlayback root, String playerName, int visitId, CloneFx fx, int pendingSkip, Visit visit, long head) {
             this.root = root;
             this.playerName = playerName;
             this.visitId = visitId;
             this.fx = fx;
             this.pendingSkip = pendingSkip;
             this.visit = visit;
+            this.head = head;
         }
     }
 
+    public static final long NO_HEAD = Long.MIN_VALUE;
+
     private final List<Clone> roots = new ArrayList<>();
-    private final PriorityQueue<PendingPiece> pending = new PriorityQueue<>(
-            Comparator.comparingLong(PendingPiece::startTick));
-    private final PriorityQueue<PendingSound> pendingSounds = new PriorityQueue<>(
-            Comparator.comparingLong(PendingSound::tick));
+    private final Map<Long, PriorityQueue<PendingPiece>> pending = new HashMap<>();
+    private final Map<Long, PriorityQueue<PendingSound>> pendingSounds = new HashMap<>();
+    private final Set<Long> built = new HashSet<>();
     private boolean needsRebuild = true;
     private boolean idle = false;
+
+    static long positionOf(long head) {
+        return Math.max(0, TimeTravel.presentTick - head);
+    }
+
+    private PriorityQueue<PendingPiece> pieces(long head) {
+        return pending.computeIfAbsent(head,
+                k -> new PriorityQueue<>(Comparator.comparingLong(PendingPiece::startTick)));
+    }
+
+    private PriorityQueue<PendingSound> sounds(long head) {
+        return pendingSounds.computeIfAbsent(head,
+                k -> new PriorityQueue<>(Comparator.comparingLong(PendingSound::tick)));
+    }
+
+    public long headOf(Entity entity) {
+        for (Clone clone : roots) {
+            if (clone.fx.entity() == entity) return clone.head;
+        }
+        return NO_HEAD;
+    }
 
     public void markNeedsRebuild() { needsRebuild = true; }
 
@@ -92,7 +125,11 @@ public final class CloneManager {
     public boolean isIdle() { return idle; }
     public void setIdle(boolean v) { idle = v; }
 
-    public int countPending() { return pending.size(); }
+    public int countPending() {
+        int total = 0;
+        for (PriorityQueue<PendingPiece> q : pending.values()) total += q.size();
+        return total;
+    }
 
     List<Clone> roots() { return roots; }
 
@@ -101,89 +138,157 @@ public final class CloneManager {
         pendingSounds.clear();
     }
 
-    public void rebuild() {
+    public void dropHead(long head) {
+        pending.remove(head);
+        pendingSounds.remove(head);
+        built.remove(head);
+        stopHead(head);
+    }
+
+    public void shiftHeads(long delta) {
+        TimeHeads.shiftKeys(pending, delta);
+        TimeHeads.shiftKeys(pendingSounds, delta);
+        Set<Long> moved = new HashSet<>();
+        for (Long head : built) moved.add(TimeHeads.shifted(head, delta));
+        built.clear();
+        built.addAll(moved);
+        for (Clone clone : roots) clone.head = TimeHeads.shifted(clone.head, delta);
+    }
+
+    public void rebuildAll() {
+        needsRebuild = false;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        stopAll();
         pending.clear();
         pendingSounds.clear();
+        built.clear();
+        for (TimeHead head : heads.occupied()) rebuild(head.offset(), head.position());
+    }
+
+    public void flushAll() {
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (!built.contains(head.offset())) rebuild(head.offset(), head.position());
+            flushPending(head.offset(), head.position());
+            flushSounds(head.offset(), head.position());
+        }
+    }
+
+    public void rebuild(long head, final long now) {
+        built.add(head);
+        pieces(head).clear();
+        sounds(head).clear();
 
         TimelineSceneManager scene = TimeTravel.timelineSceneManager;
-        final long now = TimeTravel.timelineTick;
-        if (scene == null) {
-            needsRebuild = false;
-            return;
-        }
+        if (scene == null) return;
 
         scene.forEachRecordingPlayer(pd -> {
-            for (Visit visit : pd.getVisits()) {
-                if (visit.pieces.isEmpty()) continue;
-
-                if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= now) {
-                    long arriveTick = Math.max(now, visit.startTick - APPEAR_SOUND_LEAD_TICKS);
-                    pendingSounds.add(new PendingSound(arriveTick, visit.startDim,
-                            visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id, true));
-                }
-                if (visit.departDir != 0 && visit.endDim != null && visit.endTick > now) {
-                    int lead;
-                    if (TimeTravel.oldSfx) {
-                        lead = OG_VANISH_SOUND_LEAD_TICKS;
-                    } else if (TimeTravel.flowerManMode) {
-                        lead = FLOWER_VANISH_SOUND_LEAD_TICKS;
-                    } else {
-                        lead = VANISH_SOUND_LEAD_TICKS;
-                    }
-                    long soundTick = visit.endTick - lead;
-                    if (soundTick < now) soundTick = now;
-                    pendingSounds.add(new PendingSound(soundTick, visit.endDim,
-                            visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id, false));
-                }
-
-                for (int i = 0; i < visit.pieces.size(); i++) {
-                    Visit.Piece piece = visit.pieces.get(i);
-                    long end = (i + 1 < visit.pieces.size())
-                            ? visit.pieces.get(i + 1).startTick
-                            : visit.endTick;
-                    if (piece.startTick >= now) {
-                        pending.add(new PendingPiece(piece.startTick, piece.recording, pd.getName(),
-                                0, visit.id, i, visit.startTick));
-                    } else if (end > now) {
-                        pending.add(new PendingPiece(now, piece.recording, pd.getName(),
-                                (int) (now - piece.startTick), visit.id, i, visit.startTick));
-                    }
-                }
-            }
+            for (Visit visit : pd.getVisits()) queueVisit(head, now, pd, visit);
+            queueVisit(head, now, pd, pd.getCurrentVisit());
         });
-        needsRebuild = false;
-        TimeTravel.TIMELINE_LOGGER.info("Clone queue rebuilt at tick {}: {} piece(s) pending",
-                now, pending.size());
+        TimeTravel.TIMELINE_LOGGER.info("Clone queue for head {} rebuilt at tick {}: {} piece(s) pending",
+                head, now, pieces(head).size());
     }
 
-    public void flushPending() {
-        final long now = TimeTravel.timelineTick;
-        while (!pending.isEmpty()
-                && pending.peek().startTick() <= now + TimeTravel.cloneLookaheadTicks) {
-            PendingPiece piece = pending.poll();
-            start(piece, (int) Math.max(0, piece.startTick() - now));
+    private void queueVisit(long head, long now, PlayerData pd, Visit visit) {
+        if (visit == null || visit.pieces.isEmpty()) return;
+
+        if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= now) {
+            long arriveTick = Math.max(now, visit.startTick - APPEAR_SOUND_LEAD_TICKS);
+            sounds(head).add(new PendingSound(arriveTick, visit.startDim,
+                    visit.sx, visit.sy, visit.sz, visit.arrivalDir, pd.getName(), visit.id, true));
+        }
+        queueDeparture(head, now, pd, visit);
+        queuePieces(head, now, pd, visit, 0);
+    }
+
+    private void queueDeparture(long head, long now, PlayerData pd, Visit visit) {
+        if (visit.departDir == 0 || visit.endDim == null || visit.endTick <= now) return;
+        int lead;
+        if (TimeTravel.oldSfx) {
+            lead = OG_VANISH_SOUND_LEAD_TICKS;
+        } else if (TimeTravel.flowerManMode) {
+            lead = FLOWER_VANISH_SOUND_LEAD_TICKS;
+        } else {
+            lead = VANISH_SOUND_LEAD_TICKS;
+        }
+        long soundTick = Math.max(now, visit.endTick - lead);
+        sounds(head).add(new PendingSound(soundTick, visit.endDim,
+                visit.ex, visit.ey, visit.ez, visit.departDir, pd.getName(), visit.id, false));
+    }
+
+    private void queuePieces(long head, long now, PlayerData pd, Visit visit, int fromIndex) {
+        long tail = tailOf(pd, visit);
+        for (int i = Math.max(0, fromIndex); i < visit.pieces.size(); i++) {
+            Visit.Piece piece = visit.pieces.get(i);
+            long end = (i + 1 < visit.pieces.size())
+                    ? visit.pieces.get(i + 1).startTick
+                    : tail;
+            if (piece.startTick >= now) {
+                pieces(head).add(new PendingPiece(piece.startTick, piece.recording, pd.getName(),
+                        0, visit.id, i, visit.startTick));
+            } else if (end > now) {
+                pieces(head).add(new PendingPiece(now, piece.recording, pd.getName(),
+                        (int) (now - piece.startTick), visit.id, i, visit.startTick));
+            }
         }
     }
 
-    public void flushSounds() {
-        final long now = TimeTravel.timelineTick;
-        while (!pendingSounds.isEmpty() && pendingSounds.peek().tick() <= now) {
-            playTimeSound(pendingSounds.poll());
+    private static long tailOf(PlayerData pd, Visit visit) {
+        return visit.endTick >= 0 ? visit.endTick : pd.getChunkStartTick();
+    }
+
+    public void publishPieces(PlayerData pd, Visit visit, int fromIndex) {
+        if (!TimeTravel.individualTime || visit == null) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (!built.contains(head.offset())) continue;
+            queuePieces(head.offset(), head.position(), pd, visit, fromIndex);
+        }
+    }
+
+    public void publishDeparture(PlayerData pd, Visit visit) {
+        if (!TimeTravel.individualTime || visit == null) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (!built.contains(head.offset())) continue;
+            queueDeparture(head.offset(), head.position(), pd, visit);
+        }
+    }
+
+    public void flushPending(long head, long now) {
+        PriorityQueue<PendingPiece> queue = pieces(head);
+        while (!queue.isEmpty()
+                && queue.peek().startTick() <= now + TimeTravel.cloneLookaheadTicks) {
+            PendingPiece piece = queue.poll();
+            start(piece, (int) Math.max(0, piece.startTick() - now), head, now);
+        }
+    }
+
+    public void flushSounds(long head, long now) {
+        PriorityQueue<PendingSound> queue = sounds(head);
+        while (!queue.isEmpty() && queue.peek().tick() <= now) {
+            playTimeSound(queue.poll(), head);
         }
     }
 
     public void replayEvents() {
-        long now = TimeTravel.timelineTick;
         for (Clone clone : roots) {
             if (clone.pendingSkip > 0 || clone.root.isFinished()) continue;
             if (clone.visit == null) continue;
-            if (clone.fx.entity() instanceof ServerPlayer sp) CloneTracks.replay(clone.visit, sp, now);
+            if (clone.fx.entity() instanceof ServerPlayer sp) {
+                CloneTracks.replay(clone.visit, sp, positionOf(clone.head));
+            }
         }
     }
 
     public void tickActive() {
-        long now = TimeTravel.timelineTick;
         for (Clone clone : roots) {
+            long now = positionOf(clone.head);
             boolean protect = clone.pendingSkip > 0 || now < clone.fx.graceUntil;
             if (protect) shield(clone);
             else if (clone.shielded) unshield(clone, now);
@@ -199,7 +304,7 @@ public final class CloneManager {
             if (!clone.root.isFinished()) clone.fx.tick();
         }
         touchOrbs();
-        if (now % 100 == 0) {
+        if (TimeTravel.presentTick % 100 == 0) {
             roots.removeIf(g -> g.root.isFinished());
         }
     }
@@ -231,7 +336,7 @@ public final class CloneManager {
         sp.hurtMarked = false;
     }
 
-    private void start(PendingPiece piece, int delayTicks) {
+    private void start(PendingPiece piece, int delayTicks, long head, long now) {
         TimelineSceneManager scene = TimeTravel.timelineSceneManager;
         PlayerData pd = scene == null ? null : scene.getRecordingPlayer(piece.playerName());
         if (pd == null) return;
@@ -251,7 +356,7 @@ public final class CloneManager {
         }
 
         CloneFx fx = new CloneFx(cloneEntity);
-        fx.graceUntil = TimeTravel.timelineTick + 20;
+        fx.graceUntil = now + 20;
 
         Visit cloneVisit = null;
         for (Visit v : pd.getVisits()) {
@@ -260,12 +365,17 @@ public final class CloneManager {
                 break;
             }
         }
+        if (cloneVisit == null && pd.getCurrentVisit() != null
+                && pd.getCurrentVisit().id == piece.visitId()) {
+            cloneVisit = pd.getCurrentVisit();
+        }
 
         int pendingSkip = piece.skipTicks();
         int syncSkip = Math.min(pendingSkip, CLONE_SYNC_SKIP_LIMIT);
-        Clone clone = new Clone(playback, piece.playerName(), piece.visitId(), fx, pendingSkip - syncSkip, cloneVisit);
+        Clone clone = new Clone(playback, piece.playerName(), piece.visitId(), fx, pendingSkip - syncSkip, cloneVisit, head);
         clone.endTick = endTickOf(cloneVisit, piece.recording());
         roots.add(clone);
+        HeadTracking.markDirty();
 
         if (cloneEntity != null && pendingSkip == 0
                 && piece.segment() == 0
@@ -281,7 +391,7 @@ public final class CloneManager {
         shield(clone);
         if (syncSkip > 0) {
             playback.tick(syncSkip);
-            fx.graceUntil = TimeTravel.timelineTick + 20;
+            fx.graceUntil = now + 20;
         }
 
         if (TimeTravel.trackVoice && TimeTravel.voiceChatLoaded) {
@@ -290,13 +400,10 @@ public final class CloneManager {
     }
 
     private static long endTickOf(Visit visit, String recording) {
-        if (visit == null) return -1;
-        for (int i = 0; i < visit.pieces.size(); i++) {
-            if (!visit.pieces.get(i).recording.equals(recording)) continue;
-            long end = i + 1 < visit.pieces.size() ? visit.pieces.get(i + 1).startTick : visit.endTick;
-            return end > 0 ? end : -1;
-        }
-        return -1;
+        if (visit == null || visit.endTick <= 0) return -1;
+        int last = visit.pieces.size() - 1;
+        if (last < 0 || !visit.pieces.get(last).recording.equals(recording)) return -1;
+        return visit.endTick;
     }
 
     private static void announceVanish(Clone g, long now) {
@@ -327,6 +434,26 @@ public final class CloneManager {
         VoicechatCompat.stopPlayback(null);
     }
 
+    public void retainHeads(Set<Long> live) {
+        List<Long> stale = new ArrayList<>();
+        for (Long head : pending.keySet()) if (!live.contains(head)) stale.add(head);
+        for (Long head : pendingSounds.keySet()) if (!live.contains(head) && !stale.contains(head)) stale.add(head);
+        for (Clone clone : roots) if (!live.contains(clone.head) && !stale.contains(clone.head)) stale.add(clone.head);
+        for (Long head : stale) dropHead(head);
+    }
+
+    public void stopHead(long head) {
+        roots.removeIf(g -> {
+            if (g.head != head) return false;
+            try {
+                if (!g.root.isFinished()) g.root.stop();
+            } catch (Exception e) {
+                TimeTravel.TIMELINE_LOGGER.error("Failed to stop clone of a released head", e);
+            }
+            return true;
+        });
+    }
+
     public void stopFromVisit(String playerName, int fromVisitId) {
         roots.removeIf(g -> {
             if (!g.playerName.equals(playerName) || g.visitId < fromVisitId) return false;
@@ -340,39 +467,60 @@ public final class CloneManager {
     }
 
     public void removePendingFrom(String playerName, int fromVisitId) {
-        pending.removeIf(pp -> pp.playerName().equals(playerName) && pp.visitId() >= fromVisitId);
-        pendingSounds.removeIf(ps -> ps.playerName().equals(playerName) && ps.visitId() >= fromVisitId);
+        for (PriorityQueue<PendingPiece> q : pending.values()) {
+            q.removeIf(pp -> pp.playerName().equals(playerName) && pp.visitId() >= fromVisitId);
+        }
+        for (PriorityQueue<PendingSound> q : pendingSounds.values()) {
+            q.removeIf(ps -> ps.playerName().equals(playerName) && ps.visitId() >= fromVisitId);
+        }
     }
 
-    private void playTimeSound(PendingSound s) {
+    private void playTimeSound(PendingSound s, long head) {
         try {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(s.dim()));
             if (level == null) return;
-
-            if (TimeTravel.oldSfx) {
-                playOldSfx(level, s);
-                return;
-            }
-
-            SoundEvent sound = TTSounds.travel(s.dir() > 0);
-            float pitch = s.appear() ? APPEAR_SOUND_PITCH : 1.0f;
-            level.playSound(null, s.x(), s.y(), s.z(), sound, SoundSource.PLAYERS, 1.6f, pitch);
+            emitTravel(level, s.x(), s.y(), s.z(), s.dir(), s.appear(),
+                    TimeTravel.individualTime ? listener -> TimeTravel.headOffsetOf(listener) == head : null);
         } catch (Exception e) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to play time sound", e);
         }
     }
 
-    private static void playOldSfx(ServerLevel level, PendingSound s) {
-        if (s.dir() > 0) {
-            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT,
-                    SoundSource.PLAYERS, 1.6f, 1.7f);
-            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_CHIME,
-                    SoundSource.PLAYERS, 1.4f, 1.5f);
-        } else {
-            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.ENDERMAN_TELEPORT,
-                    SoundSource.PLAYERS, 1.6f, 0.6f);
-            level.playSound(null, s.x(), s.y(), s.z(), SoundEvents.AMETHYST_BLOCK_RESONATE,
-                    SoundSource.PLAYERS, 1.4f, 0.5f);
+    public static void emitTravel(ServerLevel level, double x, double y, double z, int dir,
+                                  boolean appear, Predicate<ServerPlayer> audience) {
+        if (TimeTravel.oldSfx) {
+            if (dir > 0) {
+                emit(level, x, y, z, audience, SoundEvents.ENDERMAN_TELEPORT, 1.6f, 1.7f);
+                emit(level, x, y, z, audience, SoundEvents.AMETHYST_BLOCK_CHIME, 1.4f, 1.5f);
+            } else {
+                emit(level, x, y, z, audience, SoundEvents.ENDERMAN_TELEPORT, 1.6f, 0.6f);
+                emit(level, x, y, z, audience, SoundEvents.AMETHYST_BLOCK_RESONATE, 1.4f, 0.5f);
+            }
+            return;
+        }
+        emit(level, x, y, z, audience, TTSounds.travel(dir > 0), 1.6f,
+                appear ? APPEAR_SOUND_PITCH : 1.0f);
+    }
+
+    private static void emit(ServerLevel level, double x, double y, double z,
+                             Predicate<ServerPlayer> audience, SoundEvent sound,
+                             float volume, float pitch) {
+        if (audience == null) {
+            level.playSound(null, x, y, z, sound, SoundSource.PLAYERS, volume, pitch);
+            return;
+        }
+
+        double radius = volume > 1.0f ? 16.0 * volume : 16.0;
+        double radiusSq = radius * radius;
+        ClientboundSoundPacket packet = new ClientboundSoundPacket(
+                BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), SoundSource.PLAYERS,
+                x, y, z, volume, pitch, level.getRandom().nextLong());
+
+        for (ServerPlayer listener : level.players()) {
+            if (Clones.is(listener)) continue;
+            if (!audience.test(listener)) continue;
+            if (listener.distanceToSqr(x, y, z) > radiusSq) continue;
+            listener.connection.send(packet);
         }
     }
     public int visitIdOf(Entity entity) {
@@ -432,8 +580,8 @@ public final class CloneManager {
         for (PlayerData pd : scene.getRecordingPlayers()) {
             for (Visit v : pd.getVisits()) {
                 if (v.id == visitId) {
-                    return v.startTick > TimeTravel.timelineTick
-                            && v.startTick - TimeTravel.timelineTick <= PENDING_VISIT_WINDOW;
+                    return v.startTick > TimeTravel.sharedTick
+                            && v.startTick - TimeTravel.sharedTick <= PENDING_VISIT_WINDOW;
                 }
             }
         }

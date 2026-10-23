@@ -22,11 +22,14 @@ public class LifecycleEvent {
 
         TimeTravelConfig c = TimeTravel.config;
         TimeTravel.isLooping = c.isLooping;
-        TimeTravel.timelineTick = c.timelineTick;
+        TimeTravel.sharedTick = c.timelineTick;
+        TimeTravel.presentTick = Math.max(c.presentTick, c.timelineTick);
         TimeTravel.dayTimeOrigin = c.dayTimeOrigin;
         TimeTravel.syncDayTime = c.syncDayTime;
+        TimeTravel.individualTime = c.individualTime;
         TimeTravel.jumpRequiresOp = c.jumpRequiresOp;
         TimeTravel.chainDeath = c.chainDeath;
+        TimeTravel.noDuplication = c.noDuplication;
         TimeTravel.jumpCooldownTicks = c.jumpCooldownTicks;
         TimeTravel.maxJumpTicks = c.maxJumpTicks;
         TimeTravel.cloneLookaheadTicks = c.cloneLookaheadTicks;

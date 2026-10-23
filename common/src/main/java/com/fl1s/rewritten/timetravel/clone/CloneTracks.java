@@ -6,6 +6,10 @@ import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.entity.FishingHookExt;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
+import com.fl1s.rewritten.timetravel.mob.HeadMobView;
+import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
+import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
+import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -51,7 +55,7 @@ public final class CloneTracks {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.pearls == null) visit.pearls = new ArrayList<>();
-        visit.pearls.add(TimeTravel.timelineTick);
+        visit.pearls.add(TimeTravel.personalTick(player));
     }
 
     private static void applyPearls(Visit visit, ServerPlayer clone, long now) {
@@ -68,7 +72,7 @@ public final class CloneTracks {
     public static void poll(ServerPlayer player, PlayerData pd) {
         Visit visit = pd.getCurrentVisit();
         if (visit == null) return;
-        long tick = TimeTravel.timelineTick;
+        long tick = TimeTravel.personalTick(player);
 
         int mode = player.gameMode.getGameModeForPlayer().getId();
         boolean flying = player.getAbilities().flying;
@@ -79,7 +83,7 @@ public final class CloneTracks {
         }
 
         Entity vehicle = player.getVehicle();
-        String vehicleId = vehicle == null ? null : vehicle.getUUID().toString();
+        String vehicleId = vehicle == null ? null : HeadCarry.rideIdOf(vehicle).toString();
         if (!Objects.equals(visit.lastVehicle, vehicleId)) {
             visit.rides.add(new Visit.RideChange(tick, vehicleId));
             visit.lastVehicle = vehicleId;
@@ -106,20 +110,20 @@ public final class CloneTracks {
         if (target instanceof Player) return;
         Visit visit = recordedVisit(player);
         if (visit == null) return;
-        visit.attacks.add(new Visit.AttackEvent(TimeTravel.timelineTick, target.getUUID().toString()));
+        visit.attacks.add(new Visit.AttackEvent(TimeTravel.personalTick(player), target.getUUID().toString()));
     }
 
     public static void onTotem(ServerPlayer player) {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.totems == null) visit.totems = new ArrayList<>();
-        visit.totems.add(TimeTravel.timelineTick);
+        visit.totems.add(TimeTravel.personalTick(player));
     }
 
     public static void onAttributesDirty(ServerPlayer player, Collection<AttributeInstance> dirty) {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
-        long tick = TimeTravel.timelineTick;
+        long tick = TimeTravel.personalTick(player);
         for (AttributeInstance inst : dirty) recordAttr(visit, tick, inst);
     }
 
@@ -170,7 +174,7 @@ public final class CloneTracks {
         Visit visit = recordedVisit(player);
         if (visit == null) return;
         if (visit.fishing == null) visit.fishing = new ArrayList<>();
-        visit.fishing.add(new Visit.FishEvent(TimeTravel.timelineTick, type, result));
+        visit.fishing.add(new Visit.FishEvent(TimeTravel.personalTick(player), type, result));
     }
 
     public static void replay(Visit visit, ServerPlayer clone, long now) {
@@ -233,15 +237,13 @@ public final class CloneTracks {
 
     public static void applyHealthAll() {
         if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
-        long now = TimeTravel.timelineTick;
-        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> {
-            for (Visit visit : pd.getVisits()) {
-                Entity e = TimeTravel.entityOfVisit(visit.id);
-                if (e instanceof ServerPlayer clone && Clones.is(clone) && !clone.isRemoved()) {
-                    applyHealth(visit, clone, now);
-                }
+        CloneManager clones = TimeTravel.session().clones;
+        for (CloneManager.Clone active : new ArrayList<>(clones.roots())) {
+            if (active.visit == null) continue;
+            if (active.fx.entity() instanceof ServerPlayer clone && !clone.isRemoved()) {
+                applyHealth(active.visit, clone, CloneManager.positionOf(active.head));
             }
-        });
+        }
     }
 
     private static void applyMode(Visit visit, ServerPlayer clone, long now) {
@@ -269,19 +271,25 @@ public final class CloneTracks {
         }
         Entity current = clone.getVehicle();
         if (wanted == null) {
+            HeadMobView.unride(clone);
             if (current != null) clone.stopRiding();
             return;
         }
-        if (current != null && current.getUUID().toString().equals(wanted)) return;
+        if (current != null && HeadVehicleView.originalOf(current).toString().equals(wanted)) return;
         UUID id;
         try {
             id = UUID.fromString(wanted);
         } catch (IllegalArgumentException ex) {
             return;
         }
-        if (!(clone.level() instanceof ServerLevel level)) return;
-        Entity vehicle = level.getEntity(id);
-        if (vehicle == null || vehicle.isRemoved()) return;
+        if (HeadMobView.rideVisually(clone, id)) {
+            if (current != null) clone.stopRiding();
+            return;
+        }
+        HeadMobView.unride(clone);
+        Entity vehicle = HeadVehicleView.vehicleFor(clone, id);
+        if (vehicle == null || vehicle.level() != clone.level()) return;
+        if (current != null) clone.stopRiding();
         clone.startRiding(vehicle, true);
     }
 
@@ -303,12 +311,23 @@ public final class CloneTracks {
             } catch (IllegalArgumentException ex) {
                 continue;
             }
-            Entity target = level.getEntity(id);
+            Entity target = targetFor(clone, level, id);
             if (target == null || target.isRemoved()) continue;
             double d2 = clone.distanceToSqr(target);
             if (d2 > 36.0) continue;
             clone.attack(target);
         }
+    }
+
+    private static Entity targetFor(ServerPlayer clone, ServerLevel level, UUID id) {
+        long head = TimeTravel.cloneHeadOf(clone);
+        boolean past = TimeTravel.individualTime && head != CloneManager.NO_HEAD && head > 0;
+        if (past && MobTrailJournal.tracked(id)) return null;
+        if (past && VehicleSpawnJournal.isRecorded(id)) return HeadVehicleView.vehicleFor(clone, id);
+        Entity target = level.getEntity(id);
+        if (target == null || !past) return target;
+        long carried = HeadCarry.headOf(target);
+        return carried == HeadCarry.NONE || carried == head ? target : null;
     }
 
     private static void applyTotems(Visit visit, ServerPlayer clone, long now) {

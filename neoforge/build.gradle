@@ -19,8 +19,23 @@ neoForge {
     }
 
     runs {
-        client { client() }
-        server { server() }
+        client {
+            client()
+            programArguments.addAll("--username", "Dev1")
+        }
+
+        client2 {
+            client()
+            ideName = "NeoForge Client 2 (Dev2)"
+            gameDirectory = file("run/client2")
+            programArguments.addAll("--username", "Dev2")
+        }
+
+        server {
+            server()
+            gameDirectory = file("run/server")
+            programArguments.addAll("--nogui")
+        }
     }
     
     mods {

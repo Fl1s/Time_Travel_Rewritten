@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Levels;
@@ -58,14 +59,14 @@ public final class RedstoneJournal {
         PlayerData pd = BlockJournal.nearestRecorder(serverLevel, pos);
         if (pd == null || pd.getCurrentVisit() == null) return;
 
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         long key = ((long) level.dimension().location().hashCode() << 32) ^ pos.asLong();
 
         Entry existing = pendingByKey.get(key);
         if (existing != null && existing.tick + existing.delay > now) return;
 
         Entry e = new Entry();
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = pos.getX();
         e.y = pos.getY();
         e.z = pos.getZ();
@@ -88,7 +89,7 @@ public final class RedstoneJournal {
 
     private static void restorePending() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         restoring = true;
         try {
             for (Entry e : STORE.entries()) {

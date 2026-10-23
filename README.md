@@ -25,6 +25,9 @@ Use `/timetravel` or `/tt` to control the timeline.
 - `jump forward <time>` - Jump forward by a duration.
 - `jump back <time>` - Jump backward by a duration.
 - `jump return` - Return to the previous time position.
+- `jump present` - Jump to the newest point the timeline has reached.
+- `jump join <player>` - Match another traveller's time. Requires `individualTime`.
+- `jump ... bring <targets>` - Take other players along on your jump, e.g. `jump back 30s bring @a[distance=..8]`. Only players carry their own time, so non-player targets are ignored.
 - `jump mark <name>` - Jump to a saved time mark.
 - `mark <name>` - Save the current time as a mark.
 - `unmark <name>` - Delete a saved mark.
@@ -32,6 +35,10 @@ Use `/timetravel` or `/tt` to control the timeline.
 - `visits [player]` - View recorded player visits.
 
 Time can be specified in ticks (`t`), seconds (`s`), minutes (`m`), hours (`h`), or days (`d`). For example, `5m`, `30s`, or `1200t`.
+
+A **Return to the Present** button appears in the pause menu whenever you are behind the present, and
+the same jump is bound to `;` by default (rebindable under Controls). Both confirm with
+`Returning to the present...`.
 
 ## Settings
 
@@ -46,9 +53,11 @@ Use `/tt settings` to view the current settings.
 
 Use `/tt settings toggles <option> <true|false>` to change an option.
 
+- `individualTime` - Give each player their own position on the timeline instead of moving the whole server together. See below.
 - `syncDayTime` - Synchronize the world's time of day with the timeline.
 - `jumpRequiresOp` - Configure operator requirements for time jumps.
 - `chainDeath` - Configure chained death behavior.
+- `noDuplication` - Stop travellers from taking items their past self is going to collect (off by default).
 - `trackItems` - Toggle dropped-item tracking.
 - `trackChat` - Toggle chat tracking.
 - `hurtClones` - Toggle whether recorded player clones can be hurt.
@@ -66,6 +75,17 @@ Requires [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat/).
 - `voice threshold <dB>` - Set the voice interaction threshold.
 - `voice cooldown <ticks>` - Set the voice interaction cooldown.
 
-# Support
 
-If you encounter an issue or need help, open an issue on the [GitHub repository](https://github.com/Fl1s/Time_Travel_Rewritten/issues).
+# Custom Additions:
+
+### Usage
+- `jump present` - Jump to the newest point the timeline has reached. (though this is only really relevant with `individualTime` enabled)
+- `jump join <player>` - Match another traveller's time. Requires `individualTime`.
+- `jump ... bring <targets>` - Take other players along on your jump, e.g. `jump back 30s bring @a[distance=..8]` (Player-only).
+
+### Toggles
+- `individualTime` - Give each player their own position on the timeline instead of moving the whole server together. See below.
+- `noDuplication` - Stop travellers from taking items their past self is going to collect (off by default). 
+
+## Individual Time
+i WAS going to explain how this works in depth but.. its literally so that each player has their own timeline. and believe me. i had to pull some mysterious voodoo client server shit to make this work as intended.

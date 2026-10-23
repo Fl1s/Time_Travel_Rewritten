@@ -1,10 +1,12 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.clone.HeadCarry;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
@@ -67,13 +69,14 @@ public final class VehicleContainerJournal {
 
     public static void tick() {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        if (TimeTravel.timelineTick % POLL_INTERVAL != 0) return;
+        if (TimeTravel.sharedTick % POLL_INTERVAL != 0) return;
 
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString().intern();
+            String dim = Levels.canonicalId(level);
             for (Entity e : level.getAllEntities()) {
                 if (!isContainer(e)) continue;
                 if (!(e instanceof Container container)) continue;
+                if (HeadVehicleView.isCopy(e) || HeadCarry.isCarried(e.getUUID())) continue;
 
                 UUID id = e.getUUID();
                 String now = snapshot(container);
@@ -95,7 +98,7 @@ public final class VehicleContainerJournal {
                 entry.uuid = id;
                 entry.oldItems = prev;
                 entry.newItems = now;
-                entry.tick = TimeTravel.timelineTick;
+                entry.tick = TimeContext.now();
                 entry.seq = STORE.nextSeq();
                 entry.visit = pd.getCurrentVisit().id;
                 STORE.entries().add(entry);
@@ -140,6 +143,37 @@ public final class VehicleContainerJournal {
             container.setChanged();
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to apply vehicle container entry for {}", e.uuid, ex);
+        } finally {
+            applying = false;
+        }
+    }
+
+    public static String contentsAt(UUID id, long tick) {
+        Entry before = null;
+        Entry after = null;
+        for (Entry e : STORE.entries()) {
+            if (!id.equals(e.uuid)) continue;
+            if (e.tick <= tick) {
+                if (before == null || e.tick > before.tick || (e.tick == before.tick && e.seq > before.seq)) before = e;
+            } else if (after == null || e.tick < after.tick || (e.tick == after.tick && e.seq < after.seq)) {
+                after = e;
+            }
+        }
+        if (before != null) return before.newItems;
+        return after != null ? after.oldItems : null;
+    }
+
+    public static void fill(Container container, String items) {
+        if (items == null) return;
+        applying = true;
+        try {
+            int size = container.getContainerSize();
+            NonNullList<ItemStack> list = NonNullList.withSize(size, ItemStack.EMPTY);
+            ContainerHelper.loadAllItems(TagParser.parseTag(items), list, TimeTravel.server.registryAccess());
+            for (int i = 0; i < size; i++) container.setItem(i, list.get(i).copy());
+            container.setChanged();
+        } catch (Exception ex) {
+            TimeTravel.TIMELINE_LOGGER.error("Failed to fill a vehicle container", ex);
         } finally {
             applying = false;
         }
