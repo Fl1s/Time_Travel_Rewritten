@@ -38,6 +38,10 @@ public class TimeTravelConfig {
     public boolean oldSfx = false;
     public boolean hurtPastSelves = true;
 
+    public float hudScale = 1.0f;
+    public boolean hudAtBottom = false;
+    public boolean compactHud = false;
+
     /* ------------- Voice (Simple Voice Chat) ------------- */
 
     public boolean voiceInteractionEnabled = true;
@@ -97,6 +101,7 @@ public class TimeTravelConfig {
         if (config.voiceInteractionThresholdDb < -127 || config.voiceInteractionThresholdDb > 0) {
             config.voiceInteractionThresholdDb = -50;
         }
+        if (config.hudScale < 0.5f || config.hudScale > 2.0f) config.hudScale = 1.0f;
         if (config.voiceInteractionCooldownTicks < 1) config.voiceInteractionCooldownTicks = 20;
         if (config.voiceAudioDistance < 1.0f) config.voiceAudioDistance = 48.0f;
 

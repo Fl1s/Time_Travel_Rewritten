@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Gliders, Immersive Aircraft and Civillian Aviation compat
  - Iron's Spells 'n Spellbooks
 
+### Changed
+
+ - Combat roll, Better Combat and Emotecraft compat
+ - Timeline hud
+
 ### Fixed
 
  - Paradox death chain
