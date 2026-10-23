@@ -24,6 +24,7 @@ import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import net.minecraft.network.chat.Component;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -139,7 +140,7 @@ public final class Timeline {
         TimeTravel.broadcastSync();
     }
 
-    private static void relocate(TimelineSession s, PlayerData pd, long from, long target, int dir) {
+    private static void relocate(TimelineSession s, PlayerData pd, long from, long target, int dir, boolean fx) {
         ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
         if (pd.getCurrentVisit() != null) s.visits.endVisit(pd, dir);
         pd.setLastJumpOrigin(from);
@@ -147,7 +148,7 @@ public final class Timeline {
         long toOffset = Math.max(0, TimeTravel.presentTick - target);
         s.heads.move(pd, toOffset);
         if (player != null) {
-            TravelFx.onTravel(player, fromOffset, toOffset, dir);
+            if (fx) TravelFx.onTravel(player, fromOffset, toOffset, dir);
             HeadWorldView.onTravel(player, fromOffset, toOffset);
             HeadMobView.onTravel(player);
             HeadCarry.onTravel(player, fromOffset, toOffset);
@@ -163,10 +164,9 @@ public final class Timeline {
         if (pd == null) return "Only recorded players can travel while individualTime is on";
 
         long from = s.heads.positionOf(pd);
-        target = Math.min(target, TimeTravel.presentTick);
         if (TimeTravel.maxJumpTicks > 0) {
             long min = Math.max(0, from - TimeTravel.maxJumpTicks);
-            long max = Math.min(TimeTravel.presentTick, from + TimeTravel.maxJumpTicks);
+            long max = from + TimeTravel.maxJumpTicks;
             target = Math.min(max, Math.max(min, target));
         }
         if (target == from) return "Already at " + TimeFormat.clock(target);
@@ -179,26 +179,78 @@ public final class Timeline {
         pd.setLastJumpServerTick(nowServerTick);
 
         int dir = target > from ? 1 : -1;
-        relocate(s, pd, from, target, dir);
+        long skipped = Math.max(0, target - TimeTravel.presentTick);
+        Set<String> moved = new HashSet<>();
+        if (skipped > 0) {
+            Component note = Component.literal(initiatorName + " skipped ahead to "
+                    + TimeFormat.format(target, TimeTravel.displayTimeInTicks) + " and brought the present along");
+            for (PlayerData present : skipAhead(s, skipped)) {
+                relocate(s, present, s.heads.positionOf(present), target, dir, false);
+                moved.add(present.getName());
+                ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(present.getName());
+                if (player != null && present != pd) player.displayClientMessage(note, true);
+            }
+        }
+        if (!moved.contains(pd.getName())) relocate(s, pd, from, target, dir, true);
 
         int brought = 0;
         for (ServerPlayer passenger : bring) {
             String name = passenger.getName().getString();
             if (name.equalsIgnoreCase(pd.getName())) continue;
             PlayerData ppd = TimeTravel.timelineSceneManager.getRecordingPlayer(name);
-            if (ppd == null || !ppd.getActive()) continue;
-            relocate(s, ppd, s.heads.positionOf(ppd), target, dir);
+            if (ppd == null || !ppd.getActive() || moved.contains(ppd.getName())) continue;
+            relocate(s, ppd, s.heads.positionOf(ppd), target, dir, true);
             passenger.displayClientMessage(Component.literal(initiatorName + " brought you to "
                     + TimeFormat.format(target, TimeTravel.displayTimeInTicks)), true);
             brought++;
         }
+        if (skipped > 0) TimeTravel.broadcastSync();
 
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
 
-        TimeTravel.TIMELINE_LOGGER.info("Individual time jump by {}: {} -> {} (offset {}, brought {})",
-                initiatorName, from, target, pd.getTimeOffset(), brought);
+        TimeTravel.TIMELINE_LOGGER.info("Individual time jump by {}: {} -> {} (offset {}, brought {}, skipped {})",
+                initiatorName, from, target, pd.getTimeOffset(), brought, skipped);
         return null;
+    }
+
+    private static List<PlayerData> skipAhead(TimelineSession s, long skipped) {
+        List<PlayerData> present = new ArrayList<>();
+        List<PlayerData> offline = new ArrayList<>();
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> {
+            if (pd.getTimeOffset() != 0) return;
+            boolean online = pd.getActive() && TimeTravel.server.getPlayerList().getPlayerByName(pd.getName()) != null;
+            (online ? present : offline).add(pd);
+        });
+
+        long from = TimeTravel.sharedTick;
+        long to = from + skipped;
+        BlockJournal.flushWatches();
+        ProcessJournal.beforeJump();
+
+        s.heads.shiftAll(skipped);
+        for (PlayerData pd : offline) pd.setTimeOffset(0);
+        Journal.shiftAllHeads(skipped);
+        HeadWorldView.shiftHeads(skipped);
+        HeadItemView.shiftHeads(skipped);
+        HeadVehicleView.shiftHeads(skipped);
+        HeadCarry.shiftHeads(skipped);
+        HeadMobView.shiftHeads(skipped);
+        PastContainers.shiftHeads(skipped);
+        TravelFx.shiftHeads(skipped);
+        s.clones.shiftHeads(skipped);
+
+        advancePresent(TimeTravel.presentTick + skipped);
+        TimeTravel.sharedTick = s.heads.sharedPosition();
+        TimeTravel.config.timelineTick = TimeTravel.sharedTick;
+        if (TimeTravel.syncDayTime && TimeTravel.serverLevel.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
+            TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.sharedTick);
+        }
+
+        EntityJournal.fastForward(from, to);
+        MobJournal.fastForward(from, to);
+        ProcessJournal.afterJump(from, to);
+        return present;
     }
 
     public String jumpTo(long target, String initiatorName) {

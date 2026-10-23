@@ -47,6 +47,11 @@ public final class HeadItemView {
         return entity instanceof ItemEntity && copies.containsKey(entity.getUUID());
     }
 
+    public static void shiftHeads(long delta) {
+        copies.replaceAll((id, copy) -> new Copy(TimeHeads.shifted(copy.head(), delta), copy.original(), copy.level()));
+        TimeHeads.shiftKeys(byHead, delta);
+    }
+
     public static boolean isOrphan(ItemEntity item) {
         return item.getTags().contains(TAG) && !copies.containsKey(item.getUUID());
     }
@@ -133,7 +138,7 @@ public final class HeadItemView {
         if (stack.isEmpty() || age < 0 || age >= LIFESPAN) return;
         Map<UUID, UUID> mine = byHead.computeIfAbsent(head, k -> new HashMap<>());
         if (mine.containsKey(original)) return;
-        UUID id = UUID.nameUUIDFromBytes((head + "/" + original).getBytes(StandardCharsets.UTF_8));
+        UUID id = UUID.nameUUIDFromBytes((TimeHeads.toTag(head) + "/" + original).getBytes(StandardCharsets.UTF_8));
         if (level.getEntity(id) != null) return;
 
         ItemEntity item = new ItemEntity(level, x, y, z, stack);

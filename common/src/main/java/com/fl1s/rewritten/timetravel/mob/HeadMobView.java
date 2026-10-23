@@ -63,6 +63,10 @@ public final class HeadMobView {
         seated.clear();
     }
 
+    public static void shiftHeads(long delta) {
+        rides.replaceAll((id, ride) -> new Ride(TimeHeads.shifted(ride.head(), delta), ride.mob()));
+    }
+
     public static boolean rideVisually(ServerPlayer clone, UUID mob) {
         if (!enabled() || !(MobTrailJournal.tracked(mob) || CarryTrailJournal.has(mob))) return false;
         long head = TimeTravel.cloneHeadOf(clone);

@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.net.CloneAppearPayload;
 import com.fl1s.rewritten.timetravel.net.CloneVanishPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -27,6 +28,10 @@ public final class TravelFx {
 
     public static void clear() {
         fading.clear();
+    }
+
+    public static void shiftHeads(long delta) {
+        fading.replaceAll((id, fade) -> new Fade(TimeHeads.shifted(fade.fromHead(), delta), fade.until() + delta));
     }
 
     public static void onTravel(ServerPlayer player, long fromOffset, long toOffset, int dir) {

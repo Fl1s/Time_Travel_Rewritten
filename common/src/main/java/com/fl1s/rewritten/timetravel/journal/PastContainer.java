@@ -18,7 +18,7 @@ public final class PastContainer implements Container {
     private final ServerPlayer viewer;
     private final String dim;
     private final BlockPos pos;
-    private final long head;
+    private long head;
     private final boolean ghost;
     private final NonNullList<ItemStack> view;
     private final NonNullList<ItemStack> committed;
@@ -36,6 +36,10 @@ public final class PastContainer implements Container {
         this.nextChange = nextChange;
         this.committed = NonNullList.withSize(view.size(), ItemStack.EMPTY);
         for (int i = 0; i < view.size(); i++) committed.set(i, view.get(i).copy());
+    }
+
+    void shift(long delta) {
+        if (head > 0) head += delta;
     }
 
     private boolean historied(int slot) {

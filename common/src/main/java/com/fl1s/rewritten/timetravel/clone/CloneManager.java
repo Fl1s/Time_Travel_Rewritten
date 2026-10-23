@@ -66,7 +66,7 @@ public final class CloneManager {
         final int visitId;
         final CloneFx fx;
         final Visit visit;
-        final long head;
+        long head;
         int pendingSkip;
         boolean shielded;
         boolean wasInvulnerable;
@@ -143,6 +143,16 @@ public final class CloneManager {
         pendingSounds.remove(head);
         built.remove(head);
         stopHead(head);
+    }
+
+    public void shiftHeads(long delta) {
+        TimeHeads.shiftKeys(pending, delta);
+        TimeHeads.shiftKeys(pendingSounds, delta);
+        Set<Long> moved = new HashSet<>();
+        for (Long head : built) moved.add(TimeHeads.shifted(head, delta));
+        built.clear();
+        built.addAll(moved);
+        for (Clone clone : roots) clone.head = TimeHeads.shifted(clone.head, delta);
     }
 
     public void rebuildAll() {
