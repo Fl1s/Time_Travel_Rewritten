@@ -10,11 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
  - Combat roll, Better Combat and Emotecraft compat
  - Gliders, Immersive Aircraft and Civillian Aviation compat
- - Iron's Spells 'n Spellbooks
+ - Iron's Spells 'n Spellbooks (huge wip, much bugs)
 
 ### Changed
 
- - Combat roll, Better Combat and Emotecraft compat
  - Timeline hud
 
 ### Fixed
