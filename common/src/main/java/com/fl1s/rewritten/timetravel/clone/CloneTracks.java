@@ -9,7 +9,9 @@ import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.entity.FishingHookExt;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import com.fl1s.rewritten.timetravel.mob.HeadMobView;
+import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
+import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -313,12 +315,23 @@ public final class CloneTracks {
             } catch (IllegalArgumentException ex) {
                 continue;
             }
-            Entity target = level.getEntity(id);
+            Entity target = targetFor(clone, level, id);
             if (target == null || target.isRemoved()) continue;
             double d2 = clone.distanceToSqr(target);
             if (d2 > 36.0) continue;
             clone.attack(target);
         }
+    }
+
+    private static Entity targetFor(ServerPlayer clone, ServerLevel level, UUID id) {
+        long head = TimeTravel.cloneHeadOf(clone);
+        boolean past = TimeTravel.individualTime && head != CloneManager.NO_HEAD && head > 0;
+        if (past && MobTrailJournal.tracked(id)) return null;
+        if (past && VehicleSpawnJournal.isRecorded(id)) return HeadVehicleView.vehicleFor(clone, id);
+        Entity target = level.getEntity(id);
+        if (target == null || !past) return target;
+        long carried = HeadCarry.headOf(target);
+        return carried == HeadCarry.NONE || carried == head ? target : null;
     }
 
     private static void applyTotems(Visit visit, ServerPlayer clone, long now) {
