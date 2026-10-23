@@ -87,4 +87,4 @@ Requires [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat/).
 - `noDuplication` - Stop travellers from taking items their past self is going to collect (off by default). 
 
 ## Individual Time
-i WAS going to explain how this works in depth but.. its literally so that each player has their own timeline. 
+i WAS going to explain how this works in depth but.. its literally so that each player has their own timeline. and believe me. i had to pull some mysterious voodoo client server shit to make this work as intended.
