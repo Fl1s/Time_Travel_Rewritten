@@ -37,7 +37,8 @@ public final class TimelineClient {
 
     private static final long NO_PREVIEW = -1L;
 
-    private record JumpRecord(long from, long to) { }
+    private record JumpRecord(long from, long to) {
+    }
 
     private static final List<JumpRecord> history = new ArrayList<>();
 
@@ -45,41 +46,40 @@ public final class TimelineClient {
     private static final ResourceLocation HUD_DARK_TEXTURE = ResourceLocation.fromNamespaceAndPath("timetravel_rewritten", "textures/gui/hud_dark.png");
 
     private static final int TEX_W = 160;
-    private static final int TEX_H = 75;
+    private static final int TEX_H = 87;
     private static final int TEX_NORMAL_V = 0;
-    private static final int TEX_PREVIEW_V = 30;
-    private static final int TEX_PLUS_V = 70;
-    private static final int TEX_PLUS_SIZE = 5;
+    private static final int TEX_PREVIEW_V = 35;
+
+    private static final int TEX_ARROW_SIZE = 7;
+    private static final int TEX_ARROW_UP_U = 0;
+    private static final int TEX_ARROW_UP_V = 80;
+    private static final int TEX_ARROW_DOWN_U = 7;
+    private static final int TEX_ARROW_DOWN_V = 80;
 
     private static final int PANEL_W = 160;
-    private static final int PANEL_H_NORMAL = 30;
-    private static final int PANEL_H_PREVIEW = 40;
+    private static final int PANEL_H_NORMAL = 35;
+    private static final int PANEL_H_PREVIEW = 45;
     private static final int BOTTOM_OFFSET = 55;
+    private static final int SCREEN_MARGIN = 4;
+    private static final int TOP_MARGIN = 20;
 
-    private static final int WINDOW_LEFT = 3;
+    private static final int WINDOW_LEFT = 2;
     private static final int WINDOW_RIGHT = 158;
-    private static final int WINDOW_TOP = 3;
-    private static final int WINDOW_BOTTOM_NORMAL = 28;
-    private static final int WINDOW_BOTTOM_PREVIEW = 38;
-    private static final int DARK_WINDOW_FILL = 0x80000000;
+    private static final int WINDOW_TOP = 2;
+    private static final int WINDOW_BOTTOM_NORMAL = 33;
+    private static final int WINDOW_BOTTOM_PREVIEW = 43;
+    private static final int WINDOW_FILL = 0x80000000;
 
-    private static final int LIGHT_COLOR_TEXT = 0xFF404040;
-    private static final int LIGHT_COLOR_BAR_BG = 0xFF8B8B8B;
-    private static final int LIGHT_COLOR_START = 0xFF000000;
-    private static final int LIGHT_COLOR_NOW = 0xFFFFFFFF;
-    private static final int LIGHT_COLOR_PAST = 0xFF55AAFF;
-    private static final int LIGHT_COLOR_FUTURE = 0xFFFFDD00;
-    private static final int LIGHT_COLOR_RETURN = 0xFF444444;
-    private static final int LIGHT_COLOR_TICK = 0x40000000;
+    private static final int COMPACT_BG = 0x90000000;
 
-    private static final int DARK_COLOR_TEXT = 0xFFE0E0E0;
-    private static final int DARK_COLOR_BAR_BG = 0xFF3A3A3A;
-    private static final int DARK_COLOR_START = 0xFFE0E0E0;
-    private static final int DARK_COLOR_NOW = 0xFFFFFFFF;
-    private static final int DARK_COLOR_PAST = 0xFF55AAFF;
-    private static final int DARK_COLOR_FUTURE = 0xFFFFDD00;
-    private static final int DARK_COLOR_RETURN = 0xFFAAAAAA;
-    private static final int DARK_COLOR_TICK = 0x40FFFFFF;
+    private static final int COLOR_TEXT = 0xFFE0E0E0;
+    private static final int COLOR_BAR_BG = 0xFF3A3A3A;
+    private static final int COLOR_START = 0xFFE0E0E0;
+    private static final int COLOR_NOW = 0xFFFFFFFF;
+    private static final int COLOR_PAST = 0xFF55AAFF;
+    private static final int COLOR_FUTURE = 0xFFFFDD00;
+    private static final int COLOR_RETURN = 0xFFAAAAAA;
+    private static final int COLOR_TICK = 0x40FFFFFF;
 
     private static boolean running = false;
     private static boolean showTicks = false;
@@ -106,7 +106,7 @@ public final class TimelineClient {
             } else {
                 returnTick = displayTick;
                 history.add(new JumpRecord(displayTick, payload.tick()));
-                if (history.size() > TimeTravel.maxHistorySize) history.removeFirst();
+                if (history.size() > 50) history.remove(0);
             }
         }
         synced = true;
@@ -232,26 +232,19 @@ public final class TimelineClient {
 
         boolean previewing = previewTick != NO_PREVIEW;
         boolean compact = TimeTravel.compactHud;
-        boolean showBar = !compact;
         boolean dark = TimeTravel.isDarkHud;
 
-        int colorText = dark ? DARK_COLOR_TEXT : LIGHT_COLOR_TEXT;
-
-        Component line1;
-        Component line2 = null;
-
         if (compact) {
-            if (previewing) {
-                line1 = Component.translatable("hud.timetravel_rewritten.target", TimeFormat.format(previewTick, showTicks), TimeFormat.delta(previewTick - displayTick, showTicks));
-            } else {
-                line1 = buildLine1(displayTick);
-            }
-        } else {
-            line1 = buildLine1(displayTick);
-            if (previewing) {
-                String key = previewTick < displayTick ? "hud.timetravel_rewritten.target.past" : "hud.timetravel_rewritten.target.future";
-                line2 = Component.translatable(key, TimeFormat.format(previewTick, showTicks), TimeFormat.delta(previewTick - displayTick, showTicks));
-            }
+            Component line = previewing ? Component.translatable("hud.timetravel_rewritten.target", TimeFormat.format(previewTick, showTicks), TimeFormat.delta(previewTick - displayTick, showTicks)) : buildLine1(displayTick);
+            renderCompact(graphics, mc, line, previewing);
+            return;
+        }
+
+        Component line1 = buildLine1(displayTick);
+        Component line2 = null;
+        if (previewing) {
+            String key = previewTick < displayTick ? "hud.timetravel_rewritten.target.past" : "hud.timetravel_rewritten.target.future";
+            line2 = Component.translatable(key, TimeFormat.format(previewTick, showTicks), TimeFormat.delta(previewTick - displayTick, showTicks));
         }
 
         int panelW = PANEL_W;
@@ -259,18 +252,18 @@ public final class TimelineClient {
 
         int gw = graphics.guiWidth();
         int gh = graphics.guiHeight();
-        int px = (gw - panelW) / 2;
 
         float s = TimeTravel.hudScale;
-        int py = TimeTravel.hudAtBottom ? gh - (int) (BOTTOM_OFFSET / s) - panelH : 4;
+        int px = gw - (int) (panelW * s) - SCREEN_MARGIN;
+        int py = TimeTravel.hudAtBottom ? gh - (int) (BOTTOM_OFFSET / s) - panelH : TOP_MARGIN;
 
         boolean scaled = Math.abs(s - 1.0f) > 1e-4f;
         if (scaled) {
-            float anchorY = TimeTravel.hudAtBottom ? gh : 0;
             graphics.pose().pushPose();
-            graphics.pose().translate(gw / 2f, anchorY, 0);
+            graphics.pose().translate(px, py, 0);
             graphics.pose().scale(s, s, 1f);
-            graphics.pose().translate(-gw / 2f, -anchorY, 0);
+            px = 0;
+            py = 0;
         }
 
         try {
@@ -278,27 +271,49 @@ public final class TimelineClient {
             int vOff = previewing ? TEX_PREVIEW_V : TEX_NORMAL_V;
             graphics.blit(tex, px, py, 0, vOff, panelW, panelH, TEX_W, TEX_H);
 
-            if (dark) {
-                int wb = previewing ? WINDOW_BOTTOM_PREVIEW : WINDOW_BOTTOM_NORMAL;
-                graphics.fill(px + WINDOW_LEFT, py + WINDOW_TOP, px + WINDOW_RIGHT, py + wb, DARK_WINDOW_FILL);
-            }
+            int wb = previewing ? WINDOW_BOTTOM_PREVIEW : WINDOW_BOTTOM_NORMAL;
+            graphics.fill(px + WINDOW_LEFT, py + WINDOW_TOP, px + WINDOW_RIGHT, py + wb, WINDOW_FILL);
 
             int cx = px + panelW / 2;
 
-            drawCenteredNoShadow(graphics, mc.font, line1, cx, py + 6, colorText);
+            drawCenteredNoShadow(graphics, mc.font, line1, cx, py + 6, COLOR_TEXT);
 
             if (line2 != null) {
-                drawCenteredNoShadow(graphics, mc.font, line2, cx, py + 16, colorText);
+                drawCenteredNoShadow(graphics, mc.font, line2, cx, py + 16, COLOR_TEXT);
             }
 
-            if (showBar) {
-                long previewPos = previewing ? (previewVisual != NO_PREVIEW ? previewVisual : previewTick) : NO_PREVIEW;
-                int barY = py + (previewing ? 30 : 20);
-                renderTimelineBar(graphics, tex, cx, barY, panelW - 12, displayTick, previewPos, returnTick, dark, previewing);
-            }
+            long previewPos = previewing ? (previewVisual != NO_PREVIEW ? previewVisual : previewTick) : NO_PREVIEW;
+            int barY = py + (previewing ? 35 : 25);
+            renderTimelineBar(graphics, tex, cx, barY, panelW - 12, displayTick, previewPos, returnTick, previewing);
         } finally {
             if (scaled) graphics.pose().popPose();
         }
+    }
+
+    private static void renderCompact(GuiGraphics graphics, Minecraft mc, Component line, boolean previewing) {
+        int gw = graphics.guiWidth();
+        int gh = graphics.guiHeight();
+
+        int lineW = mc.font.width(line);
+        int boxW = lineW + 12;
+        int boxH = mc.font.lineHeight + 8;
+
+        float s = TimeTravel.hudScale;
+        int px = gw - (int) (boxW * s) - SCREEN_MARGIN;
+        int py = TimeTravel.hudAtBottom ? gh - (int) (BOTTOM_OFFSET / s) - (int) (boxH * s) : TOP_MARGIN;
+
+        graphics.pose().pushPose();
+        graphics.pose().translate(px, py, 0);
+        graphics.pose().scale(s, s, 1f);
+
+        graphics.fill(0, 0, boxW, boxH, COMPACT_BG);
+        graphics.fill(0, 0, boxW, 1, 0x30FFFFFF);
+
+        int color = previewing ? (previewTick < displayTick ? COLOR_PAST : COLOR_FUTURE) : 0xFFFFFFFF;
+
+        graphics.drawString(mc.font, line, (boxW - lineW) / 2, (boxH - mc.font.lineHeight) / 2, color, false);
+
+        graphics.pose().popPose();
     }
 
     private static void drawCenteredNoShadow(GuiGraphics graphics, Font font, Component text, int cx, int y, int color) {
@@ -306,25 +321,17 @@ public final class TimelineClient {
         graphics.drawString(font, text, cx - w / 2, y, color, false);
     }
 
-    private static void renderTimelineBar(GuiGraphics g, ResourceLocation tex, int cx, int y, int width, long display, long preview, long ret, boolean dark, boolean previewing) {
+    private static void renderTimelineBar(GuiGraphics g, ResourceLocation tex, int cx, int y, int width, long display, long preview, long ret, boolean previewing) {
         if (width < 20) return;
-
-        int colorBarBg = dark ? DARK_COLOR_BAR_BG : LIGHT_COLOR_BAR_BG;
-        int colorStart = dark ? DARK_COLOR_START : LIGHT_COLOR_START;
-        int colorNow = dark ? DARK_COLOR_NOW : LIGHT_COLOR_NOW;
-        int colorPast = dark ? DARK_COLOR_PAST : LIGHT_COLOR_PAST;
-        int colorFuture = dark ? DARK_COLOR_FUTURE : LIGHT_COLOR_FUTURE;
-        int colorReturn = dark ? DARK_COLOR_RETURN : LIGHT_COLOR_RETURN;
-        int colorTick = dark ? DARK_COLOR_TICK : LIGHT_COLOR_TICK;
 
         int alphaMask = previewing ? 0x40 : 0xFF;
         int x0 = cx - width / 2;
         int h = 4;
         long half = 1200L;
 
-        g.fill(x0, y, x0 + width, y + h, colorBarBg);
+        g.fill(x0, y, x0 + width, y + h, COLOR_BAR_BG);
 
-        int dimTickColor = (colorTick & 0x00FFFFFF) | (alphaMask << 24);
+        int dimTickColor = (COLOR_TICK & 0x00FFFFFF) | (alphaMask << 24);
         long startTick = display - half;
         long endTick = display + half;
         long firstTick = Math.max(0, (startTick / 20) * 20);
@@ -342,18 +349,23 @@ public final class TimelineClient {
         long dStart = -display;
         if (dStart >= -half) {
             int sx = cx + (int) Math.round(dStart * (width / 2.0) / half);
-            g.fill(sx, y - 1, sx + 1, y + h + 1, colorStart);
+            g.fill(sx, y - 1, sx + 1, y + h + 1, COLOR_START);
         } else {
-            g.fill(x0, y - 1, x0 + 1, y + h + 1, colorStart);
+            g.fill(x0, y - 1, x0 + 1, y + h + 1, COLOR_START);
         }
 
         if (ret != NO_PREVIEW) {
             long d = Math.max(-half, Math.min(half, ret - display));
             int rx = cx + (int) Math.round(d * (width / 2.0) / half);
-            g.fill(rx - 1, y - 1, rx + 2, y + h + 1, colorReturn);
+            g.fill(rx - 1, y - 1, rx + 2, y + h + 1, COLOR_RETURN);
         }
 
-        for (JumpRecord j : history) {
+        int arrowY = y - TEX_ARROW_SIZE;
+        int branchY = arrowY - 3;
+
+        int hSize = history.size();
+        for (int i = 0; i < hSize; i++) {
+            JumpRecord j = history.get(i);
             long dFrom = Math.max(-half, Math.min(half, j.from() - display));
             long dTo = Math.max(-half, Math.min(half, j.to() - display));
             int pxFrom = cx + (int) Math.round(dFrom * (width / 2.0) / half);
@@ -361,36 +373,40 @@ public final class TimelineClient {
 
             if (pxFrom == pxTo) continue;
 
-            int c = j.to() < j.from() ? colorPast : colorFuture;
-            c = (c & 0x00FFFFFF) | (alphaMask << 24);
+            float fade = hSize > 1 ? (0.15f + 0.85f * i / (float) (hSize - 1)) : 1.0f;
+            int jumpAlpha = (int) (255 * fade);
+            if (previewing) jumpAlpha /= 4;
 
-            int branchY = y - 4;
-            g.fill(pxFrom, y - 2, pxFrom + 1, branchY, c);
+            int c = j.to() < j.from() ? COLOR_PAST : COLOR_FUTURE;
+            c = (c & 0x00FFFFFF) | (jumpAlpha << 24);
+
+            g.fill(pxFrom, arrowY, pxFrom + 1, branchY, c);
+            g.fill(pxTo, arrowY, pxTo + 1, branchY, c);
             g.fill(Math.min(pxFrom, pxTo), branchY, Math.max(pxFrom, pxTo) + 1, branchY + 1, c);
-            g.fill(pxTo, y - 2, pxTo + 1, branchY, c);
 
-            RenderSystem.setShaderColor(1f, 1f, 1f, alphaMask / 255f);
-            g.blit(tex, pxTo - 2, y - 2, 0, TEX_PLUS_V, TEX_PLUS_SIZE, TEX_PLUS_SIZE, TEX_W, TEX_H);
+            RenderSystem.setShaderColor(1f, 1f, 1f, jumpAlpha / 255f);
+            g.blit(tex, pxFrom - 3, arrowY, TEX_ARROW_UP_U, TEX_ARROW_UP_V, TEX_ARROW_SIZE, TEX_ARROW_SIZE, TEX_W, TEX_H);
+            g.blit(tex, pxTo - 3, arrowY, TEX_ARROW_DOWN_U, TEX_ARROW_DOWN_V, TEX_ARROW_SIZE, TEX_ARROW_SIZE, TEX_W, TEX_H);
             RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
         }
 
         if (preview != NO_PREVIEW) {
             long d = Math.max(-half, Math.min(half, preview - display));
             int px = cx + (int) Math.round(d * (width / 2.0) / half);
-            int color = preview < display ? colorPast : colorFuture;
+            int color = preview < display ? COLOR_PAST : COLOR_FUTURE;
 
             if (px != cx) {
-                int branchY = y - 4;
-                g.fill(cx, y - 2, cx + 1, branchY, color);
+                g.fill(cx, arrowY, cx + 1, branchY, color);
+                g.fill(px, arrowY, px + 1, branchY, color);
                 g.fill(Math.min(cx, px), branchY, Math.max(cx, px) + 1, branchY + 1, color);
-                g.fill(px, y - 2, px + 1, branchY, color);
             }
 
             RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-            g.blit(tex, px - 2, y - 2, 0, TEX_PLUS_V, TEX_PLUS_SIZE, TEX_PLUS_SIZE, TEX_W, TEX_H);
+            g.blit(tex, cx - 3, arrowY, TEX_ARROW_UP_U, TEX_ARROW_UP_V, TEX_ARROW_SIZE, TEX_ARROW_SIZE, TEX_W, TEX_H);
+            g.blit(tex, px - 3, arrowY, TEX_ARROW_DOWN_U, TEX_ARROW_DOWN_V, TEX_ARROW_SIZE, TEX_ARROW_SIZE, TEX_W, TEX_H);
         }
 
-        g.fill(cx, y - 2, cx + 1, y + h + 2, colorNow);
+        g.fill(cx, y - 2, cx + 1, y + h + 2, COLOR_NOW);
     }
 
     private static Component buildLine1(long tick) {
