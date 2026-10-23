@@ -23,8 +23,10 @@ public final class CastRelay implements RelayAdapter {
     private static final ResourceLocation FINISHED_ID = ResourceLocation.fromNamespaceAndPath("irons_spellbooks", "on_cast_finished");
 
     private static boolean initialized = false;
-    private static Field casterIdField;
-    private static Field spellIdField;
+    private static Field startedCasterField;
+    private static Field finishedCasterField;
+    private static Field startedSpellIdField;
+    private static Field finishedSpellIdField;
     private static Field levelField;
     private static Field cancelledField;
     private static Constructor<?> startedCtor;
@@ -53,10 +55,14 @@ public final class CastRelay implements RelayAdapter {
         Class<?> finishedCls = Class.forName("io.redspace.ironsspellbooks.network.casting.OnCastFinishedPacket");
         startedCtor = startedCls.getConstructor(UUID.class, String.class, int.class);
         finishedCtor = finishedCls.getConstructor(UUID.class, String.class, boolean.class);
-        casterIdField = startedCls.getDeclaredField("castingEntityId");
-        casterIdField.setAccessible(true);
-        spellIdField = startedCls.getDeclaredField("spellId");
-        spellIdField.setAccessible(true);
+        startedCasterField = startedCls.getDeclaredField("castingEntityId");
+        startedCasterField.setAccessible(true);
+        finishedCasterField = finishedCls.getDeclaredField("castingEntityId");
+        finishedCasterField.setAccessible(true);
+        startedSpellIdField = startedCls.getDeclaredField("spellId");
+        startedSpellIdField.setAccessible(true);
+        finishedSpellIdField = finishedCls.getDeclaredField("spellId");
+        finishedSpellIdField.setAccessible(true);
         levelField = startedCls.getDeclaredField("spellLevel");
         levelField.setAccessible(true);
         cancelledField = finishedCls.getDeclaredField("cancelled");
@@ -64,7 +70,7 @@ public final class CastRelay implements RelayAdapter {
     }
 
     public static void onOutgoing(ServerPlayer recipient, CustomPacketPayload payload) {
-        if (!initialized || casterIdField == null) return;
+        if (!initialized || startedCasterField == null || finishedCasterField == null) return;
         if (!TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
         if (recipient == null || Clones.is(recipient)) return;
 
@@ -72,7 +78,9 @@ public final class CastRelay implements RelayAdapter {
         if (!STARTED_ID.equals(pid) && !FINISHED_ID.equals(pid)) return;
 
         try {
-            UUID casterId = (UUID) casterIdField.get(payload);
+            boolean isStarted = STARTED_ID.equals(pid);
+            Field casterField = isStarted ? startedCasterField : finishedCasterField;
+            UUID casterId = (UUID) casterField.get(payload);
             if (casterId == null) return;
             if (!casterId.equals(recipient.getUUID())) return;
 
@@ -80,12 +88,12 @@ public final class CastRelay implements RelayAdapter {
             if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return;
 
             String data;
-            if (STARTED_ID.equals(pid)) {
-                String spellId = (String) spellIdField.get(payload);
+            if (isStarted) {
+                String spellId = (String) startedSpellIdField.get(payload);
                 int level = (Integer) levelField.get(payload);
                 data = GSON.toJson(new StartedData(spellId, level));
             } else {
-                String spellId = (String) spellIdField.get(payload);
+                String spellId = (String) finishedSpellIdField.get(payload);
                 boolean cancelled = (Boolean) cancelledField.get(payload);
                 data = GSON.toJson(new FinishedData(spellId, cancelled));
             }
@@ -127,6 +135,17 @@ public final class CastRelay implements RelayAdapter {
             for (ServerPlayer viewer : new ArrayList<>(level.players())) {
                 if (Clones.is(viewer)) continue;
                 TimelineNet.sendToPlayer(viewer, cpp);
+            }
+
+            if (started) {
+                StartedData d = GSON.fromJson(json, StartedData.class);
+                Object finished = finishedCtor.newInstance(cloneUUID, d.spellId, false);
+                if (finished instanceof CustomPacketPayload fcpp) {
+                    for (ServerPlayer viewer : new ArrayList<>(level.players())) {
+                        if (Clones.is(viewer)) continue;
+                        TimelineNet.sendToPlayer(viewer, fcpp);
+                    }
+                }
             }
         } catch (Throwable t) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to replay cast packet", t);

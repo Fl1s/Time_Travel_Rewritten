@@ -136,6 +136,22 @@
     {
       "id": "irons_spellbooks:visual_falling_block",
       "required": false
+    },
+    {
+      "id": "irons_spellbooks:frozen_humanoid",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:sculk_tentacle",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:root",
+      "required": false
+    },
+    {
+      "id": "irons_spellbooks:dead_king_soul",
+      "required": false
     }
   ]
 }

@@ -6,6 +6,7 @@ import com.fl1s.rewritten.timetravel.entity.ClonePearlExt;
 import com.fl1s.rewritten.timetravel.entity.EntityStateJournal;
 import com.fl1s.rewritten.timetravel.journal.ProjectileJournal;
 import com.fl1s.rewritten.timetravel.journal.TrackedEntityJournal;
+import com.fl1s.rewritten.timetravel.mob.MobSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleJournal;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.FishingHook;
@@ -23,6 +24,7 @@ public abstract class EntityRemoveMixin {
         try {
             EntityStateJournal.onRemoved(self, reason);
             VehicleJournal.onRemoved(self, reason);
+            MobSpawnJournal.onRemoved(self, reason);
             if (reason.shouldDestroy()) ProjectileJournal.onRemoved(self);
             if (reason.shouldDestroy()) TrackedEntityJournal.onRemoved(self);
             if (self instanceof FishingHook hook && reason.shouldDestroy()) CloneTracks.onHookRemoved(hook);

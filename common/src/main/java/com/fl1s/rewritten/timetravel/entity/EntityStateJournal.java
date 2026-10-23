@@ -221,7 +221,10 @@ public final class EntityStateJournal {
                 ListTag p = tag.getList("Pos", 6);
                 if (!level.isLoaded(BlockPos.containing(p.getDouble(0), p.getDouble(1), p.getDouble(2)))) return;
                 Entity created = EntityType.loadEntityRecursive(tag, level, en -> en);
-                if (created != null) level.addFreshEntity(created);
+                if (created != null) {
+                    created.setUUID(e.uuid);
+                    level.addFreshEntity(created);
+                }
             }
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to apply entity state entry", ex);

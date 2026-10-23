@@ -75,6 +75,11 @@ public class TogglesCommands {
             TimeTravel.broadcastSync();
         }));
 
+        togglesNode.then(toggle("oldSfx", () -> TimeTravel.oldSfx, v -> {
+            TimeTravel.oldSfx = v;
+            TimeTravel.config.oldSfx = v;
+        }));
+
         settingsNode.then(togglesNode);
         settingsNode.then(voiceNode);
     }

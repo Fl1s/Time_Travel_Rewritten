@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.data;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import net.minecraft.world.entity.Entity;
 
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,10 @@ public final class Clones {
         for (String prefix : FOREIGN) if (name.startsWith(prefix)) return false;
         TimeTravel.TIMELINE_LOGGER.info("Clone player class detected: {}", name);
         return true;
+    }
+
+    public static boolean isVisualOnly(Entity entity) {
+        return false;
     }
 
     public static boolean is(Object o) {

@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.compat.ironsspells.IrSpellsCompat;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
@@ -63,7 +64,12 @@ public final class ProjectileJournal {
     }
 
     private static boolean skip(Entity e) {
-        return e instanceof ThrownEnderpearl || e instanceof FishingHook || e instanceof FireworkRocketEntity;
+        if (e instanceof ThrownEnderpearl) return true;
+        if (e instanceof FishingHook) return true;
+        if (e instanceof FireworkRocketEntity) return true;
+        if (Clones.isVisualOnly(e)) return true;
+        if (IrSpellsCompat.isUntracked(e)) return true;
+        return false;
     }
 
     public static void onSpawn(ServerLevel level, Entity entity) {
@@ -167,6 +173,10 @@ public final class ProjectileJournal {
         applyPuppets();
     }
 
+    public static boolean isPuppeted(Entity e) {
+        return e != null && puppets.containsKey(e.getUUID());
+    }
+
     private static void handleDue(Entry e) {
         if (e.kind == KIND_SPAWN) startPuppet(e);
         else if (e.kind == KIND_END) endPuppet(e.uuid);
@@ -180,6 +190,7 @@ public final class ProjectileJournal {
             CompoundTag tag = TagParser.parseTag(spawn.nbt);
             Entity created = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (created == null) return;
+            created.setUUID(spawn.uuid);
             created.moveTo(spawn.x, spawn.y, spawn.z, spawn.yRot, spawn.xRot);
             created.setDeltaMovement(spawn.vx, spawn.vy, spawn.vz);
             created.addTag(EntityJournal.TAG);

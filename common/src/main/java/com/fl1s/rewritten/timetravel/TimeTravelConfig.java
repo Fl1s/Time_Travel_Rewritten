@@ -35,6 +35,7 @@ public class TimeTravelConfig {
     public boolean trackItems = true;
     public int entityTrackingDistance = 32; // Distance in blocks for mocap entity tracking (items, vehicles)
     public boolean trackChat = true;
+    public boolean oldSfx = false;
     public boolean hurtPastSelves = true;
 
     /* ------------- Voice (Simple Voice Chat) ------------- */

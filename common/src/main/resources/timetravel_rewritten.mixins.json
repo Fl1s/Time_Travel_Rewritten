@@ -56,7 +56,10 @@
     "ServerCommonPacketListenerMixin",
     "BetterCombatAttackSoundMixin",
     "ServerCommonPacketListenerSendMixin",
-    "WispMixin"
+    "WispMixin",
+    "SpectralHammerMixin",
+    "IronSpellsEntityTickMixin",
+    "MagicManagerMixin"
   ],
   "client": [
     "LivingEntityRendererMixin",

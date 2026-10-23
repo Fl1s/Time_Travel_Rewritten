@@ -144,6 +144,10 @@ public final class TrackedEntityJournal {
         STORE.markDirty();
     }
 
+    public static boolean isPuppeted(Entity e) {
+        return e != null && puppets.containsKey(e.getUUID());
+    }
+
     private static void sample() {
         if (TimeTravel.server == null || tracked.isEmpty()) return;
         long now = TimeTravel.timelineTick;
@@ -203,6 +207,7 @@ public final class TrackedEntityJournal {
             CompoundTag tag = TagParser.parseTag(spawn.nbt);
             Entity created = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (created == null) return;
+            created.setUUID(spawn.uuid);
             created.moveTo(spawn.x, spawn.y, spawn.z, spawn.yRot, spawn.xRot);
             created.setDeltaMovement(spawn.vx, spawn.vy, spawn.vz);
             created.addTag(EntityJournal.TAG);

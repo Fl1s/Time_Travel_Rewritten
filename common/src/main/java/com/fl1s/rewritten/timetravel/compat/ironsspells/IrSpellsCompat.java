@@ -24,6 +24,16 @@ public final class IrSpellsCompat {
     private static Method getSummonerMethod;
     private static Method summonManagerSetOwner;
 
+    private static Method skeletonTriggerRise;
+    private static Method zombieTriggerRise;
+
+    private static final net.minecraft.resources.ResourceLocation CHAIN_LIGHTNING =
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("irons_spellbooks", "chain_lightning");
+
+    public static boolean isUntracked(Entity entity) {
+        return entity != null && CHAIN_LIGHTNING.equals(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()));
+    }
+
     public static boolean isLoaded() {
         Boolean l = loaded;
         if (l != null) return l;
@@ -61,6 +71,8 @@ public final class IrSpellsCompat {
         } catch (Throwable t) {
             TimeTravel.TIMELINE_LOGGER.debug("[IrSpells] SummonManager reflection failed: {}", t.toString());
         }
+
+        initRiseReflection();
     }
 
     public static void onRecord(Entity entity, CompoundTag tag) {
@@ -118,6 +130,32 @@ public final class IrSpellsCompat {
             } catch (Throwable t) {
                 TimeTravel.TIMELINE_LOGGER.debug("[IrSpells] summon restore failed: {}", t.toString());
             }
+        }
+    }
+
+    private static void initRiseReflection() {
+        try {
+            Class<?> cls = Class.forName("io.redspace.ironsspellbooks.entity.mobs.SummonedSkeleton");
+            skeletonTriggerRise = cls.getMethod("triggerRiseAnimation");
+        } catch (Throwable ignored) {}
+        try {
+            Class<?> cls = Class.forName("io.redspace.ironsspellbooks.entity.mobs.SummonedZombie");
+            zombieTriggerRise = cls.getMethod("triggerRiseAnimation");
+        } catch (Throwable ignored) {}
+    }
+
+    public static void onRiseAnimation(Entity entity) {
+        if (entity == null || skeletonTriggerRise == null && zombieTriggerRise == null) return;
+        try {
+            if (skeletonTriggerRise != null && skeletonTriggerRise.getDeclaringClass().isInstance(entity)) {
+                skeletonTriggerRise.invoke(entity);
+                return;
+            }
+            if (zombieTriggerRise != null && zombieTriggerRise.getDeclaringClass().isInstance(entity)) {
+                zombieTriggerRise.invoke(entity);
+            }
+        } catch (Throwable t) {
+            TimeTravel.TIMELINE_LOGGER.debug("[IrSpells] rise anim failed: {}", t.toString());
         }
     }
 }

@@ -34,11 +34,6 @@ import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.*;
 
-/**
- * Dense per-tick trail of every mob within {@code entityTrackingDistance} of
- * any player (including clones), plus a coarse per-mob seed sample captured at
- * timeline start.
- */
 public final class MobTrailJournal {
     private MobTrailJournal() {
     }
@@ -96,6 +91,7 @@ public final class MobTrailJournal {
     private static final Map<UUID, Track> tracks = new HashMap<>();
     private static final Set<UUID> sampledThisTick = new HashSet<>();
     private static final Set<UUID> puppets = new HashSet<>();
+    private static final Set<UUID> spawnedPuppets = new HashSet<>();
     private static final String PUPPET_TAG = "tt_puppet";
     private static final String ORIG_NOAI_TAG = "tt_orig_noai";
     private static final Map<UUID, Boolean> originalNoAi = new HashMap<>();
@@ -111,7 +107,24 @@ public final class MobTrailJournal {
     public static boolean isPuppeted(Mob mob) {
         return puppets.contains(mob.getUUID());
     }
-    private static boolean angryOf(Mob mob) {return mob instanceof NeutralMob n && n.getRemainingPersistentAngerTime() > 0;}
+
+    public static void markSpawned(Entity e) {
+        if (e == null) return;
+        spawnedPuppets.add(e.getUUID());
+        if (!puppets.contains(e.getUUID())) {
+            puppets.add(e.getUUID());
+            if (e instanceof Mob mob) {
+                boolean orig = mob.isNoAi();
+                originalNoAi.put(e.getUUID(), orig);
+                mob.addTag(PUPPET_TAG);
+                if (orig) mob.addTag(ORIG_NOAI_TAG);
+            }
+        }
+    }
+
+    private static boolean angryOf(Mob mob) {
+        return mob instanceof NeutralMob n && n.getRemainingPersistentAngerTime() > 0;
+    }
 
     public static boolean isBoss(Entity entity) {
         return entity instanceof EnderDragon || entity instanceof WitherBoss;
@@ -178,6 +191,7 @@ public final class MobTrailJournal {
             String dim = level.dimension().location().toString();
             for (Entity entity : level.getAllEntities()) {
                 if (!(entity instanceof Mob mob) || Clones.is(mob)) continue;
+                if (Clones.isVisualOnly(mob)) continue;
                 seedFor(mob, dim, now);
             }
         }
@@ -208,6 +222,7 @@ public final class MobTrailJournal {
             for (ServerPlayer p : viewers) {
                 for (Mob mob : candidates(level, p, r)) {
                     if (Clones.is(mob)) continue;
+                    if (Clones.isVisualOnly(mob)) continue;
                     if (mob.isDeadOrDying()) continue;
                     UUID id = mob.getUUID();
                     if (isBoss(mob)) bosses.add(id);
@@ -299,6 +314,18 @@ public final class MobTrailJournal {
             UUID id = en.getKey();
             Track t = en.getValue();
 
+            if (MobSpawnJournal.shouldBeDespawned(id, now)) {
+                ServerLevel level = levelOf(t);
+                if (level != null) {
+                    Entity e = level.getEntity(id);
+                    if (e instanceof Mob mob && !mob.isRemoved()) {
+                        MobSpawnJournal.discardForReplay(mob);
+                    }
+                }
+                releasePuppet(id);
+                continue;
+            }
+
             Sample s = null;
             if (!t.samples.isEmpty() && now >= t.firstTick() && now <= t.lastTick() + GRACE) {
                 s = sampleAt(t.samples, now);
@@ -323,6 +350,66 @@ public final class MobTrailJournal {
                 mob.addTag(PUPPET_TAG);
                 if (orig) mob.addTag(ORIG_NOAI_TAG);
             }
+
+            Vec3 vel = Vec3.ZERO;
+            if (mob instanceof EnderDragon) {
+                Sample prev = sampleAt(t.samples, now - 1);
+                if (prev != null) vel = new Vec3(s.x - prev.x, s.y - prev.y, s.z - prev.z);
+            }
+
+            if (!MobJournal.isApplying()) {
+                MobJournal.enterApplying();
+                try {
+                    applySample(mob, s, vel);
+                } finally {
+                    MobJournal.exitApplying();
+                }
+            } else {
+                applySample(mob, s, vel);
+            }
+        }
+    }
+    private static void applySpawned() {
+        if (spawnedPuppets.isEmpty() || TimeTravel.server == null) return;
+        long now = TimeTravel.timelineTick;
+
+        for (UUID id : new ArrayList<>(spawnedPuppets)) {
+            Track t = tracks.get(id);
+            if (t == null) {
+                spawnedPuppets.remove(id);
+                puppets.remove(id);
+                continue;
+            }
+
+            if (MobSpawnJournal.shouldBeDespawned(id, now)) {
+                ServerLevel level = levelOf(t);
+                if (level != null) {
+                    Entity e = level.getEntity(id);
+                    if (e instanceof Mob mob && !mob.isRemoved()) {
+                        MobSpawnJournal.discardForReplay(mob);
+                    }
+                }
+                releasePuppet(id);
+                continue;
+            }
+
+            Sample s = null;
+            if (!t.samples.isEmpty() && now >= t.firstTick() && now <= t.lastTick() + GRACE) {
+                s = sampleAt(t.samples, now);
+            }
+            if (s == null) {
+                releasePuppet(id);
+                continue;
+            }
+            ServerLevel level = levelOf(t);
+            if (level == null) continue;
+            Entity e = level.getEntity(id);
+            if (!(e instanceof Mob mob) || mob.isRemoved()) {
+                releasePuppet(id);
+                continue;
+            }
+            if (mob.isDeadOrDying() && !MobJournal.isDoomed(mob)) continue;
+            if (mob instanceof EnderDragon d && BossFightJournal.isDrivenDeath(d)) continue;
 
             Vec3 vel = Vec3.ZERO;
             if (mob instanceof EnderDragon) {
@@ -425,6 +512,7 @@ public final class MobTrailJournal {
     }
 
     private static void releasePuppet(UUID id) {
+        spawnedPuppets.remove(id);
         if (!puppets.remove(id)) return;
         lastBossHealth.remove(id);
         Boolean orig = originalNoAi.remove(id);
@@ -474,6 +562,13 @@ public final class MobTrailJournal {
         for (UUID id : new ArrayList<>(puppets)) releasePuppet(id);
     }
 
+    private static void releaseTemporaryPuppets() {
+        for (UUID id : new ArrayList<>(puppets)) {
+            if (spawnedPuppets.contains(id)) continue;
+            releasePuppet(id);
+        }
+    }
+
     private static Sample sampleAt(List<Sample> s, long tick) {
         if (s.isEmpty() || tick < s.get(0).tick) return null;
         int last = s.size() - 1;
@@ -518,11 +613,12 @@ public final class MobTrailJournal {
             sample(true);
         } else {
             if (wasReplaying) {
-                releaseAllPuppets();
+                releaseTemporaryPuppets();
                 wasReplaying = false;
             }
             if (TimeTravel.timelineTick % 100 == 0) sweepStrayPuppets(false);
             sample();
+            applySpawned();
         }
     }
 
@@ -614,6 +710,7 @@ public final class MobTrailJournal {
         tracks.clear();
         sampledThisTick.clear();
         puppets.clear();
+        spawnedPuppets.clear();
         originalNoAi.clear();
         bosses.clear();
         lastBossHealth.clear();

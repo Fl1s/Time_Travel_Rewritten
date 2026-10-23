@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.journal.BossFightJournal;
+import com.fl1s.rewritten.timetravel.journal.TrackedEntityJournal;
 import com.fl1s.rewritten.timetravel.mob.MobEventJournal;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
@@ -29,7 +30,7 @@ public abstract class EnderDragonMixin {
     @Unique
     private boolean tt$puppet() {
         EnderDragon self = (EnderDragon) (Object) this;
-        return !self.level().isClientSide && MobTrailJournal.isPuppeted(self);
+        return !self.level().isClientSide && TrackedEntityJournal.isPuppeted(self);
     }
 
     @Inject(method = "aiStep", at = @At("HEAD"))

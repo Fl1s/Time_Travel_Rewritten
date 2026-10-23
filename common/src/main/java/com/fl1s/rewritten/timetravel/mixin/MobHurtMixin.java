@@ -2,6 +2,8 @@ package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.clone.CloneFx;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
+import com.fl1s.rewritten.timetravel.journal.ProjectileJournal;
+import com.fl1s.rewritten.timetravel.journal.TrackedEntityJournal;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.mob.MobSpawnJournal;
@@ -75,6 +77,16 @@ public abstract class MobHurtMixin {
         if (lost > 0.0f) MobTrailJournal.rewriteHealth(dragon.getUUID(), TimeTravel.timelineTick, lost);
     }
 
+    @Unique
+    private static boolean tt$isPuppetAttacker(Entity e) {
+        if (e == null) return false;
+        if (Clones.is(e)) return true;
+        if (e instanceof Mob mob && MobTrailJournal.isPuppeted(mob)) return true;
+        if (TrackedEntityJournal.isPuppeted(e)) return true;
+        if (ProjectileJournal.isPuppeted(e)) return true;
+        return false;
+    }
+
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
     private void tt$hurt(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
@@ -86,11 +98,12 @@ public abstract class MobHurtMixin {
 
         if (MobJournal.isApplying()) return;
 
-        if (self instanceof Mob om
-                && source.getEntity() != null
-                && Clones.is(source.getEntity())
-                && MobSpawnJournal.isOutOfTime(om.getUUID())
-                && !MobTrailJournal.isPuppeted(om)) {
+        if (tt$isPuppetAttacker(source.getEntity()) || tt$isPuppetAttacker(source.getDirectEntity())) {
+            cir.setReturnValue(false);
+            return;
+        }
+
+        if (self instanceof Mob om && source.getEntity() != null && Clones.is(source.getEntity()) && MobSpawnJournal.isOutOfTime(om.getUUID()) && !MobTrailJournal.isPuppeted(om)) {
             cir.setReturnValue(false);
             return;
         }
@@ -100,12 +113,9 @@ public abstract class MobHurtMixin {
         boolean replayShot = direct != null && direct != attacker && direct.getTags().contains(EntityJournal.TAG);
 
         boolean doomed = MobJournal.isDoomed(self);
-        boolean replayPuppet = self instanceof Mob mob
-                && MobTrailJournal.isReplaying()
-                && MobTrailJournal.isPuppeted(mob);
+        boolean replayPuppet = self instanceof Mob mob && MobTrailJournal.isReplaying() && MobTrailJournal.isPuppeted(mob);
         if ((doomed || replayPuppet) && self.getHealth() - amount <= 1.0f) {
-            if (!replayShot && attacker instanceof ServerPlayer sp && !Clones.is(sp)
-                    && self.level() instanceof ServerLevel sl) {
+            if (!replayShot && attacker instanceof ServerPlayer sp && !Clones.is(sp) && self.level() instanceof ServerLevel sl) {
                 DoomedFeedback.tryShow(sp, sl, doomed);
             }
         }
@@ -132,10 +142,8 @@ public abstract class MobHurtMixin {
         if (fx == null || !fx.falling()) return amount;
 
         if (victim.level() instanceof ServerLevel sl) {
-            sl.sendParticles(ParticleTypes.CRIT, victim.getX(), victim.getY(0.5), victim.getZ(),
-                    10, 0.3, 0.3, 0.3, 0.2);
-            sl.playSound(null, victim.getX(), victim.getY(), victim.getZ(),
-                    SoundEvents.PLAYER_ATTACK_CRIT, SoundSource.PLAYERS, 1.0f, 1.0f);
+            sl.sendParticles(ParticleTypes.CRIT, victim.getX(), victim.getY(0.5), victim.getZ(), 10, 0.3, 0.3, 0.3, 0.2);
+            sl.playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.PLAYER_ATTACK_CRIT, SoundSource.PLAYERS, 1.0f, 1.0f);
         }
         return amount * 1.5f;
     }
@@ -145,9 +153,7 @@ public abstract class MobHurtMixin {
         if (!(self instanceof ServerPlayer) || !Clones.is(self)) return false;
         if (!self.isUsingItem()) return false;
         ItemStack use = self.getUseItem();
-        boolean shield = use.is(Items.SHIELD)
-                || self.getOffhandItem().is(Items.SHIELD)
-                || self.getMainHandItem().is(Items.SHIELD);
+        boolean shield = use.is(Items.SHIELD) || self.getOffhandItem().is(Items.SHIELD) || self.getMainHandItem().is(Items.SHIELD);
         if (!shield) return false;
         if (source.is(DamageTypeTags.BYPASSES_SHIELD)) return false;
 
@@ -160,8 +166,7 @@ public abstract class MobHurtMixin {
         if (toSrc.dot(view) <= 0.0) return false;
 
         self.level().broadcastEntityEvent(self, (byte) 29);
-        self.level().playSound(null, self.getX(), self.getY(), self.getZ(),
-                SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 1.0f, 0.8f + self.level().random.nextFloat() * 0.4f);
+        self.level().playSound(null, self.getX(), self.getY(), self.getZ(), SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 1.0f, 0.8f + self.level().random.nextFloat() * 0.4f);
         if (source.getDirectEntity() instanceof AbstractArrow arrow) arrow.discard();
         return true;
     }

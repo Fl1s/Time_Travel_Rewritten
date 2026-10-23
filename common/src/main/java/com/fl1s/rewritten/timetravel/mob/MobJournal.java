@@ -46,6 +46,7 @@ public final class MobJournal {
     }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
+        if (Clones.isVisualOnly(entity)) return;
         MobSpawnJournal.onSpawn(level, entity);
         MobStateJournal.onSpawn(level, entity);
         if (entity instanceof Mob) {

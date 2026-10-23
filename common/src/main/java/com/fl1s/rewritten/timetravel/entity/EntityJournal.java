@@ -193,6 +193,7 @@ public final class EntityJournal {
             Entity entity = EntityType.loadEntityRecursive(tag, level, en -> en);
             if (entity instanceof Projectile) return;
             if (entity == null) return;
+            entity.setUUID(e.uuid);
             entity.addTag(TAG);
             if (level.addFreshEntity(entity)) {
                 e.uuid = entity.getUUID();
