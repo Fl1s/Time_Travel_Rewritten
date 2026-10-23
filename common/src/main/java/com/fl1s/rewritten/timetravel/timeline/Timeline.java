@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.timeline;
 
+import com.fl1s.rewritten.timetravel.clone.HeadCarry;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.api.TimelineEventBus;
 import com.fl1s.rewritten.timetravel.clone.CloneManager;
@@ -19,6 +20,7 @@ import com.fl1s.rewritten.timetravel.time.HeadScope;
 import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TimeFormat;
+import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import net.minecraft.network.chat.Component;
@@ -98,6 +100,10 @@ public final class Timeline {
         TravelFx.clear();
         HeadWorldView.clear();
         HeadMobView.clear();
+        HeadItemView.clear();
+        HeadVehicleView.clear();
+        HeadCarry.clear();
+        PastContainers.clear();
         HeadTracking.markDirty();
         TimeTravel.config.timelineTick = TimeTravel.sharedTick;
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
@@ -144,6 +150,7 @@ public final class Timeline {
             TravelFx.onTravel(player, fromOffset, toOffset, dir);
             HeadWorldView.onTravel(player, fromOffset, toOffset);
             HeadMobView.onTravel(player);
+            HeadCarry.onTravel(player, fromOffset, toOffset);
             s.visits.beginVisit(player, pd, dir);
             TimeTravel.sendSync(player);
             ChatTimeline.resendFor(player);
@@ -287,6 +294,8 @@ public final class Timeline {
         HeadTracking.refreshIfDirty();
         HeadWorldView.tick();
         HeadMobView.tick();
+        HeadVehicleView.tick();
+        HeadCarry.tick();
 
         if (!TimeTravel.isLooping || !MocapAdapter.isReady()) return;
 

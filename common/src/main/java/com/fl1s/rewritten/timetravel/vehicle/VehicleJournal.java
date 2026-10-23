@@ -26,7 +26,7 @@ public final class VehicleJournal {
     }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
-        if (!isTracked(entity)) return;
+        if (!isTracked(entity) || HeadVehicleView.isCopy(entity)) return;
         VehicleSpawnJournal.onSpawn(level, entity);
         VehicleTrailJournal.onSpawnSeen(entity.getUUID(), Levels.canonicalId(level));
     }

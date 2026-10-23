@@ -127,7 +127,7 @@ public class BaseCommands {
                 "visits [player] - list a player's recorded visits",
                 "settings - show all settings",
                 "settings toggles <option> [true/false] - turn an option on or off:",
-                "  syncDayTime, individualTime, jumpRequiresOp, chainDeath, trackItems, trackChat,",
+                "  syncDayTime, individualTime, jumpRequiresOp, chainDeath, noDuplication, trackItems, trackChat,",
                 "  hurtClones, showTimer, timerInTicks",
                 "settings maxJump <time> - cap the length of a single jump (0 = no limit)",
                 "settings preload <ticks> - how far ahead past selves are preloaded (0 = off)",

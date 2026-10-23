@@ -40,6 +40,11 @@ public class TogglesCommands {
             TimeTravel.config.chainDeath = v;
         }));
 
+        togglesNode.then(toggle("noDuplication", () -> TimeTravel.noDuplication, v -> {
+            TimeTravel.noDuplication = v;
+            TimeTravel.config.noDuplication = v;
+        }));
+
         togglesNode.then(toggle("trackItems", () -> TimeTravel.trackItems, v -> {
             TimeTravel.trackItems = v;
             TimeTravel.config.trackItems = v;

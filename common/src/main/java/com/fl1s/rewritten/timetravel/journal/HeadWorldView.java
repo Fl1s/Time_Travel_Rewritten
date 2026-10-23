@@ -81,6 +81,7 @@ public final class HeadWorldView {
             advance(head.offset(), head.position(), view, viewers);
             EffectJournal.tickHead(head.offset(), head.position(), viewers);
             EntityJournal.tickHead(head.offset(), head.position());
+            ItemFlowJournal.tickHead(head.offset(), head.position());
             ChatTimeline.tickHead(head.offset(), head.position(), viewers);
         }
 
@@ -91,6 +92,8 @@ public final class HeadWorldView {
             BlockJournal.store().dropCursor(head);
             EffectJournal.dropHead(head);
             EntityJournal.dropHead(head);
+            ItemFlowJournal.dropHead(head);
+            PastContainers.dropHead(head);
             ChatTimeline.dropHead(head);
         }
     }
@@ -101,6 +104,7 @@ public final class HeadWorldView {
         BlockJournal.store().rebuildUpcoming(head, position);
         EffectJournal.openHead(head, position);
         EntityJournal.openHead(head, position);
+        ItemFlowJournal.openHead(head, position);
         ChatTimeline.openHead(head, position);
         return view;
     }
@@ -227,6 +231,7 @@ public final class HeadWorldView {
             for (ServerPlayer viewer : viewersOf(entry.getKey())) restore(entry.getValue(), viewer);
         }
         views.clear();
+        HeadItemView.clear();
     }
 
     private static void restore(Map<Key, BlockState> view, ServerPlayer viewer) {

@@ -59,6 +59,7 @@ public class TimeTravel {
 	public static boolean showTimelineMessages;
 
 	public static boolean chainDeath;
+	public static boolean noDuplication;
 
 	public static boolean showTimelineInfo;
 	public static boolean knightOfTimeMode;

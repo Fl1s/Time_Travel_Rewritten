@@ -77,6 +77,9 @@ public final class ConfigOptions {
             new ConfigOption.Bool("timeline", "chainDeath",
                     "If a past self dies outside of its recorded death, the timeline collapses from that visit.",
                     true, v -> TimeTravel.chainDeath = v),
+            new ConfigOption.Bool("timeline", "noDuplication",
+                    "Stop travellers from taking items their past self is going to collect.",
+                    false, v -> TimeTravel.noDuplication = v),
 
             new ConfigOption.Bool("recording", "trackItems",
                     "Record item entities in addition to vehicles.",

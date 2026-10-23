@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.clone.HeadCarry;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
@@ -223,7 +224,7 @@ public final class MobTrailJournal {
 
             for (ServerPlayer p : viewers) {
                 for (Mob mob : candidates(level, p, r)) {
-                    if (Clones.is(mob)) continue;
+                    if (Clones.is(mob) || HeadCarry.isCarried(mob.getUUID())) continue;
                     if (Clones.isVisualOnly(mob)) continue;
                     if (mob.isDeadOrDying()) continue;
                     UUID id = mob.getUUID();

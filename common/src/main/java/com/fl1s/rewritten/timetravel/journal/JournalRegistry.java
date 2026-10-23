@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.clone.CarryTrailJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.entity.EntityContainerJournal;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
@@ -68,6 +69,7 @@ public final class JournalRegistry {
         register("tracked_entities", TrackedEntityJournal::load, TrackedEntityJournal::save, TrackedEntityJournal::saveIfDirty, TrackedEntityJournal::clear, TrackedEntityJournal::rebuildUpcoming, TrackedEntityJournal::tick, TrackedEntityJournal::onJump, TrackedEntityJournal::eraseVisits);
         register("particles", ParticleJournal::load, ParticleJournal::save, ParticleJournal::saveIfDirty, ParticleJournal::clear, ParticleJournal::rebuildUpcoming, ParticleJournal::tick, ParticleJournal::onJump, ParticleJournal::eraseVisits);
         register("weather", WeatherJournal::load, WeatherJournal::save, WeatherJournal::saveIfDirty, WeatherJournal::clear, WeatherJournal::rebuildUpcoming, WeatherJournal::tick, WeatherJournal::onJump, WeatherJournal::eraseVisits);
+        register("carry_trails", CarryTrailJournal::load, CarryTrailJournal::save, CarryTrailJournal::saveIfDirty, CarryTrailJournal::clear, NOOP, NOOP, (from, to) -> {}, ids -> {});
         register("client_fx", NOOP, NOOP, NOOP, NOOP, NOOP, NOOP, (from, to) -> TimeTravel.broadcastStopDragonSound(), ids -> {
         });
     }

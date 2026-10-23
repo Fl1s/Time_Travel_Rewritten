@@ -56,6 +56,7 @@ Use `/tt settings toggles <option> <true|false>` to change an option.
 - `syncDayTime` - Synchronize the world's time of day with the timeline.
 - `jumpRequiresOp` - Configure operator requirements for time jumps.
 - `chainDeath` - Configure chained death behavior.
+- `noDuplication` - Stop travellers from taking items their past self is going to collect (off by default).
 - `trackItems` - Toggle dropped-item tracking.
 - `trackChat` - Toggle chat tracking.
 - `hurtClones` - Toggle whether recorded player clones can be hurt.
@@ -118,11 +119,30 @@ later passes through it. You hear what is said at your time, and arriving somewh
 era's chat log. Players in other times do not hear you live, and you do not hear them - use
 `jump join` to share a time if you want to talk.
 
-Items a past self drops come back as real items when your clock reaches the moment they were dropped,
-so you can pick up what your past self mined just as you can with the whole server moving together.
-They are real entities in the shared world rather than something only you can see, which is what lets
-you pick them up - so a player at the present watches them appear too, and the copy your past self
-originally collected still exists.
+Containers show what was in them at your time. Opening a chest, barrel, hopper or shulker box in the
+past rebuilds its contents from the recorded history, and what you change there cascades forward: a
+slot nobody touches again afterwards is changed in the present too, and your change becomes history
+for anyone who later passes your moment. A slot your past self changes later is different - you can
+still take from it, keeping the change to your own time, unless `noDuplication` is on, which locks
+those slots (in shared time too). You cannot put items into such a slot, since history is about to
+overwrite it.
+
+Storage that has since been broken or replaced still opens in the past as a ghost: right-click the
+chest, barrel, hopper, dispenser or shulker box you see and you get what was inside at your time.
+Ghosts are take-only - there is nowhere for an item to go once you leave - and with `noDuplication`
+on they are look-only. Contents are snapshotted whenever a storage block is removed, which also means
+jumping the whole server back to before a chest was broken now brings its contents back with it. Chest minecarts and chest boats show their contents at your time as
+well, and opening one makes the copy yours. Chests fed by hoppers can be off, since hopper transfers
+are not recorded.
+
+Items belong to the moment they were dropped. An item on the ground only exists for players whose clock
+has reached that moment, so someone behind you cannot see or grab what was dropped after their time.
+If an item existed at your time but is gone now, your time gets its own copy that nobody else sees:
+items your past self dropped land when your clock reaches the drop, and vanish again when your past
+self picks them up - unless you grab them first, just like when the whole server jumps together
+(turn on `noDuplication` to forbid that).
+Taking one removes it from every later time too. Items you drop in the past are real and stay there into the
+present. Mobs and hoppers ignore another time's copies.
 
 Mobs you have history for are rewound the same way: the live mob is hidden from you and a replay of
 its recorded path is streamed to you instead, so an iron golem walks the route it walked back then
@@ -132,13 +152,35 @@ is simply absent.
 What does **not** rewind: a replayed mob is **scenery**. It cannot be hit and cannot hurt you, because
 it is a replay sent to your client rather than a real creature - one mob cannot chase you in the past
 while standing still in someone else's present. Mobs that died before your position do not come back
-yet, and mobs that were never recorded (too far from any player to be tracked) are shown live. Chest
-*contents* are read from the server when you open the chest, so those are the present contents even
-though the chest block and its lid are not. Items and vehicles stay shared and live. If you want the
+yet, and mobs that were never recorded (too far from any player to be tracked) are shown live. The
+present-day creatures behind those replays cannot target or damage you either: nothing you cannot see
+can hurt you. If you want the
 whole world to rewind for everybody, including creatures you can fight, leave `individualTime` off
 and let the server move together.
 
-Only players carry a time offset, which is why `bring` reports non-player targets as ignored.
+Boats and minecarts get a copy of their own in your time, and unlike mobs these are real: you can ride
+them, push them and break them. Until somebody in your time touches it, a copy follows the route the
+vehicle took back then and disappears again if it was destroyed. Once you ride or hit it, it is yours and
+stops following history. A vehicle you moved and left behind is moved in the present too once everyone
+has left your time, unless its recorded history moved it again afterwards.
+
+Whatever you are riding when you jump comes with you - a boat, a minecart, a horse, a pig, a modded
+seat. If the boat or minecart already exists at the time you arrive, you are seated in that one instead;
+otherwise the very thing you were riding travels along and leaves the time you came from. Get off in
+the past and it stays there with you, and it returns to the present where it stands once nobody is left
+in your time. Ride it back to the present and it comes back with you.
+
+A trip like that becomes history of its own. Anyone who later passes through that stretch of time sees the
+horse or boat you brought, with your past self riding it, alongside the animal's or vehicle's own past
+self - the two are recorded separately, so neither overwrites the other.
+With `noDuplication` on, breaking a past copy drops nothing.
+
+Past selves sit in whatever they rode back then. In your time that is your copy of the boat or minecart,
+or the replayed horse, pig or camel; anything the timeline never recorded, like a modded seat, is the
+real thing.
+
+Apart from what they ride, only players carry a time offset, which is why `bring` reports non-player
+targets as ignored.
 
 # Support
 
