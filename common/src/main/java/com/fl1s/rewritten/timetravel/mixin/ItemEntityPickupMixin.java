@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
+import com.fl1s.rewritten.timetravel.journal.HeadItemView;
 import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
@@ -15,18 +16,28 @@ public abstract class ItemEntityPickupMixin {
     @Unique
     private int tt$before;
 
-    @Inject(method = "playerTouch", at = @At("HEAD"))
+    @Inject(method = "playerTouch", at = @At("HEAD"), cancellable = true)
     private void tt$head(Player player, CallbackInfo ci) {
-        tt$before = ((ItemEntity) (Object) this).getItem().getCount();
+        ItemEntity self = (ItemEntity) (Object) this;
+        if (self.level().isClientSide) return;
+        if (!HeadItemView.canTake(self, player)) {
+            ci.cancel();
+            return;
+        }
+        tt$before = self.getItem().getCount();
+        HeadItemView.beginTouch(self, player);
     }
 
     @Inject(method = "playerTouch", at = @At("RETURN"))
     private void tt$return(Player player, CallbackInfo ci) {
         ItemEntity self = (ItemEntity) (Object) this;
         if (self.level().isClientSide) return;
-        ItemStack stack = self.getItem();
-        int taken = self.isRemoved() ? tt$before : tt$before - stack.getCount();
-        if (taken <= 0) return;
-        ItemFlowJournal.recordPickup(self, player, stack.copyWithCount(taken));
+        try {
+            ItemStack stack = self.getItem();
+            int taken = self.isRemoved() ? tt$before : tt$before - stack.getCount();
+            if (taken > 0) ItemFlowJournal.recordPickup(self, player, stack.copyWithCount(taken));
+        } finally {
+            HeadItemView.endTouch();
+        }
     }
 }

@@ -54,6 +54,7 @@ public class TimeTravel {
 	public static int jumpCooldownTicks = 20;
 
 	public static boolean chainDeath;
+	public static boolean noDuplication;
 
 	public static boolean showTimelineInfo;
 	public static boolean knightOfTimeMode;

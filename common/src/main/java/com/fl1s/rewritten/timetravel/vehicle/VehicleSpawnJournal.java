@@ -122,6 +122,14 @@ public final class VehicleSpawnJournal {
         return e.endTick >= 0 && e.endTick <= now;
     }
 
+    public static boolean isRecorded(UUID id) {
+        return canon.containsKey(id);
+    }
+
+    public static java.util.Collection<Entry> recorded() {
+        return canon.values();
+    }
+
     public static boolean isProtected(UUID id, long now) {
         Entry e = canon.get(id);
         return e != null && e.endTick > now;

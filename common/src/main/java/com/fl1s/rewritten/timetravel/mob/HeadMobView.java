@@ -1,6 +1,17 @@
 package com.fl1s.rewritten.timetravel.mob;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.clone.CloneManager;
+import com.fl1s.rewritten.timetravel.clone.CarryTrailJournal;
+import com.fl1s.rewritten.timetravel.clone.HeadCarry;
+import com.fl1s.rewritten.timetravel.data.Levels;
+import net.minecraft.world.entity.EntityType;
+import io.netty.buffer.Unpooled;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
+import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
+import net.minecraft.network.syncher.SynchedEntityData;
+import java.nio.charset.StandardCharsets;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
@@ -31,11 +42,33 @@ public final class HeadMobView {
 
     private static final double PUPPET_RANGE_SQ = 80.0 * 80.0;
     private static final double MAX_DELTA = 7.5;
+    private static final int CARRIED_PUPPET_BASE = -1_000_000;
+    private static final Map<UUID, Integer> tripPuppets = new HashMap<>();
+    private static int nextTripPuppet = -2_000_000;
 
     private static final Map<UUID, Map<Integer, Vec3>> shown = new HashMap<>();
 
+    private record Ride(long head, UUID mob) {}
+
+    private static final Map<Integer, Ride> rides = new HashMap<>();
+    private static final Map<UUID, Map<Integer, Integer>> seated = new HashMap<>();
+
     public static void clear() {
         shown.clear();
+        rides.clear();
+        seated.clear();
+    }
+
+    public static boolean rideVisually(ServerPlayer clone, UUID mob) {
+        if (!enabled() || !(MobTrailJournal.tracked(mob) || CarryTrailJournal.has(mob))) return false;
+        long head = TimeTravel.cloneHeadOf(clone);
+        if (head == CloneManager.NO_HEAD || head <= 0) return false;
+        rides.put(clone.getId(), new Ride(head, mob));
+        return true;
+    }
+
+    public static void unride(ServerPlayer clone) {
+        rides.remove(clone.getId());
     }
 
     private static boolean enabled() {
@@ -62,13 +95,15 @@ public final class HeadMobView {
             if (head.offset() <= 0 || head.isEmpty()) continue;
             for (ServerPlayer viewer : viewersOf(head.offset())) {
                 live.add(viewer.getUUID());
-                stream(viewer, head.position());
+                stream(viewer, head.offset(), head.position());
+                seat(viewer, head.offset());
             }
         }
         shown.keySet().removeIf(id -> !live.contains(id));
+        seated.keySet().removeIf(id -> !live.contains(id));
     }
 
-    private static void stream(ServerPlayer viewer, long position) {
+    private static void stream(ServerPlayer viewer, long head, long position) {
         if (viewer.connection == null) return;
         ServerLevel level = viewer.serverLevel();
         Map<Integer, Vec3> active = shown.computeIfAbsent(viewer.getUUID(), k -> new HashMap<>());
@@ -82,18 +117,50 @@ public final class HeadMobView {
             Entity entity = level.getEntity(id);
             if (!(entity instanceof Mob mob) || Clones.is(mob)) continue;
 
-            seen.add(mob.getId());
+            int puppet = puppetId(mob);
+            seen.add(puppet);
             Vec3 target = new Vec3(sample.x, sample.y, sample.z);
-            Vec3 previous = active.get(mob.getId());
+            Vec3 previous = active.get(puppet);
 
             if (previous == null || far(previous, target)) {
-                if (previous != null) viewer.connection.send(new ClientboundRemoveEntitiesPacket(mob.getId()));
-                viewer.connection.send(spawn(mob, sample));
+                if (previous != null) viewer.connection.send(new ClientboundRemoveEntitiesPacket(puppet));
+                viewer.connection.send(spawn(mob, puppet, sample));
+                List<SynchedEntityData.DataValue<?>> looks = mob.getEntityData().getNonDefaultValues();
+                if (looks != null) viewer.connection.send(new ClientboundSetEntityDataPacket(puppet, looks));
             } else {
-                viewer.connection.send(move(mob, previous, target, sample));
+                viewer.connection.send(move(puppet, previous, target, sample));
             }
-            viewer.connection.send(new ClientboundRotateHeadPacket(mob, degrees(sample.yHeadRot)));
-            active.put(mob.getId(), target);
+            viewer.connection.send(rotateHead(puppet, degrees(sample.yHeadRot)));
+            active.put(puppet, target);
+        }
+
+        String dim = Levels.canonicalId(level);
+        for (Map.Entry<UUID, CarryTrailJournal.Trail> entry : CarryTrailJournal.trails().entrySet()) {
+            CarryTrailJournal.Trail trail = entry.getValue();
+            if (!dim.equals(trail.dim) || HeadCarry.isTripIn(entry.getKey(), head)) continue;
+            CarryTrailJournal.Sample sample = CarryTrailJournal.sampleAt(trail, position);
+            if (sample == null || viewer.distanceToSqr(sample.x, sample.y, sample.z) > PUPPET_RANGE_SQ) continue;
+            EntityType<?> type = EntityType.byString(trail.type).orElse(null);
+            if (type == null) continue;
+
+            int puppet = tripPuppetId(entry.getKey());
+            seen.add(puppet);
+            Vec3 target = new Vec3(sample.x, sample.y, sample.z);
+            Vec3 previous = active.get(puppet);
+            if (previous == null || far(previous, target)) {
+                if (previous != null) viewer.connection.send(new ClientboundRemoveEntitiesPacket(puppet));
+                viewer.connection.send(new ClientboundAddEntityPacket(puppet, entry.getKey(),
+                        sample.x, sample.y, sample.z, sample.xRot, sample.yRot, type, 0, Vec3.ZERO, sample.yHeadRot));
+                Entity source = level.getEntity(trail.source);
+                List<SynchedEntityData.DataValue<?>> looks = source == null ? null : source.getEntityData().getNonDefaultValues();
+                if (looks != null) viewer.connection.send(new ClientboundSetEntityDataPacket(puppet, looks));
+            } else {
+                viewer.connection.send(new ClientboundMoveEntityPacket.PosRot(puppet,
+                        delta(target.x, previous.x), delta(target.y, previous.y), delta(target.z, previous.z),
+                        degrees(sample.yRot), degrees(sample.xRot), true));
+            }
+            viewer.connection.send(rotateHead(puppet, degrees(sample.yHeadRot)));
+            active.put(puppet, target);
         }
 
         for (Iterator<Map.Entry<Integer, Vec3>> it = active.entrySet().iterator(); it.hasNext(); ) {
@@ -104,21 +171,87 @@ public final class HeadMobView {
         }
     }
 
+    private static void seat(ServerPlayer viewer, long head) {
+        if (viewer.connection == null) return;
+        ServerLevel level = viewer.serverLevel();
+        Map<Integer, Vec3> active = shown.getOrDefault(viewer.getUUID(), Map.of());
+        Map<Integer, Integer> mine = seated.computeIfAbsent(viewer.getUUID(), k -> new HashMap<>());
+        Map<Integer, Integer> wanted = new HashMap<>();
+
+        rides.entrySet().removeIf(entry -> !(level.getEntity(entry.getKey()) instanceof ServerPlayer clone)
+                || clone.isRemoved() || !Clones.is(clone));
+        for (Map.Entry<Integer, Ride> entry : rides.entrySet()) {
+            Ride ride = entry.getValue();
+            if (ride.head() != head) continue;
+            int puppet;
+            if (CarryTrailJournal.has(ride.mob())) {
+                puppet = tripPuppetId(ride.mob());
+            } else {
+                Entity mob = level.getEntity(ride.mob());
+                if (mob == null) continue;
+                puppet = puppetId(mob);
+            }
+            if (!active.containsKey(puppet)) continue;
+            wanted.put(puppet, entry.getKey());
+        }
+
+        for (Map.Entry<Integer, Integer> entry : wanted.entrySet()) {
+            viewer.connection.send(passengers(entry.getKey(), entry.getValue()));
+        }
+        for (Integer mobId : mine.keySet()) {
+            if (!wanted.containsKey(mobId) && active.containsKey(mobId)) viewer.connection.send(passengers(mobId));
+        }
+        mine.clear();
+        mine.putAll(wanted);
+    }
+
+    private static ClientboundSetPassengersPacket passengers(int vehicle, int... riders) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeVarInt(vehicle);
+        buf.writeVarIntArray(riders);
+        try {
+            return ClientboundSetPassengersPacket.STREAM_CODEC.decode(buf);
+        } finally {
+            buf.release();
+        }
+    }
+
     private static boolean far(Vec3 from, Vec3 to) {
         return Math.abs(to.x - from.x) > MAX_DELTA
                 || Math.abs(to.y - from.y) > MAX_DELTA
                 || Math.abs(to.z - from.z) > MAX_DELTA;
     }
 
-    private static ClientboundAddEntityPacket spawn(Mob mob, MobTrailJournal.Sample sample) {
-        return new ClientboundAddEntityPacket(mob.getId(), mob.getUUID(),
+    private static int tripPuppetId(UUID trip) {
+        return tripPuppets.computeIfAbsent(trip, k -> nextTripPuppet--);
+    }
+
+    private static int puppetId(Entity mob) {
+        return HeadCarry.isCarried(mob.getUUID()) ? CARRIED_PUPPET_BASE - mob.getId() : mob.getId();
+    }
+
+    private static ClientboundRotateHeadPacket rotateHead(int id, byte yHeadRot) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeVarInt(id);
+        buf.writeByte(yHeadRot);
+        try {
+            return ClientboundRotateHeadPacket.STREAM_CODEC.decode(buf);
+        } finally {
+            buf.release();
+        }
+    }
+
+    private static ClientboundAddEntityPacket spawn(Mob mob, int puppet, MobTrailJournal.Sample sample) {
+        UUID uuid = puppet == mob.getId() ? mob.getUUID()
+                : UUID.nameUUIDFromBytes(("puppet/" + mob.getUUID()).getBytes(StandardCharsets.UTF_8));
+        return new ClientboundAddEntityPacket(puppet, uuid,
                 sample.x, sample.y, sample.z, sample.xRot, sample.yRot,
                 mob.getType(), 0, Vec3.ZERO, sample.yHeadRot);
     }
 
-    private static ClientboundMoveEntityPacket move(Mob mob, Vec3 from, Vec3 to,
+    private static ClientboundMoveEntityPacket move(int puppet, Vec3 from, Vec3 to,
                                                     MobTrailJournal.Sample sample) {
-        return new ClientboundMoveEntityPacket.PosRot(mob.getId(),
+        return new ClientboundMoveEntityPacket.PosRot(puppet,
                 delta(to.x, from.x), delta(to.y, from.y), delta(to.z, from.z),
                 degrees(sample.yRot), degrees(sample.xRot), true);
     }
@@ -146,6 +279,7 @@ public final class HeadMobView {
     }
 
     private static void release(ServerPlayer player) {
+        seated.remove(player.getUUID());
         Map<Integer, Vec3> active = shown.remove(player.getUUID());
         if (active == null || active.isEmpty() || player.connection == null) return;
         int[] ids = new int[active.size()];

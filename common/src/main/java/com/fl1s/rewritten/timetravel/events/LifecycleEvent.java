@@ -29,6 +29,7 @@ public class LifecycleEvent {
         TimeTravel.individualTime = c.individualTime;
         TimeTravel.jumpRequiresOp = c.jumpRequiresOp;
         TimeTravel.chainDeath = c.chainDeath;
+        TimeTravel.noDuplication = c.noDuplication;
         TimeTravel.jumpCooldownTicks = c.jumpCooldownTicks;
         TimeTravel.maxJumpTicks = c.maxJumpTicks;
         TimeTravel.cloneLookaheadTicks = c.cloneLookaheadTicks;

@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.mixin;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.journal.PastContainers;
 import com.fl1s.rewritten.timetravel.time.HeadScope;
 import com.fl1s.rewritten.timetravel.time.HeadScopeSupport;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
@@ -83,8 +84,12 @@ public abstract class ServerPlayerGameModeMixin {
         }
     }
 
-    @Inject(method = "useItemOn", at = @At("HEAD"))
+    @Inject(method = "useItemOn", at = @At("HEAD"), cancellable = true)
     private void tt$enterUseItemOn(ServerPlayer player, Level level, ItemStack stack, InteractionHand hand, BlockHitResult hitResult, CallbackInfoReturnable<InteractionResult> cir) {
+        if (hand == InteractionHand.MAIN_HAND && PastContainers.tryOpenGhost(player, hitResult.getBlockPos())) {
+            cir.setReturnValue(InteractionResult.SUCCESS);
+            return;
+        }
         if (tt$isRealPlayer()) BlockJournal.enterAction();
         tt$scopedUseItemOn = tt$openScope();
         if (tt$scopedUseItemOn) {

@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.clone.CloneFx;
+import com.fl1s.rewritten.timetravel.clone.HeadVisibility;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
@@ -54,6 +55,14 @@ public abstract class MobHurtMixin {
             return Math.min(v, cur - 1.0f);
         }
         return v;
+    }
+
+    @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
+    private void tt$unseenAttacker(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ServerPlayer player) || Clones.is(player)) return;
+        Entity attacker = source.getEntity();
+        if (attacker == null || attacker == player || attacker instanceof net.minecraft.world.entity.player.Player) return;
+        if (!HeadVisibility.visibleTo(attacker, player)) cir.setReturnValue(false);
     }
 
     @Inject(method = "hurt", at = @At("HEAD"))

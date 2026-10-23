@@ -95,6 +95,8 @@ public final class BlockJournal {
         final BlockState before;
         final BlockState requested;
         boolean notified;
+        String items;
+        int size;
 
         SetFrame(ServerLevel level, long pos, BlockState before, BlockState requested) {
             this.level = level;
@@ -197,7 +199,36 @@ public final class BlockJournal {
 
     public static void beginSet(ServerLevel level, BlockPos pos, BlockState requested) {
         if (!TimeTravel.isLooping) return;
-        setFrames.push(new SetFrame(level, pos.asLong(), level.getBlockState(pos), requested));
+        SetFrame frame = new SetFrame(level, pos.asLong(), level.getBlockState(pos), requested);
+        if (!applying && !replayingLive && !frame.before.is(requested.getBlock())
+                && level.getBlockEntity(pos) instanceof Container container
+                && !(container instanceof JukeboxBlockEntity)
+                && !(container instanceof BlockEntity be && ProcessJournal.isProcess(be))
+                && !container.isEmpty()) {
+            frame.items = serializeItems(copyOf(container));
+            frame.size = container.getContainerSize();
+        }
+        setFrames.push(frame);
+    }
+
+    private static void recordEmptied(SetFrame frame, BlockPos pos) {
+        if (frame.items == null) return;
+        String items = frame.items;
+        frame.items = null;
+        PlayerData pd = nearestRecorder(frame.level, pos);
+        Entry entry = new Entry();
+        entry.dim = Levels.canonicalId(frame.level);
+        entry.x = pos.getX();
+        entry.y = pos.getY();
+        entry.z = pos.getZ();
+        entry.oldItems = items;
+        entry.newItems = serializeItems(NonNullList.withSize(frame.size, ItemStack.EMPTY));
+        entry.tick = positionOf(pd);
+        entry.seq = STORE.nextSeq();
+        entry.visit = pd != null && pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
+        STORE.entries().add(entry);
+        index(entry);
+        STORE.markDirty();
     }
 
     public static void endSet(ServerLevel level, BlockPos pos, boolean changed) {
@@ -209,7 +240,9 @@ public final class BlockJournal {
                 || TimeTravel.timelineSceneManager == null) return;
 
         BlockState now = level.getBlockState(pos);
-        if (!now.equals(top.before)) record(level, pos, top.before, now);
+        if (now.equals(top.before)) return;
+        recordEmptied(top, pos);
+        record(level, pos, top.before, now);
     }
 
     public static void flushWatches() {
@@ -231,6 +264,7 @@ public final class BlockJournal {
         SetFrame top = setFrames.peek();
         if (top != null && top.pos == pos.asLong() && top.level == level && top.requested.equals(now)) {
             top.notified = true;
+            recordEmptied(top, pos);
         }
         for (SetFrame f : setFrames) {
             if (!f.notified && f.pos == pos.asLong() && f.level == level
@@ -349,6 +383,23 @@ public final class BlockJournal {
         if (!TimeTravel.individualTime || pd == null) return TimeContext.now();
         TimeHeads heads = TimeTravel.heads();
         return heads == null ? TimeContext.now() : heads.positionOf(pd);
+    }
+
+    private static long stampFor(ServerPlayer player) {
+        if (!TimeTravel.individualTime || TimeTravel.timelineSceneManager == null) return TimeContext.now();
+        return positionOf(TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString()));
+    }
+
+    static List<Entry> containerChangesAfter(String dim, BlockPos pos, long position) {
+        List<Entry> out = new ArrayList<>();
+        List<Entry> list = byPos.get(pos.asLong());
+        if (list == null) return out;
+        for (Entry e : list) {
+            if (e.oldItems == null || e.newItems == null || e.tick <= position || !dim.equals(e.dim)) continue;
+            out.add(e);
+        }
+        out.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
+        return out;
     }
 
     static Journal<Entry> store() {
@@ -672,6 +723,7 @@ public final class BlockJournal {
     }
 
     private static BlockState parse(String s) {
+        if (s == null) return null;
         try {
             return BlockStateParser.parseForBlock(TimeTravel.server.registryAccess().lookupOrThrow(Registries.BLOCK), s, false).blockState();
         } catch (Exception ex) {
@@ -726,7 +778,7 @@ public final class BlockJournal {
                 entry.z = e.getKey().getZ();
                 entry.oldItems = serializeItems(e.getValue());
                 entry.newItems = serializeItems(now);
-                entry.tick = TimeContext.now();
+                entry.tick = stampFor(w.player());
                 entry.seq = STORE.nextSeq();
                 entry.visit = w.visit();
                 entry.root = true;

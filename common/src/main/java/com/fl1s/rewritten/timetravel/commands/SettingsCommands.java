@@ -162,6 +162,7 @@ public class SettingsCommands {
                 "individualTime: " + TimeTravel.individualTime,
                 "jumpRequiresOp: " + TimeTravel.jumpRequiresOp,
                 "chainDeath: " + TimeTravel.chainDeath,
+                "noDuplication: " + TimeTravel.noDuplication,
                 "trackItems: " + TimeTravel.trackItems,
                 "trackChat: " + TimeTravel.trackChat,
                 "hurtClones: " + TimeTravel.hurtPastSelves,

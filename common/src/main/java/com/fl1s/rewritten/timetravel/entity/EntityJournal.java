@@ -149,6 +149,7 @@ public final class EntityJournal {
     }
 
     private static void spawnIfAbsent(Entry e) {
+        if (e.item) return;
         ServerLevel level = levelOf(e.dim);
         if (level == null) return;
         if (e.uuid != null) {

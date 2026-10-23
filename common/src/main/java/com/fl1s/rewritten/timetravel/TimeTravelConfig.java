@@ -28,6 +28,7 @@ public class TimeTravelConfig {
     private Boolean internalTime;
     public boolean jumpRequiresOp = false;
     public boolean chainDeath = true;
+    public boolean noDuplication = false;
     public int jumpCooldownTicks = 20;
     public Map<String, Long> marks = new java.util.LinkedHashMap<>();
     public long maxJumpTicks = 0;

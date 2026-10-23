@@ -6,6 +6,8 @@ import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.entity.FishingHookExt;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
+import com.fl1s.rewritten.timetravel.mob.HeadMobView;
+import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -79,7 +81,7 @@ public final class CloneTracks {
         }
 
         Entity vehicle = player.getVehicle();
-        String vehicleId = vehicle == null ? null : vehicle.getUUID().toString();
+        String vehicleId = vehicle == null ? null : HeadCarry.rideIdOf(vehicle).toString();
         if (!Objects.equals(visit.lastVehicle, vehicleId)) {
             visit.rides.add(new Visit.RideChange(tick, vehicleId));
             visit.lastVehicle = vehicleId;
@@ -267,19 +269,25 @@ public final class CloneTracks {
         }
         Entity current = clone.getVehicle();
         if (wanted == null) {
+            HeadMobView.unride(clone);
             if (current != null) clone.stopRiding();
             return;
         }
-        if (current != null && current.getUUID().toString().equals(wanted)) return;
+        if (current != null && HeadVehicleView.originalOf(current).toString().equals(wanted)) return;
         UUID id;
         try {
             id = UUID.fromString(wanted);
         } catch (IllegalArgumentException ex) {
             return;
         }
-        if (!(clone.level() instanceof ServerLevel level)) return;
-        Entity vehicle = level.getEntity(id);
-        if (vehicle == null || vehicle.isRemoved()) return;
+        if (HeadMobView.rideVisually(clone, id)) {
+            if (current != null) clone.stopRiding();
+            return;
+        }
+        HeadMobView.unride(clone);
+        Entity vehicle = HeadVehicleView.vehicleFor(clone, id);
+        if (vehicle == null || vehicle.level() != clone.level()) return;
+        if (current != null) clone.stopRiding();
         clone.startRiding(vehicle, true);
     }
 
