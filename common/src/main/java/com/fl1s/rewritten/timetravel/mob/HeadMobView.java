@@ -8,10 +8,12 @@ import com.fl1s.rewritten.timetravel.data.Levels;
 import net.minecraft.world.entity.EntityType;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.game.ClientboundDamageEventPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
 import net.minecraft.network.syncher.SynchedEntityData;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
@@ -47,6 +49,7 @@ public final class HeadMobView {
     private static int nextTripPuppet = -2_000_000;
 
     private static final Map<UUID, Map<Integer, Vec3>> shown = new HashMap<>();
+    private static final Map<UUID, Map<Integer, Float>> healths = new HashMap<>();
 
     private record Ride(long head, UUID mob) {}
 
@@ -55,6 +58,7 @@ public final class HeadMobView {
 
     public static void clear() {
         shown.clear();
+        healths.clear();
         rides.clear();
         seated.clear();
     }
@@ -132,6 +136,7 @@ public final class HeadMobView {
             }
             viewer.connection.send(rotateHead(puppet, degrees(sample.yHeadRot)));
             active.put(puppet, target);
+            flashIfHurt(viewer, level, puppet, sample.health);
         }
 
         String dim = Levels.canonicalId(level);
@@ -163,10 +168,12 @@ public final class HeadMobView {
             active.put(puppet, target);
         }
 
+        Map<Integer, Float> lastHealth = healths.get(viewer.getUUID());
         for (Iterator<Map.Entry<Integer, Vec3>> it = active.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<Integer, Vec3> entry = it.next();
             if (seen.contains(entry.getKey())) continue;
             viewer.connection.send(new ClientboundRemoveEntitiesPacket(entry.getKey()));
+            if (lastHealth != null) lastHealth.remove(entry.getKey());
             it.remove();
         }
     }
@@ -220,6 +227,13 @@ public final class HeadMobView {
         return Math.abs(to.x - from.x) > MAX_DELTA
                 || Math.abs(to.y - from.y) > MAX_DELTA
                 || Math.abs(to.z - from.z) > MAX_DELTA;
+    }
+
+    private static void flashIfHurt(ServerPlayer viewer, ServerLevel level, int puppet, float health) {
+        Float before = healths.computeIfAbsent(viewer.getUUID(), k -> new HashMap<>()).put(puppet, health);
+        if (before == null || health <= 0.0F || health >= before - 0.01F) return;
+        viewer.connection.send(new ClientboundDamageEventPacket(puppet,
+                level.damageSources().generic().typeHolder(), -1, -1, Optional.empty()));
     }
 
     private static int tripPuppetId(UUID trip) {
@@ -280,6 +294,7 @@ public final class HeadMobView {
 
     private static void release(ServerPlayer player) {
         seated.remove(player.getUUID());
+        healths.remove(player.getUUID());
         Map<Integer, Vec3> active = shown.remove(player.getUUID());
         if (active == null || active.isEmpty() || player.connection == null) return;
         int[] ids = new int[active.size()];
