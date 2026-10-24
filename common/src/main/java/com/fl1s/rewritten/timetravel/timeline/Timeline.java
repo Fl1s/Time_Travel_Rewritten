@@ -168,10 +168,12 @@ public final class Timeline {
         TimeTravel.broadcastSync();
         TimelineEventBus.fireAfterJump(from, target);
 
+        if (TimeTravel.showTimelineMessages){
         String msg = initiatorName + " jumped " + (target > from ? "forward" : "back") + " to "
                 + TimeFormat.format(target, TimeTravel.displayTimeInTicks) + " ("
                 + TimeFormat.delta(target - from, TimeTravel.displayTimeInTicks) + ")";
         TimeTravel.server.getPlayerList().broadcastSystemMessage(Component.literal(msg), false);
+        }
         return null;
     }
 
