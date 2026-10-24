@@ -9,6 +9,8 @@ import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.mob.MobSpawnJournal;
 import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.net.HurtFlashPayload;
+import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import net.minecraft.core.particles.ParticleTypes;
@@ -33,6 +35,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.ArrayList;
 
 @Mixin(LivingEntity.class)
 public abstract class MobHurtMixin {
@@ -87,6 +91,16 @@ public abstract class MobHurtMixin {
         return false;
     }
 
+    @Unique
+    private static void tt$flashNearby(LivingEntity mob, ServerLevel level) {
+        HurtFlashPayload payload = new HurtFlashPayload(mob.getId(), 10);
+        for (ServerPlayer p : new ArrayList<>(level.players())) {
+            if (Clones.is(p)) continue;
+            if (p.distanceToSqr(mob) > 64.0 * 64.0) continue;
+            TimelineNet.sendToPlayer(p, payload);
+        }
+    }
+
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
     private void tt$hurt(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
@@ -99,6 +113,12 @@ public abstract class MobHurtMixin {
         if (MobJournal.isApplying()) return;
 
         if (tt$isPuppetAttacker(source.getEntity()) || tt$isPuppetAttacker(source.getDirectEntity())) {
+            if (self.level() instanceof ServerLevel sl) {
+                self.hurtDuration = 10;
+                self.hurtTime = 10;
+                tt$flashNearby(self, sl);
+                sl.broadcastEntityEvent(self, (byte) 2);
+            }
             cir.setReturnValue(false);
             return;
         }

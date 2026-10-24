@@ -87,6 +87,7 @@ public final class TimelineClient {
     private static long displayTick = 0;
     private static long previewTick = NO_PREVIEW;
     private static long previewVisual = NO_PREVIEW;
+    private static long viewCenterVisual = Long.MIN_VALUE;
     private static long returnTick = NO_PREVIEW;
     private static boolean synced = false;
     private static int holdBack = 0;
@@ -128,6 +129,7 @@ public final class TimelineClient {
         displayTick = 0;
         previewTick = NO_PREVIEW;
         previewVisual = NO_PREVIEW;
+        viewCenterVisual = Long.MIN_VALUE;
         holdBack = holdForward = 0;
         cachedLine1Tick = Long.MIN_VALUE;
         history.clear();
@@ -190,6 +192,18 @@ public final class TimelineClient {
             long diff = previewTick - previewVisual;
             if (Math.abs(diff) <= 2) previewVisual = previewTick;
             else previewVisual += diff / 4;
+        }
+
+        long targetCenter = previewTick != NO_PREVIEW
+                ? (previewVisual != NO_PREVIEW ? previewVisual : previewTick)
+                : displayTick;
+
+        if (viewCenterVisual == Long.MIN_VALUE) {
+            viewCenterVisual = targetCenter;
+        } else {
+            long diff = targetCenter - viewCenterVisual;
+            if (Math.abs(diff) <= 2) viewCenterVisual = targetCenter;
+            else viewCenterVisual += diff / 4;
         }
 
         while (KEY_TOGGLE.consumeClick()) {
@@ -284,7 +298,7 @@ public final class TimelineClient {
 
             long previewPos = previewing ? (previewVisual != NO_PREVIEW ? previewVisual : previewTick) : NO_PREVIEW;
             int barY = py + (previewing ? 35 : 25);
-            renderTimelineBar(graphics, tex, cx, barY, panelW - 12, displayTick, previewPos, returnTick, previewing);
+            renderTimelineBar(graphics, tex, cx, barY, panelW - 12, displayTick, viewCenterVisual, previewPos, returnTick, previewing);
         } finally {
             if (scaled) graphics.pose().popPose();
         }
@@ -321,7 +335,7 @@ public final class TimelineClient {
         graphics.drawString(font, text, cx - w / 2, y, color, false);
     }
 
-    private static void renderTimelineBar(GuiGraphics g, ResourceLocation tex, int cx, int y, int width, long display, long preview, long ret, boolean previewing) {
+    private static void renderTimelineBar(GuiGraphics g, ResourceLocation tex, int cx, int y, int width, long display, long center, long preview, long ret, boolean previewing) {
         if (width < 20) return;
 
         int alphaMask = previewing ? 0x40 : 0xFF;
@@ -332,13 +346,13 @@ public final class TimelineClient {
         g.fill(x0, y, x0 + width, y + h, COLOR_BAR_BG);
 
         int dimTickColor = (COLOR_TICK & 0x00FFFFFF) | (alphaMask << 24);
-        long startTick = display - half;
-        long endTick = display + half;
+        long startTick = center - half;
+        long endTick = center + half;
         long firstTick = Math.max(0, (startTick / 20) * 20);
         if (firstTick < startTick && firstTick > 0) firstTick += 20;
 
         for (long t = firstTick; t <= endTick; t += 20) {
-            int px = cx + (int) Math.round((t - display) * (width / 2.0) / half);
+            int px = cx + (int) Math.round((t - center) * (width / 2.0) / half);
             if (px < x0 || px >= x0 + width) continue;
 
             boolean isMajor = (t % 100 == 0);
@@ -346,7 +360,7 @@ public final class TimelineClient {
             g.fill(px, y + h - tickH, px + 1, y + h, dimTickColor);
         }
 
-        long dStart = -display;
+        long dStart = -center;
         if (dStart >= -half) {
             int sx = cx + (int) Math.round(dStart * (width / 2.0) / half);
             g.fill(sx, y - 1, sx + 1, y + h + 1, COLOR_START);
@@ -355,7 +369,7 @@ public final class TimelineClient {
         }
 
         if (ret != NO_PREVIEW) {
-            long d = Math.max(-half, Math.min(half, ret - display));
+            long d = Math.max(-half, Math.min(half, ret - center));
             int rx = cx + (int) Math.round(d * (width / 2.0) / half);
             g.fill(rx - 1, y - 1, rx + 2, y + h + 1, COLOR_RETURN);
         }
@@ -366,8 +380,8 @@ public final class TimelineClient {
         int hSize = history.size();
         for (int i = 0; i < hSize; i++) {
             JumpRecord j = history.get(i);
-            long dFrom = Math.max(-half, Math.min(half, j.from() - display));
-            long dTo = Math.max(-half, Math.min(half, j.to() - display));
+            long dFrom = Math.max(-half, Math.min(half, j.from() - center));
+            long dTo = Math.max(-half, Math.min(half, j.to() - center));
             int pxFrom = cx + (int) Math.round(dFrom * (width / 2.0) / half);
             int pxTo = cx + (int) Math.round(dTo * (width / 2.0) / half);
 
@@ -391,22 +405,27 @@ public final class TimelineClient {
         }
 
         if (preview != NO_PREVIEW) {
-            long d = Math.max(-half, Math.min(half, preview - display));
+            long d = Math.max(-half, Math.min(half, preview - center));
             int px = cx + (int) Math.round(d * (width / 2.0) / half);
             int color = preview < display ? COLOR_PAST : COLOR_FUTURE;
 
-            if (px != cx) {
-                g.fill(cx, arrowY, cx + 1, branchY, color);
+            long dDisplay = Math.max(-half, Math.min(half, display - center));
+            int pxDisplay = cx + (int) Math.round(dDisplay * (width / 2.0) / half);
+
+            if (px != pxDisplay) {
+                g.fill(pxDisplay, arrowY, pxDisplay + 1, branchY, color);
                 g.fill(px, arrowY, px + 1, branchY, color);
-                g.fill(Math.min(cx, px), branchY, Math.max(cx, px) + 1, branchY + 1, color);
+                g.fill(Math.min(pxDisplay, px), branchY, Math.max(pxDisplay, px) + 1, branchY + 1, color);
             }
 
             RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-            g.blit(tex, cx - 3, arrowY, TEX_ARROW_UP_U, TEX_ARROW_UP_V, TEX_ARROW_SIZE, TEX_ARROW_SIZE, TEX_W, TEX_H);
+            g.blit(tex, pxDisplay - 3, arrowY, TEX_ARROW_UP_U, TEX_ARROW_UP_V, TEX_ARROW_SIZE, TEX_ARROW_SIZE, TEX_W, TEX_H);
             g.blit(tex, px - 3, arrowY, TEX_ARROW_DOWN_U, TEX_ARROW_DOWN_V, TEX_ARROW_SIZE, TEX_ARROW_SIZE, TEX_W, TEX_H);
         }
 
-        g.fill(cx, y - 2, cx + 1, y + h + 2, COLOR_NOW);
+        long dNow = Math.max(-half, Math.min(half, display - center));
+        int pxNow = cx + (int) Math.round(dNow * (width / 2.0) / half);
+        g.fill(pxNow, y - 2, pxNow + 1, y + h + 2, COLOR_NOW);
     }
 
     private static Component buildLine1(long tick) {

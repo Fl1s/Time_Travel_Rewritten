@@ -49,8 +49,11 @@ public final class ConfigOptions {
             new ConfigOption.Bool("past self", "flowerManMode", "With your powers combined! The TRUE power of friendship!", false, v -> {
                 TimeTravel.flowerManMode = v;
                 if (v) TimeTravel.knightOfTimeMode = false;
-            })
-    );
+            }),
+
+            new ConfigOption.Bool("chat", "showTimelineMessages",
+                    "Outputs logs of time travel stuff to the chat.",
+                    false, v -> TimeTravel.showTimelineMessages = v));
 
     public static final List<ConfigOption> SERVER = List.of(
             new ConfigOption.Bool("timeline", "syncDayTime",

@@ -52,6 +52,7 @@ public class TimeTravel {
 	public static boolean jumpRequiresOp;
 	public static long maxJumpTicks;
 	public static int jumpCooldownTicks = 20;
+	public static boolean showTimelineMessages;
 
 	public static boolean chainDeath;
 
