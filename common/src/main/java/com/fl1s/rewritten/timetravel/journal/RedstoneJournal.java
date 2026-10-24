@@ -70,7 +70,7 @@ public final class RedstoneJournal {
         if (restoring) return;
         if (!TimeTravel.isLooping) return;
         if (!(level instanceof ServerLevel serverLevel)) return;
-        if (TimeTravel.timelineSceneManager == null) return;
+        if (TimeTravel.timelineSceneManager == null || ExemptBlocks.at(level, pos)) return;
 
         PlayerData pd = BlockJournal.nearestRecorder(serverLevel, pos);
         if (pd == null || pd.getCurrentVisit() == null) return;
@@ -159,7 +159,7 @@ public final class RedstoneJournal {
                 Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(e.block));
                 if (block == null) continue;
                 BlockPos pos = new BlockPos(e.x, e.y, e.z);
-                if (!level.isLoaded(pos)) continue;
+                if (!level.isLoaded(pos) || ExemptBlocks.at(level, pos)) continue;
                 int delay = (int) Math.min(Integer.MAX_VALUE, due - now);
                 level.scheduleTick(pos, block, delay);
                 pendingByKey.put(((long) e.dim.hashCode() << 32) ^ pos.asLong(), e);

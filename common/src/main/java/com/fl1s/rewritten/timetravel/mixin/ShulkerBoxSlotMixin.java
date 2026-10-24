@@ -15,6 +15,6 @@ public abstract class ShulkerBoxSlotMixin {
     @Inject(method = "mayPlace", at = @At("HEAD"), cancellable = true)
     private void tt$lockedPlace(ItemStack stack, CallbackInfoReturnable<Boolean> cir) {
         Slot self = (Slot) (Object) this;
-        if (PastContainers.lockedPlace(self.container, self.getContainerSlot())) cir.setReturnValue(false);
+        if (PastContainers.lockedPlace(self.container, self.getContainerSlot(), stack)) cir.setReturnValue(false);
     }
 }

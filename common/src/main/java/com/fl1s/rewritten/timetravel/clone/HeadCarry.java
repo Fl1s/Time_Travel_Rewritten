@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.clone;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
 import net.minecraft.server.level.ServerLevel;
@@ -100,6 +101,13 @@ public final class HeadCarry {
         CarryTrailJournal.open(trip, entity);
     }
 
+    public static void forget(Entity entity) {
+        if (carried.remove(entity.getUUID()) != null) HeadTracking.markDirty();
+        unfollow(entity.getUUID());
+        retag(entity, CARRY_PREFIX, null);
+        retag(entity, TRIP_PREFIX, null);
+    }
+
     public static void unfollow(UUID entity) {
         trips.remove(entity);
         tripIds.remove(entity);
@@ -108,7 +116,7 @@ public final class HeadCarry {
     public static void onTravel(ServerPlayer player, long fromOffset, long toOffset) {
         if (!enabled() || player == null || fromOffset == toOffset) return;
         Entity mount = player.getVehicle();
-        if (mount == null) return;
+        if (mount == null || Exempt.is(mount)) return;
         if (headOf(mount) == toOffset || HeadVehicleView.headOf(mount) == toOffset) return;
         if (HeadVehicleView.reseat(player, mount, toOffset)) return;
         if (HeadVehicleView.isCopy(mount)) {

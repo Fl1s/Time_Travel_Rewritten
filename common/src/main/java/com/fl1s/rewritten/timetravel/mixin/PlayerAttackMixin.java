@@ -4,6 +4,7 @@ import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
@@ -25,7 +26,7 @@ public abstract class PlayerAttackMixin {
     private void tt$handleAttack(Entity target, CallbackInfo ci) {
         if (!((Object) this instanceof ServerPlayer sp)) return;
 
-        if (TimeTravel.isLooping && VehicleJournal.isTracked(target)) {
+        if (TimeTravel.isLooping && VehicleJournal.isTracked(target) && !Exempt.is(target)) {
             if (Clones.is(sp)) {
                 VehicleJournal.cosmeticHit(target);
                 ci.cancel();
@@ -38,6 +39,6 @@ public abstract class PlayerAttackMixin {
                 return;
             }
         }
-        CloneTracks.onAttack(sp, target);
+        if (!Exempt.is(target)) CloneTracks.onAttack(sp, target);
     }
 }

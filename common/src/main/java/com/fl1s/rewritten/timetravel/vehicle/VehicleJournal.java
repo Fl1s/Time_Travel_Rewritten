@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -12,6 +13,7 @@ import net.minecraft.world.entity.vehicle.AbstractMinecart;
 import net.minecraft.world.entity.vehicle.Boat;
 
 import java.util.Set;
+import java.util.UUID;
 
 public final class VehicleJournal {
     private VehicleJournal() {
@@ -32,7 +34,7 @@ public final class VehicleJournal {
     }
 
     public static void onRemoved(Entity e, Entity.RemovalReason reason) {
-        if (!isTracked(e) || !reason.shouldDestroy()) return;
+        if (!isTracked(e) || !reason.shouldDestroy() || Exempt.is(e)) return;
         VehicleSpawnJournal.onDestroyed(e);
     }
 
@@ -46,6 +48,13 @@ public final class VehicleJournal {
             b.setHurtTime(10);
             b.setDamage(Math.min(b.getDamage() + 10.0f, 30.0f));
         }
+    }
+
+    public static void forget(UUID id) {
+        HeadVehicleView.forgetOriginal(id);
+        VehicleSpawnJournal.forget(id);
+        VehicleTrailJournal.forget(id);
+        VehicleContainerJournal.forget(id);
     }
 
     public static void tick() {

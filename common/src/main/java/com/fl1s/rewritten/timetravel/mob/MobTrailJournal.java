@@ -11,6 +11,7 @@ import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.mixin.LivingEntityAccessor;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.registries.Registries;
@@ -155,7 +156,7 @@ public final class MobTrailJournal {
         bosses.clear();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
-                if (isBoss(entity) && !entity.isRemoved()) bosses.add(entity.getUUID());
+                if (isBoss(entity) && !entity.isRemoved() && !Exempt.is(entity)) bosses.add(entity.getUUID());
             }
         }
     }
@@ -179,7 +180,7 @@ public final class MobTrailJournal {
     }
 
     static void seedFor(Mob mob, String dim, long now) {
-        if (mob.isDeadOrDying()) return;
+        if (mob.isDeadOrDying() || Exempt.is(mob)) return;
         Track t = tracks.computeIfAbsent(mob.getUUID(), k -> new Track(dim));
         if (t.samples.isEmpty()) {
             t.samples.add(makeSample(mob, now));
@@ -224,7 +225,7 @@ public final class MobTrailJournal {
 
             for (ServerPlayer p : viewers) {
                 for (Mob mob : candidates(level, p, r)) {
-                    if (Clones.is(mob) || HeadCarry.isCarried(mob.getUUID())) continue;
+                    if (Clones.is(mob) || Exempt.is(mob) || HeadCarry.isCarried(mob.getUUID())) continue;
                     if (Clones.isVisualOnly(mob)) continue;
                     if (mob.isDeadOrDying()) continue;
                     UUID id = mob.getUUID();
@@ -343,6 +344,10 @@ public final class MobTrailJournal {
 
             Entity e = level.getEntity(id);
             if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+            if (Exempt.is(mob)) {
+                releasePuppet(id);
+                continue;
+            }
             if (mob.isDeadOrDying() && !MobJournal.isDoomed(mob)) continue;
             if (mob instanceof EnderDragon d && BossFightJournal.isDrivenDeath(d)) continue;
 
@@ -614,6 +619,13 @@ public final class MobTrailJournal {
         return s == null ? null : new Vec3(s.x, s.y, s.z);
     }
 
+    public static void forget(UUID id) {
+        releasePuppet(id);
+        bosses.remove(id);
+        lastBossHealth.remove(id);
+        if (tracks.remove(id) != null) dirty = true;
+    }
+
     public static void rewriteHealth(UUID id, long tick, float lost) {
         Track t = tracks.get(id);
         if (t == null) return;
@@ -653,7 +665,7 @@ public final class MobTrailJournal {
             ServerLevel level = levelOf(t);
             if (level == null) continue;
             Entity e = level.getEntity(en.getKey());
-            if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+            if (!(e instanceof Mob mob) || mob.isRemoved() || Exempt.is(mob)) continue;
 
             mob.setHealth(Math.min(s.health, mob.getMaxHealth()));
             applyBossState(mob, s);

@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.mob;
 import com.fl1s.rewritten.timetravel.compat.ironsspells.IrSpellsCompat;
 import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -81,7 +82,7 @@ public final class MobSpawnJournal {
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
                 if (!(entity instanceof Mob mob)) continue;
-                if (Clones.is(mob)) continue;
+                if (Clones.is(mob) || Exempt.is(mob)) continue;
                 if (Clones.isVisualOnly(mob)) continue;
                 if (canon.containsKey(mob.getUUID())) continue;
                 CompoundTag tag = new CompoundTag();
@@ -95,7 +96,7 @@ public final class MobSpawnJournal {
     public static void onSpawn(ServerLevel level, Entity entity) {
         if (!TimeTravel.isLooping) return;
         if (!(entity instanceof Mob mob)) return;
-        if (Clones.is(mob)) return;
+        if (Clones.is(mob) || Exempt.is(mob)) return;
         if (Clones.isVisualOnly(mob)) return;
         if (canon.containsKey(mob.getUUID())) return;
 
@@ -125,7 +126,7 @@ public final class MobSpawnJournal {
     public static void onRemoved(Entity entity, Entity.RemovalReason reason) {
         if (!TimeTravel.isLooping || ReplayState.SUPPRESS) return;
         if (removingForReplay) return;
-        if (!(entity instanceof Mob mob)) return;
+        if (!(entity instanceof Mob mob) || Exempt.is(mob)) return;
         if (reason == null) return;
         if (reason == Entity.RemovalReason.UNLOADED_TO_CHUNK) return;
         if (reason == Entity.RemovalReason.UNLOADED_WITH_PLAYER) return;
@@ -192,12 +193,13 @@ public final class MobSpawnJournal {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
             Entity current = findLoaded(level, e.uuid);
-            if (current == null || current.isRemoved()) continue;
+            if (current == null || current.isRemoved() || Exempt.is(current)) continue;
             if (!(current instanceof Mob m)) continue;
             if (MobTrailJournal.isPuppeted(m)) {
                 deferred.add(e);
                 continue;
             }
+            Exempt.eject(current);
             discardForReplay(current);
         }
         pendingDespawns.addAll(deferred);
@@ -213,7 +215,7 @@ public final class MobSpawnJournal {
     }
 
     static void ensureRegistered(ServerLevel level, Mob mob) {
-        if (canon.containsKey(mob.getUUID())) return;
+        if (canon.containsKey(mob.getUUID()) || Exempt.is(mob)) return;
         CompoundTag tag = new CompoundTag();
         if (!mob.save(tag)) return;
         registerInitial(level, mob, tag, -1L);
@@ -227,13 +229,18 @@ public final class MobSpawnJournal {
 
             boolean shouldExist = e.tick <= now && !isGoneAt(e, now);
             Entity current = findLoaded(level, e.uuid);
+            if (Exempt.is(current)) continue;
 
             if (!shouldExist) {
-                if (current != null && !current.isRemoved()) discardForReplay(current);
+                if (current != null && !current.isRemoved()) {
+                    Exempt.eject(current);
+                    discardForReplay(current);
+                }
                 continue;
             }
             if (current != null && !current.isRemoved() && current instanceof LivingEntity living
                     && (living.isDeadOrDying() || living.deathTime > 0)) {
+                Exempt.eject(current);
                 discardForReplay(current);
                 current = null;
             }
@@ -252,12 +259,16 @@ public final class MobSpawnJournal {
     private static void revive(ServerLevel level, Entry e) {
         try {
             Entity stale = findLoaded(level, e.uuid);
-            if (stale != null && !stale.isRemoved()) discardForReplay(stale);
+            if (Exempt.is(stale)) return;
+            if (stale != null && !stale.isRemoved()) {
+                Exempt.eject(stale);
+                discardForReplay(stale);
+            }
 
             CompoundTag tag = TagParser.parseTag(e.nbt);
             sanitize(tag);
             Entity revived = EntityType.loadEntityRecursive(tag, level, entity -> entity);
-            if (revived == null) return;
+            if (revived == null || Exempt.is(revived)) return;
             revived.setUUID(e.uuid);
             Vec3 at = MobTrailJournal.positionAt(e.uuid, TimeContext.now());
             if (at == null) at = new Vec3(e.x, e.y, e.z);
@@ -272,12 +283,22 @@ public final class MobSpawnJournal {
     }
 
     private static void sanitize(CompoundTag tag) {
+        Exempt.strip(tag);
         if (tag.contains("Health") && tag.getFloat("Health") <= 0) tag.remove("Health");
         tag.putShort("DeathTime", (short) 0);
         tag.putShort("HurtTime", (short) 0);
         tag.putInt("DragonDeathTime", 0);
         tag.remove("DeathLootTable");
         tag.remove("DeathLootTableSeed");
+    }
+
+    public static void forget(UUID id) {
+        if (canon.remove(id) == null) return;
+        STORE.entries().removeIf(e -> id.equals(e.uuid));
+        STORE.removeUpcoming(e -> id.equals(e.uuid));
+        pending.removeIf(e -> id.equals(e.uuid));
+        pendingDespawns.removeIf(e -> id.equals(e.uuid));
+        STORE.markDirty();
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
@@ -287,7 +308,10 @@ public final class MobSpawnJournal {
                 ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
                 if (level == null) continue;
                 Entity current = findLoaded(level, e.uuid);
-                if (current != null && !current.isRemoved()) discardForReplay(current);
+                if (current != null && !current.isRemoved() && !Exempt.is(current)) {
+                    Exempt.eject(current);
+                    discardForReplay(current);
+                }
             }
         }
         for (Entry e : STORE.entries()) {

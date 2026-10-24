@@ -14,6 +14,7 @@ import com.fl1s.rewritten.timetravel.net.HurtFlashPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -120,6 +121,11 @@ public abstract class MobHurtMixin {
         }
 
         if (MobJournal.isApplying()) return;
+
+        if (Exempt.is(self) && Clones.is(source.getEntity())) {
+            cir.setReturnValue(false);
+            return;
+        }
 
         if (tt$isPuppetAttacker(source.getEntity()) || tt$isPuppetAttacker(source.getDirectEntity())) {
             if (self.level() instanceof ServerLevel sl) {

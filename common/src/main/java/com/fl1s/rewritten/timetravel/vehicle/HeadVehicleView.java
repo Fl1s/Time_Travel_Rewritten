@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.clone.CloneManager;
 import com.fl1s.rewritten.timetravel.clone.HeadCarry;
 import com.fl1s.rewritten.timetravel.clone.HeadTracking;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.Removal;
 import com.fl1s.rewritten.timetravel.mob.MobEventJournal;
@@ -267,8 +268,9 @@ public final class HeadVehicleView {
         try {
             CompoundTag tag = TagParser.parseTag(e.nbt);
             tag.remove("Passengers");
+            Exempt.strip(tag);
             Entity entity = EntityType.loadEntityRecursive(tag, level, en -> en);
-            if (entity == null) return null;
+            if (entity == null || Exempt.is(entity)) return null;
             entity.setUUID(id);
             entity.addTag(TAG);
             retag(entity, head, e.uuid);
@@ -388,6 +390,12 @@ public final class HeadVehicleView {
                 orphan.ejectPassengers();
                 Removal.discardWithoutDrops(orphan);
             }
+        }
+    }
+
+    public static void forgetOriginal(UUID original) {
+        for (Map.Entry<UUID, Copy> entry : new ArrayList<>(copies.entrySet())) {
+            if (entry.getValue().original.equals(original)) discard(entry.getKey());
         }
     }
 

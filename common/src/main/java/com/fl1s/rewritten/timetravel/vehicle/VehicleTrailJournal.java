@@ -6,6 +6,7 @@ import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
@@ -80,7 +81,7 @@ public final class VehicleTrailJournal {
             String dim = Levels.canonicalId(level);
             for (Entity entity : level.getAllEntities()) {
                 if (!VehicleJournal.isTracked(entity)) continue;
-                if (Clones.is(entity) || HeadVehicleView.isCopy(entity)) continue;
+                if (Clones.is(entity) || Exempt.is(entity) || HeadVehicleView.isCopy(entity)) continue;
                 Track t = tracks.computeIfAbsent(entity.getUUID(), k -> new Track(dim));
                 if (t.samples.isEmpty()) {
                     t.samples.add(makeSample(entity, now));
@@ -102,7 +103,7 @@ public final class VehicleTrailJournal {
             String dim = Levels.canonicalId(level);
             for (Entity e : level.getAllEntities()) {
                 if (!VehicleJournal.isTracked(e)) continue;
-                if (Clones.is(e) || HeadVehicleView.isCopy(e) || HeadCarry.isCarried(e.getUUID())) continue;
+                if (Clones.is(e) || Exempt.is(e) || HeadVehicleView.isCopy(e) || HeadCarry.isCarried(e.getUUID())) continue;
                 if (!sampledThisTick.add(e.getUUID())) continue;
                 record(e, dim, now);
             }
@@ -163,7 +164,7 @@ public final class VehicleTrailJournal {
             if (level == null) continue;
             Entity e = level.getEntity(en.getKey());
             if (e == null || e.isRemoved()) continue;
-            if (!VehicleJournal.isTracked(e)) continue;
+            if (!VehicleJournal.isTracked(e) || Exempt.is(e)) continue;
             e.setDeltaMovement(Vec3.ZERO);
             e.moveTo(s.x, s.y, s.z, s.yRot, s.xRot);
             e.setDeltaMovement(s.deltaX, s.deltaY, s.deltaZ);
@@ -184,6 +185,10 @@ public final class VehicleTrailJournal {
             else hi = mid - 1;
         }
         return s.get(Math.max(0, lo - 1));
+    }
+
+    public static void forget(UUID id) {
+        if (tracks.remove(id) != null) dirty = true;
     }
 
     public static Sample sampleOf(UUID id, long tick) {

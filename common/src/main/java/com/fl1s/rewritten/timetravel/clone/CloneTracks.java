@@ -6,6 +6,7 @@ import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.entity.FishingHookExt;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import com.fl1s.rewritten.timetravel.mob.HeadMobView;
@@ -85,7 +86,7 @@ public final class CloneTracks {
         }
 
         Entity vehicle = player.getVehicle();
-        String vehicleId = vehicle == null ? null : HeadCarry.rideIdOf(vehicle).toString();
+        String vehicleId = vehicle == null || Exempt.is(vehicle) ? null : HeadCarry.rideIdOf(vehicle).toString();
         if (!Objects.equals(visit.lastVehicle, vehicleId)) {
             visit.rides.add(new Visit.RideChange(tick, vehicleId));
             visit.lastVehicle = vehicleId;
@@ -292,7 +293,7 @@ public final class CloneTracks {
         }
         HeadMobView.unride(clone);
         Entity vehicle = HeadVehicleView.vehicleFor(clone, id);
-        if (vehicle == null || vehicle.level() != clone.level()) return;
+        if (vehicle == null || vehicle.level() != clone.level() || Exempt.is(vehicle)) return;
         if (current != null) clone.stopRiding();
         clone.startRiding(vehicle, true);
     }
@@ -316,7 +317,7 @@ public final class CloneTracks {
                 continue;
             }
             Entity target = targetFor(clone, level, id);
-            if (target == null || target.isRemoved()) continue;
+            if (target == null || target.isRemoved() || Exempt.is(target)) continue;
             double d2 = clone.distanceToSqr(target);
             if (d2 > 36.0) continue;
             clone.attack(target);

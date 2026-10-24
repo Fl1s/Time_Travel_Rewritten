@@ -10,6 +10,7 @@ import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
@@ -71,6 +72,7 @@ public final class EntityJournal {
     public static boolean suppress = false;
 
     private static boolean isTracked(Entity e) {
+        if (Exempt.is(e)) return false;
         if (e instanceof ExperienceOrb) return true;
         if (e instanceof PrimedTnt) return true;
         if (e instanceof ItemEntity item) return !(item.getOwner() instanceof Player);
@@ -82,6 +84,7 @@ public final class EntityJournal {
         if (com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal.shouldBlockReplaySpawn(e)) return true;
         if (ItemFlowJournal.isCloneKill()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (MobJournal.isKilling()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
+        if (Exempt.is(e)) return false;
         if (suppress) return isTracked(e);
         if (BlockJournal.isApplying() || BlockJournal.isErasing())
             return e instanceof PrimedTnt || e instanceof FallingBlockEntity || e instanceof ItemEntity;
@@ -96,6 +99,7 @@ public final class EntityJournal {
         if (ItemFlowJournal.isCapturingDeath() && !orb) return;
         if (orb && ItemFlowJournal.isCloneKill()) return;
         if (MobJournal.isApplying()) return;
+        if (Exempt.is(entity)) return;
         if (entity instanceof AreaEffectCloud) {
             clouds.put(entity.getUUID(), new CloudRef(Levels.canonicalId(level), TimeContext.now()));
             return;
@@ -108,6 +112,7 @@ public final class EntityJournal {
         CompoundTag tag = new CompoundTag();
         if (!entity.save(tag)) return;
         tag.remove("UUID");
+        Exempt.strip(tag);
 
         Entry e = new Entry();
         e.dim = Levels.canonicalId(level);
@@ -231,7 +236,7 @@ public final class EntityJournal {
             tag.putBoolean("DropItem", false);
             Entity entity = EntityType.loadEntityRecursive(tag, level, en -> en);
             if (entity instanceof Projectile) return;
-            if (entity == null) return;
+            if (entity == null || Exempt.is(entity)) return;
             entity.setUUID(e.uuid);
             entity.addTag(TAG);
             if (level.addFreshEntity(entity)) {
@@ -259,6 +264,7 @@ public final class EntityJournal {
             boolean shouldExist = e.tick <= now
                     && (e.fuse <= 0 || now < e.tick + e.fuse);
             Entity existing = findLoaded(level, e.uuid);
+            if (Exempt.is(existing)) continue;
 
             boolean projectile = !e.item && e.fuse <= 0;
             if (projectile) {
@@ -311,7 +317,7 @@ public final class EntityJournal {
             ServerLevel level = levelOf(en.getValue());
             if (level == null) continue;
             Entity entity = findLoaded(level, en.getKey());
-            if (entity != null) entity.discard();
+            if (entity != null && !Exempt.is(entity)) entity.discard();
         }
         live.clear();
     }
@@ -323,7 +329,7 @@ public final class EntityJournal {
             Map.Entry<UUID, CloudRef> en = it.next();
             ServerLevel level = levelOf(en.getValue().dim());
             Entity cloud = level == null ? null : findLoaded(level, en.getKey());
-            if (cloud == null || cloud.isRemoved()) {
+            if (cloud == null || cloud.isRemoved() || Exempt.is(cloud)) {
                 it.remove();
             } else if (en.getValue().tick() > now) {
                 cloud.discard();
@@ -363,11 +369,21 @@ public final class EntityJournal {
             if (seen.contains(en.getKey())) continue;
             ServerLevel level = levelOf(en.getValue());
             if (level == null) continue;
-            if (findLoaded(level, en.getKey()) instanceof PrimedTnt t) {
+            if (findLoaded(level, en.getKey()) instanceof PrimedTnt t && !Exempt.is(t)) {
                 seen.add(t.getUUID());
                 long due = base + t.getFuse();
                 if (due <= to) q.add(new Due(due, t));
             }
+        }
+    }
+
+    public static void forget(UUID id) {
+        live.remove(id);
+        flying.remove(id);
+        clouds.remove(id);
+        if (STORE.entries().removeIf(e -> id.equals(e.uuid))) {
+            STORE.removeUpcoming(e -> id.equals(e.uuid));
+            STORE.markDirty();
         }
     }
 

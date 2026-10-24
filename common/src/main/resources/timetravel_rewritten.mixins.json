@@ -80,7 +80,9 @@
     "WispMixin",
     "SpectralHammerMixin",
     "IronSpellsEntityTickMixin",
-    "MagicManagerMixin"
+    "MagicManagerMixin",
+    "BlockItemMixin",
+    "BlockDropsMixin"
   ],
   "client": [
     "PauseScreenMixin",
@@ -92,7 +94,10 @@
     "CapeLayerMixin",
     "PlayerModelMixin",
     "EntityRenderDispatcherMixin",
-    "ItemInHandRendererMixin"
+    "ItemInHandRendererMixin",
+    "ItemRendererMixin",
+    "BlockEntityRenderDispatcherMixin",
+    "RenderBuffersMixin"
   ],
   "injectors": {
     "defaultRequire": 1

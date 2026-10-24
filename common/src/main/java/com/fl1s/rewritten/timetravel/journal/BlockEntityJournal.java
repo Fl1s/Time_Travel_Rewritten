@@ -66,7 +66,7 @@ public final class BlockEntityJournal {
     public static boolean isApplying() { return applying; }
 
     public static boolean isTracked(BlockEntity be) {
-        if (be == null) return false;
+        if (be == null || ExemptBlocks.covers(be)) return false;
         if (BuiltInRegistries.BLOCK_ENTITY_TYPE.wrapAsHolder(be.getType()).is(IGNORED)) return false;
         if (TimelineApi.isBlockEntityExcluded(be)) return false;
         if (be instanceof JukeboxBlockEntity) return true;

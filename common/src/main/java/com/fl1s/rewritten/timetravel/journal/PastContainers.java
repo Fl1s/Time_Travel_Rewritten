@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.mixin.CompoundContainerAccessor;
 import com.fl1s.rewritten.timetravel.mixin.SlotAccessor;
@@ -35,6 +36,7 @@ import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -87,7 +89,7 @@ public final class PastContainers {
             return container;
         }
         if (!(container instanceof BlockEntity block) || !(block.getLevel() instanceof ServerLevel level)) return container;
-        if (!storage(block)) return container;
+        if (!storage(block) || ExemptBlocks.covers(block)) return container;
         if (!past && !TimeTravel.noDuplication) return container;
 
         String dim = Levels.canonicalId(level);
@@ -102,7 +104,34 @@ public final class PastContainers {
         Arrays.fill(next, PastContainer.NO_CHANGE);
         undo(later, view, next);
         if (past) overlay(head, dim, pos, position, view);
-        return new PastContainer(container, player, dim, pos, past ? head : 0, false, view, next);
+        int[] bound = bindExempt(container, view);
+        return new PastContainer(container, player, dim, pos, past ? head : 0, false, view, next, bound);
+    }
+
+    private static int[] bindExempt(Container real, NonNullList<ItemStack> view) {
+        int[] bound = new int[view.size()];
+        Arrays.fill(bound, PastContainer.UNBOUND);
+        List<Integer> moved = new ArrayList<>();
+        for (int r = 0; r < view.size(); r++) {
+            ItemStack stack = real.getItem(r);
+            if (!Exempt.is(stack)) continue;
+            if (view.get(r).isEmpty() || ItemStack.matches(view.get(r), stack)) {
+                view.set(r, stack.copy());
+                bound[r] = r;
+            } else {
+                moved.add(r);
+            }
+        }
+        for (int r : moved) {
+            int slot = -1;
+            for (int i = 0; i < view.size() && slot < 0; i++) {
+                if (view.get(i).isEmpty() && bound[i] == PastContainer.UNBOUND) slot = i;
+            }
+            if (slot < 0) continue;
+            view.set(slot, real.getItem(r).copy());
+            bound[slot] = r;
+        }
+        return bound;
     }
 
     private static boolean storage(BlockEntity block) {
@@ -209,7 +238,9 @@ public final class PastContainers {
             }
         }
         overlay(head, dim, pos, position, view);
-        return new PastContainer(new SimpleContainer(size), player, dim, pos, head, true, view, next);
+        int[] bound = new int[size];
+        Arrays.fill(bound, PastContainer.UNBOUND);
+        return new PastContainer(new SimpleContainer(size), player, dim, pos, head, true, view, next, bound);
     }
 
     private static AbstractContainerMenu menuFor(int id, Inventory inventory, Container container, boolean shulker) {
@@ -246,10 +277,10 @@ public final class PastContainers {
         return past != null && past.lockedTake(local[0]);
     }
 
-    public static boolean lockedPlace(Container container, int slot) {
+    public static boolean lockedPlace(Container container, int slot, ItemStack stack) {
         int[] local = new int[1];
         PastContainer past = partOf(container, slot, local);
-        return past != null && past.lockedPlace(local[0]);
+        return past != null && past.lockedPlace(local[0], stack);
     }
 
     public static void dropHead(long head) {

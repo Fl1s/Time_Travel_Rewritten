@@ -123,6 +123,7 @@ public final class HeadWorldView {
             if (e.tick <= position) continue;
             BlockState state = BlockJournal.oldState(e);
             if (state == null) continue;
+            if (ExemptBlocks.skips(e.dim, BlockPos.asLong(e.x, e.y, e.z), state, BlockJournal.newState(e))) continue;
             view.putIfAbsent(new Key(e.dim, BlockPos.asLong(e.x, e.y, e.z)), state);
         }
         return view;
@@ -133,6 +134,7 @@ public final class HeadWorldView {
         BlockJournal.store().tick(head, position, e -> {
             BlockState state = BlockJournal.newState(e);
             if (state == null) return;
+            if (ExemptBlocks.skips(e.dim, BlockPos.asLong(e.x, e.y, e.z), BlockJournal.oldState(e), state)) return;
             Key key = new Key(e.dim, BlockPos.asLong(e.x, e.y, e.z));
             view.put(key, state);
             for (ServerPlayer viewer : viewers) send(viewer, key, state);
@@ -159,6 +161,20 @@ public final class HeadWorldView {
             if (view.containsKey(key)) continue;
             view.put(key, old);
             for (ServerPlayer viewer : viewersOf(head.offset())) send(viewer, key, old);
+        }
+    }
+
+    public static void forget(String dim, Set<Long> packed) {
+        if (views.isEmpty()) return;
+        ServerLevel level = TimeTravel.server == null ? null : TimeTravel.server.getLevel(Levels.key(dim));
+        for (Map.Entry<Long, Map<Key, BlockState>> entry : views.entrySet()) {
+            List<ServerPlayer> viewers = viewersOf(entry.getKey());
+            for (long pos : packed) {
+                Key key = new Key(dim, pos);
+                if (entry.getValue().remove(key) == null || level == null) continue;
+                BlockState present = level.getBlockState(BlockPos.of(pos));
+                for (ServerPlayer viewer : viewers) send(viewer, key, present);
+            }
         }
     }
 

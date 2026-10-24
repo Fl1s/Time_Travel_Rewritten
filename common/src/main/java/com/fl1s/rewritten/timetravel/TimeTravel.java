@@ -9,6 +9,7 @@ import com.fl1s.rewritten.timetravel.compat.anim.BetterCombatIdleRelay;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.journal.ExemptBlocks;
 import com.fl1s.rewritten.timetravel.journal.JournalRegistry;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
@@ -62,6 +63,7 @@ public class TimeTravel {
 	public static boolean noDuplication;
 
 	public static boolean showTimelineInfo;
+	public static boolean showExemptGlow = true;
 	public static boolean knightOfTimeMode;
 	public static boolean flowerManMode;
 	public static boolean displayTimeInTicks;
@@ -164,6 +166,7 @@ public class TimeTravel {
 	}
 
 	public static void handlePlayerDimensionChange(ServerPlayer player) {
+		ExemptBlocks.sendTo(player);
 		if (!isLooping) return;
 
 		PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getName().getString());
@@ -185,6 +188,7 @@ public class TimeTravel {
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
 		TimeHeads h = heads();
 		if (h != null) h.move(pd, individualTime ? pd.getTimeOffset() : h.sharedOffset());
+		ExemptBlocks.sendTo(player);
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
 			TimelineSession s = session();
 			s.visits.beginVisit(player, pd);

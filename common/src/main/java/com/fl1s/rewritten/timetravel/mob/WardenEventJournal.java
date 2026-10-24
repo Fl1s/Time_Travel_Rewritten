@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.mob;
 import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -142,7 +143,7 @@ public final class WardenEventJournal {
     }
 
     public static void onSound(Warden warden, SoundEvent sound, float volume, float pitch) {
-        if (!active() || warden.isSilent() || MobTrailJournal.isPuppeted(warden)) return;
+        if (!active() || warden.isSilent() || MobTrailJournal.isPuppeted(warden) || Exempt.is(warden)) return;
         if (!(warden.level() instanceof ServerLevel level)) return;
         ResourceLocation id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
         if (id == null) return;
@@ -161,7 +162,7 @@ public final class WardenEventJournal {
     }
 
     public static void onEvent(Warden warden, byte state) {
-        if (graceOf(state) == 0 || !active() || MobTrailJournal.isPuppeted(warden)) return;
+        if (graceOf(state) == 0 || !active() || MobTrailJournal.isPuppeted(warden) || Exempt.is(warden)) return;
         if (!(warden.level() instanceof ServerLevel level)) return;
         Entry e = create(EVENT, level, warden.getUUID(), warden.getX(), warden.getY(), warden.getZ());
         if (e == null) return;
@@ -318,7 +319,7 @@ public final class WardenEventJournal {
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = Levels.canonicalId(level);
             for (Entity entity : level.getAllEntities()) {
-                if (!(entity instanceof Warden warden) || warden.isRemoved()) continue;
+                if (!(entity instanceof Warden warden) || warden.isRemoved() || Exempt.is(warden)) continue;
                 List<MobTrailJournal.Sample> samples = MobTrailJournal.samplesOf(warden.getUUID());
                 if (samples == null || samples.isEmpty()) continue;
                 int idx = -1;
@@ -356,6 +357,14 @@ public final class WardenEventJournal {
             else play(e);
         }
         catchUpPoses(now);
+    }
+
+    public static void forget(UUID id) {
+        pending.removeIf(p -> id.equals(p.uuid()));
+        if (STORE.entries().removeIf(e -> id.equals(e.uuid))) {
+            STORE.removeUpcoming(e -> id.equals(e.uuid));
+            STORE.markDirty();
+        }
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.clone;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.journal.HeadItemView;
 import com.fl1s.rewritten.timetravel.mob.HeadMobView;
 import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
@@ -16,7 +17,7 @@ public final class HeadVisibility {
     public static boolean visibleTo(Entity entity, ServerPlayer viewer) {
         if (!TimeTravel.individualTime || !TimeTravel.isLooping) return true;
         if (entity == null || viewer == null || entity == viewer) return true;
-        if (Clones.is(viewer)) return true;
+        if (Clones.is(viewer) || Exempt.is(entity)) return true;
 
         long carried = HeadCarry.headOf(entity);
         if (carried != HeadCarry.NONE) {

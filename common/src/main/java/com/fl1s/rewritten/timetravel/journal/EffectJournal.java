@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.mob.MobEventJournal;
 import com.fl1s.rewritten.timetravel.mob.WardenEventJournal;
@@ -99,6 +100,7 @@ public final class EffectJournal {
     public static void recordLevelEvent(ServerLevel level, Player except, int type, BlockPos pos, int data) {
         if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
         if (except == null && !PLAYERLESS_EVENTS.contains(type)) return;
+        if (ExemptBlocks.recentlyAt(level, pos)) return;
         PlayerData pd = recorder(level, except, pos.getX(), pos.getY(), pos.getZ());
         if (pd == null) return;
 
@@ -123,6 +125,7 @@ public final class EffectJournal {
         if (!level.isLoaded(pos)) return;
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof LidBlockEntity) && !(be instanceof ShulkerBoxBlockEntity)) return;
+        if (ExemptBlocks.covers(be)) return;
         PlayerData pd = recorder(level, null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
         if (pd == null) return;
 
@@ -144,6 +147,7 @@ public final class EffectJournal {
         boolean tameableEvent = entity instanceof TamableAnimal && (event == 6 || event == 7);
         boolean hurtFlash = event == 2 && entity instanceof net.minecraft.world.entity.player.Player && !Clones.is(entity);
         if (!tameableEvent && !hurtFlash) return;
+        if (Exempt.is(entity)) return;
         PlayerData pd = recorder(level, null, entity.getX(), entity.getY(), entity.getZ());
         if (pd == null) return;
         Entry e = create(ENTITY_EVENT, level, pd, entity.getX(), entity.getY(), entity.getZ());

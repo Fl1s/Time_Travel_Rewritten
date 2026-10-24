@@ -32,6 +32,9 @@ Use `/timetravel` or `/tt` to control the timeline.
 - `unmark <name>` - Delete a saved mark.
 - `marks` - List saved marks.
 - `visits [player]` - View recorded player visits.
+- `exempt <targets> [true|false]` - Take entities out of time, or check whether they are.
+- `exempt hand [true|false]` - Take the item in your main hand out of time, or check it.
+- `exempt position <pos> [<to>] [true|false]` - Keep a spot or a region out of time, or check it.
 
 Time can be specified in ticks (`t`), seconds (`s`), minutes (`m`), hours (`h`), or days (`d`). For example, `5m`, `30s`, or `1200t`.
 
@@ -81,6 +84,9 @@ Requires [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat/).
 - `jump present` - Jump to the newest point the timeline has reached. (though this is only really relevant with `individualTime` enabled)
 - `jump join <player>` - Match another traveller's time. Requires `individualTime`.
 - `jump ... bring <targets>` - Take other players along on your jump, e.g. `jump back 30s bring @a[distance=..8]` (Player-only).
+- `exempt <targets> [true|false]` - Take entities out of time, or check whether they are.
+- `exempt hand [true|false]` - Take the item in your main hand out of time, or check it.
+- `exempt position <pos> [<to>] [true|false]` - Keep a spot or a region out of time, or check it.
 
 ### Toggles
 - `individualTime` - Give each player their own position on the timeline instead of moving the whole server together. See below.
@@ -88,3 +94,13 @@ Requires [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat/).
 
 ## Individual Time
 i WAS going to explain how this works in depth but.. its literally so that each player has their own timeline. and believe me. i had to pull some mysterious voodoo client server shit to make this work as intended.
+
+## Exempt
+Exempt items and entities exist outside the timeline. Nothing about them is recorded, jumps never rewind, remove or respawn them, and every traveller sees the same one. Past selves leave them alone.
+
+- Entities get the `tt_exempt` tag, so `/tag <targets> add tt_exempt` works too.
+- Items get `tt_exempt` in their custom data, e.g. `/give @s diamond[custom_data={tt_exempt:true}]`. They stay put on the ground, in chests, chest minecarts, item frames and armor stands.
+- Placing an exempt item makes an exempt block. It stays out of time until it's broken or replaced, and breaking it drops the exempt item again. Block entities carry the flag in their data too, e.g. `/data merge block <pos> {components:{"minecraft:custom_data":{tt_exempt:1b}}}`.
+- `exempt position` marks spots instead of blocks. A marked spot stays out of time whatever gets built there, until you unmark it.
+- Whole types can be exempted with a datapack through the `#timetravel_rewritten:exempt` entity type, item and block tags.
+- Exempt items and blocks shimmer green so you can tell them apart, and exempt blocks give off the odd sparkle. Turn it off with `showExemptGlow` in the client config.

@@ -7,6 +7,7 @@ import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mixin.BaseRailBlockAccessor;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
@@ -22,6 +23,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.item.JukeboxSongPlayer;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
@@ -175,6 +177,7 @@ public final class BlockJournal {
 
     public static boolean isLocked(ServerLevel level, BlockPos pos, BlockState requested) {
         if (!TimeTravel.isLooping || applying || replayingLive || buildDepth > 0) return false;
+        if (ExemptBlocks.at(level, pos)) return false;
         List<Entry> list = byPos.get(pos.asLong());
         if (list == null) return false;
         BlockState current = level.getBlockState(pos);
@@ -223,6 +226,7 @@ public final class BlockJournal {
         if (!TimeTravel.isLooping) return;
         SetFrame frame = new SetFrame(level, pos.asLong(), level.getBlockState(pos), requested);
         if (!applying && !replayingLive && !frame.before.is(requested.getBlock())
+                && !ExemptBlocks.skips(level, pos, frame.before, requested)
                 && level.getBlockEntity(pos) instanceof Container container
                 && !(container instanceof JukeboxBlockEntity)
                 && !(container instanceof BlockEntity be && ProcessJournal.isProcess(be))
@@ -322,6 +326,7 @@ public final class BlockJournal {
             old = origin.state();
         }
         if (old.equals(now) || !shouldTrack(old, now)) return;
+        if (ExemptBlocks.skips(level, pos, old, now)) return;
 
         PlayerData pd = nearestRecorder(level, pos);
         int visit;
@@ -613,7 +618,7 @@ public final class BlockJournal {
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
             BlockState before = level.getBlockState(pos);
             if (before.is(Blocks.MOVING_PISTON)) return;
-            if (before.equals(state)) return;
+            if (before.equals(state) || ExemptBlocks.skips(level, pos, before, state)) return;
             if (!e.root) {
                 BlockState old = oldState(e);
                 if (RedstoneJournal.isNaturalPhysics(state) || RedstoneJournal.isNaturalPhysics(before)
@@ -707,6 +712,7 @@ public final class BlockJournal {
 
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
             BlockState current = level.getBlockState(pos);
+            if (ExemptBlocks.skips(level, pos, current, state)) return;
             boolean rail = current.getBlock() instanceof BaseRailBlock || state.getBlock() instanceof BaseRailBlock;
             if (!current.equals(state)) {
                 if (!current.is(state.getBlock()) && level.getBlockEntity(pos) != null) {
@@ -752,6 +758,7 @@ public final class BlockJournal {
         if (current.is(next.getBlock())) return;
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof Container container) {
+            Exempt.eject(container, level, Vec3.atBottomCenterOf(pos.above()));
             container.clearContent();
             container.setChanged();
         }
@@ -760,7 +767,7 @@ public final class BlockJournal {
     private static void discardNearbyItems(ServerLevel level, Entry e) {
         net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(e.x + 0.5 - 1.5, e.y + 0.5 - 1.5, e.z + 0.5 - 1.5, e.x + 0.5 + 1.5, e.y + 0.5 + 1.5, e.z + 0.5 + 1.5);
         for (net.minecraft.world.entity.item.ItemEntity item : level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, box)) {
-            if (!item.isRemoved()) item.discard();
+            if (!item.isRemoved() && !Exempt.is(item)) item.discard();
         }
     }
 
@@ -858,7 +865,7 @@ public final class BlockJournal {
         }
         for (BlockPos pos : candidates) {
             BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof Container container) {
+            if (be instanceof Container container && !ExemptBlocks.covers(be)) {
                 snapshot.put(pos.immutable(), copyOf(container));
             }
         }
@@ -877,7 +884,7 @@ public final class BlockJournal {
 
             for (Map.Entry<BlockPos, List<ItemStack>> e : w.last().entrySet()) {
                 BlockEntity be = w.level().getBlockEntity(e.getKey());
-                if (!(be instanceof Container container)) continue;
+                if (!(be instanceof Container container) || ExemptBlocks.covers(be)) continue;
 
                 List<ItemStack> now = copyOf(container);
                 if (sameItems(e.getValue(), now)) continue;
@@ -912,7 +919,8 @@ public final class BlockJournal {
 
     public static void recordContainerChange(ServerLevel level, BlockPos pos, List<ItemStack> before) {
         if (applying || !TimeTravel.isLooping || TimeTravel.timelineSceneManager == null) return;
-        if (!(level.getBlockEntity(pos) instanceof Container container)) return;
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof Container container) || ExemptBlocks.covers(be)) return;
         List<ItemStack> now = copyOf(container);
         if (sameItems(before, now)) return;
         PlayerData pd = nearestRecorder(level, pos);
@@ -936,7 +944,7 @@ public final class BlockJournal {
     public static List<ItemStack> copyOf(Container container) {
         List<ItemStack> list = new ArrayList<>(container.getContainerSize());
         for (int i = 0; i < container.getContainerSize(); i++) {
-            list.add(container.getItem(i).copy());
+            list.add(Exempt.masked(container.getItem(i)).copy());
         }
         return list;
     }
@@ -965,6 +973,7 @@ public final class BlockJournal {
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to parse container items", ex);
         }
+        Exempt.mask(list);
         return list;
     }
 
@@ -975,11 +984,12 @@ public final class BlockJournal {
 
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
             BlockEntity be = level.getBlockEntity(pos);
-            if (!(be instanceof Container container)) return;
+            if (!(be instanceof Container container) || ExemptBlocks.covers(be)) return;
 
             boolean jukebox = be instanceof JukeboxBlockEntity;
             boolean wasApplying = applying;
             if (jukebox) applying = true;
+            List<ItemStack> displaced = new ArrayList<>();
             try {
                 int size = container.getContainerSize();
                 List<ItemStack> oldList = parseItems(e.oldItems, size);
@@ -989,12 +999,15 @@ public final class BlockJournal {
                     ItemStack from = oldList.get(i);
                     ItemStack to = newList.get(i);
                     if (ItemStack.matches(from, to)) continue;
-                    ItemStack target = toNew ? to : from;
-                    container.setItem(i, target.copy());
+                    Exempt.put(container, i, toNew ? to : from, displaced);
                 }
                 container.setChanged();
             } finally {
                 if (jukebox) applying = wasApplying;
+            }
+            if (!displaced.isEmpty()) {
+                Exempt.rehome(container, displaced, level, Vec3.atBottomCenterOf(pos.above()));
+                container.setChanged();
             }
 
             if (jukebox) markJukebox(level, pos);

@@ -9,6 +9,7 @@ import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import com.fl1s.rewritten.timetravel.journal.EffectJournal;
@@ -100,6 +101,14 @@ public final class MobEventJournal {
 
     public static Entry deathOf(UUID id) { return latestDeath.get(id); }
 
+    public static void forget(UUID id) {
+        if (latestDeath.remove(id) == null) return;
+        STORE.entries().removeIf(e -> id.equals(e.uuid));
+        STORE.removeUpcoming(e -> id.equals(e.uuid));
+        pendingDeaths.removeIf(e -> id.equals(e.uuid));
+        STORE.markDirty();
+    }
+
     public static void tick() {
         if (!TimeTravel.isLooping) return;
         long now = TimeContext.now();
@@ -112,9 +121,10 @@ public final class MobEventJournal {
                 playExplosionFx(level, e.x, e.y, e.z, e.radius > 0 ? e.radius : 3.0f);
                 continue;
             }
-            if (!(entity instanceof LivingEntity living)) continue;
+            if (!(entity instanceof LivingEntity living) || Exempt.is(living)) continue;
             if (living.isDeadOrDying() || living.isRemoved()) continue;
 
+            Exempt.eject(living);
             ItemFlowJournal.setSuppressDrop(true);
             try {
                 if (e.explode && living instanceof net.minecraft.world.entity.monster.Creeper creeper) {
@@ -185,7 +195,7 @@ public final class MobEventJournal {
         List<Creeper> fusing = new ArrayList<>();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
-                if (entity instanceof Creeper c && c.isAlive() && !Clones.is(c) && c.getSwellDir() > 0) fusing.add(c);
+                if (entity instanceof Creeper c && c.isAlive() && !Clones.is(c) && !Exempt.is(c) && c.getSwellDir() > 0) fusing.add(c);
             }
         }
         for (Creeper c : fusing) {

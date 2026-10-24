@@ -12,6 +12,7 @@ public final class Removal {
     public static void discardWithoutDrops(Entity entity) {
         silent++;
         try {
+            Exempt.eject(entity);
             if (entity instanceof ContainerEntity container) container.clearContent();
             entity.discard();
         } finally {

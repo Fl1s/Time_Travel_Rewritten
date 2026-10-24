@@ -70,6 +70,7 @@ public final class JournalRegistry {
         register("particles", ParticleJournal::load, ParticleJournal::save, ParticleJournal::saveIfDirty, ParticleJournal::clear, ParticleJournal::rebuildUpcoming, ParticleJournal::tick, ParticleJournal::onJump, ParticleJournal::eraseVisits);
         register("weather", WeatherJournal::load, WeatherJournal::save, WeatherJournal::saveIfDirty, WeatherJournal::clear, WeatherJournal::rebuildUpcoming, WeatherJournal::tick, WeatherJournal::onJump, WeatherJournal::eraseVisits);
         register("carry_trails", CarryTrailJournal::load, CarryTrailJournal::save, CarryTrailJournal::saveIfDirty, CarryTrailJournal::clear, NOOP, NOOP, (from, to) -> {}, ids -> {});
+        register("exempt_blocks", ExemptBlocks::load, ExemptBlocks::save, ExemptBlocks::saveIfDirty, NOOP, NOOP, NOOP, (from, to) -> {}, ids -> {});
         register("client_fx", NOOP, NOOP, NOOP, NOOP, NOOP, NOOP, (from, to) -> TimeTravel.broadcastStopDragonSound(), ids -> {
         });
     }

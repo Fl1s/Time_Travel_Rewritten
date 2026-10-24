@@ -77,6 +77,7 @@ public class TimeTravelFabric implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(CloneVanishPayload.TYPE, CloneVanishPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(CloneAppearPayload.TYPE, CloneAppearPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(HurtFlashPayload.TYPE, HurtFlashPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(ExemptBlocksPayload.TYPE, ExemptBlocksPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(JumpRequestPayload.TYPE, JumpRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ToggleTimelinePayload.TYPE, ToggleTimelinePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ReturnPresentPayload.TYPE, ReturnPresentPayload.CODEC);

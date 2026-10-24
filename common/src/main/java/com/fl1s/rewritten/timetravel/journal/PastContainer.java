@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.server.level.ServerPlayer;
@@ -13,6 +14,7 @@ public final class PastContainer implements Container {
 
     static final long NO_CHANGE = Long.MAX_VALUE;
     static final long FOREVER = Long.MAX_VALUE - 1;
+    static final int UNBOUND = -1;
 
     private final Container real;
     private final ServerPlayer viewer;
@@ -23,9 +25,10 @@ public final class PastContainer implements Container {
     private final NonNullList<ItemStack> view;
     private final NonNullList<ItemStack> committed;
     private final long[] nextChange;
+    private final int[] bound;
 
     PastContainer(Container real, ServerPlayer viewer, String dim, BlockPos pos, long head, boolean ghost,
-                  NonNullList<ItemStack> view, long[] nextChange) {
+                  NonNullList<ItemStack> view, long[] nextChange, int[] bound) {
         this.real = real;
         this.viewer = viewer;
         this.dim = dim;
@@ -34,6 +37,7 @@ public final class PastContainer implements Container {
         this.ghost = ghost;
         this.view = view;
         this.nextChange = nextChange;
+        this.bound = bound;
         this.committed = NonNullList.withSize(view.size(), ItemStack.EMPTY);
         for (int i = 0; i < view.size(); i++) committed.set(i, view.get(i).copy());
     }
@@ -46,12 +50,22 @@ public final class PastContainer implements Container {
         return slot >= 0 && slot < nextChange.length && nextChange[slot] != NO_CHANGE;
     }
 
+    private boolean bound(int slot) {
+        return slot >= 0 && slot < bound.length && bound[slot] != UNBOUND;
+    }
+
     public boolean lockedTake(int slot) {
-        return TimeTravel.noDuplication && historied(slot);
+        return !bound(slot) && TimeTravel.noDuplication && historied(slot);
     }
 
     public boolean lockedPlace(int slot) {
         return ghost || historied(slot);
+    }
+
+    public boolean lockedPlace(int slot, ItemStack stack) {
+        if (bound(slot)) return !Exempt.is(stack) || !ItemStack.isSameItemSameComponents(stack, view.get(slot));
+        if (Exempt.is(stack)) return ghost || !getItem(slot).isEmpty() || !real.getItem(slot).isEmpty();
+        return lockedPlace(slot);
     }
 
     @Override
@@ -104,6 +118,32 @@ public final class PastContainer implements Container {
             ItemStack before = committed.get(i);
             if (ItemStack.matches(now, before)) continue;
 
+            if (bound(i)) {
+                touchedReal = true;
+                if (Exempt.is(now) && ItemStack.isSameItemSameComponents(now, before)) {
+                    real.setItem(bound[i], now.copy());
+                    committed.set(i, now.copy());
+                    continue;
+                }
+                real.setItem(bound[i], ItemStack.EMPTY);
+                bound[i] = UNBOUND;
+                before = ItemStack.EMPTY;
+                committed.set(i, ItemStack.EMPTY);
+                if (now.isEmpty()) continue;
+            }
+            if (Exempt.is(now)) {
+                if (ghost || !before.isEmpty() || !real.getItem(i).isEmpty()) {
+                    view.set(i, before.copy());
+                    if (viewer != null) viewer.getInventory().placeItemBackInInventory(now.copy());
+                    continue;
+                }
+                real.setItem(i, now.copy());
+                bound[i] = i;
+                committed.set(i, now.copy());
+                touchedReal = true;
+                continue;
+            }
+
             if (refused(i, now, before)) {
                 view.set(i, before.copy());
                 continue;
@@ -140,7 +180,7 @@ public final class PastContainer implements Container {
 
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
-        return !lockedPlace(slot) && (ghost || real.canPlaceItem(slot, stack));
+        return !lockedPlace(slot, stack) && (ghost || real.canPlaceItem(slot, stack));
     }
 
     @Override

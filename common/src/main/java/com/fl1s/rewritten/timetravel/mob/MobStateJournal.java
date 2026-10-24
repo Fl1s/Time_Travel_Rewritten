@@ -7,6 +7,7 @@ import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
@@ -134,12 +135,20 @@ public final class MobStateJournal {
     private static String signature(Mob mob, String[] keys) {
         CompoundTag full = new CompoundTag();
         mob.saveWithoutId(full);
+        Exempt.strip(full);
         CompoundTag out = new CompoundTag();
         for (String k : keys) {
             if (full.contains(k)) out.put(k, full.get(k));
         }
         if (mob instanceof Warden) WardenSupport.quantizeAnger(out);
         return out.toString();
+    }
+
+    public static void forget(UUID id) {
+        if (byUuid.remove(id) == null) return;
+        STORE.entries().removeIf(e -> id.equals(e.uuid));
+        STORE.removeUpcoming(e -> id.equals(e.uuid));
+        STORE.markDirty();
     }
 
     public static boolean hasFutureChange(UUID id, long now) {
@@ -180,7 +189,7 @@ public final class MobStateJournal {
         if (TimeTravel.server == null) return;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
-                if (!(entity instanceof Mob mob) || Clones.is(mob)) continue;
+                if (!(entity instanceof Mob mob) || Clones.is(mob) || Exempt.is(mob)) continue;
                 String[] keys = keysFor(mob);
                 if (keys.length == 0 || byUuid.containsKey(mob.getUUID())) continue;
                 record(level, mob, -1L, -1, signature(mob, keys));
@@ -189,7 +198,7 @@ public final class MobStateJournal {
     }
 
     public static void onSpawn(ServerLevel level, Entity entity) {
-        if (!(entity instanceof Mob mob) || Clones.is(mob)) return;
+        if (!(entity instanceof Mob mob) || Clones.is(mob) || Exempt.is(mob)) return;
         if (!active()) return;
         String[] keys = keysFor(mob);
         if (keys.length == 0 || byUuid.containsKey(mob.getUUID())) return;
@@ -198,7 +207,7 @@ public final class MobStateJournal {
     }
 
     public static void beforeChange(Mob mob) {
-        if (Clones.is(mob) || !active()) return;
+        if (Clones.is(mob) || Exempt.is(mob) || !active()) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
         if (mob.isRemoved() || mob.isDeadOrDying()) return;
         String[] keys = keysFor(mob);
@@ -207,7 +216,7 @@ public final class MobStateJournal {
     }
 
     public static void onChanged(Mob mob) {
-        if (Clones.is(mob) || !active()) return;
+        if (Clones.is(mob) || Exempt.is(mob) || !active()) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
         check(level, mob, TimeContext.now());
     }
@@ -241,7 +250,7 @@ public final class MobStateJournal {
             if (viewers.isEmpty()) continue;
             for (ServerPlayer p : viewers) {
                 for (Mob mob : level.getEntitiesOfClass(Mob.class, p.getBoundingBox().inflate(r))) {
-                    if (Clones.is(mob)) continue;
+                    if (Clones.is(mob) || Exempt.is(mob)) continue;
                     if ((mob.getId() + now / SAMPLE_STEP) % SAMPLE_GROUPS != 0) continue;
                     if (keysFor(mob).length == 0) continue;
                     if (!sampledThisTick.add(mob.getUUID())) continue;
@@ -261,7 +270,7 @@ public final class MobStateJournal {
     private static void applyEntry(Entry e) {
         ServerLevel level = levelOf(e.dim);
         if (level == null) return;
-        if (!(level.getEntity(e.uuid) instanceof Mob mob) || mob.isRemoved() || mob.isDeadOrDying()) return;
+        if (!(level.getEntity(e.uuid) instanceof Mob mob) || mob.isRemoved() || mob.isDeadOrDying() || Exempt.is(mob)) return;
         String[] keys = keysFor(mob);
         if (keys.length == 0 || signature(mob, keys).equals(e.nbt)) return;
         applying = true;
@@ -271,6 +280,7 @@ public final class MobStateJournal {
                 cached = TagParser.parseTag(e.nbt);
                 e.parsed = cached;
             }
+            Exempt.eject(mob);
             CompoundTag tag = new CompoundTag();
             mob.saveWithoutId(tag);
             for (String k : keys) tag.remove(k);

@@ -3,6 +3,7 @@ package com.fl1s.rewritten.timetravel.journal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.compat.ironsspells.IrSpellsCompat;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -65,7 +66,7 @@ public final class ProjectileJournal {
         ServerLevel level = TimeTravel.server.getLevel(Levels.key(dim));
         if (level == null) return;
         Entity existing = level.getEntity(uuid);
-        if (existing == null || existing.isRemoved() || puppets.containsKey(uuid)) return;
+        if (existing == null || existing.isRemoved() || puppets.containsKey(uuid) || Exempt.is(existing)) return;
         silentDiscard = true;
         try {
             existing.discard();
@@ -104,6 +105,7 @@ public final class ProjectileJournal {
 
         CompoundTag tag = new CompoundTag();
         if (!entity.save(tag)) return;
+        Exempt.strip(tag);
 
         Entry e = new Entry();
         e.tick = TimeTravel.sharedTick;
@@ -130,7 +132,7 @@ public final class ProjectileJournal {
     public static void onRemoved(Entity entity) {
         if (!TimeTravel.isLooping || !(entity instanceof Projectile)) return;
         if (silentDiscard) return;
-        if (puppets.containsKey(entity.getUUID())) return;
+        if (puppets.containsKey(entity.getUUID()) || Exempt.is(entity)) return;
         if (skip(entity)) return;
         if (!tracked.contains(entity.getUUID())) return;
         if (!(entity.level() instanceof ServerLevel level)) return;
@@ -156,7 +158,7 @@ public final class ProjectileJournal {
             for (Entity e : level.getAllEntities()) {
                 if (!(e instanceof Projectile)) continue;
                 if (skip(e)) continue;
-                if (Clones.is(e)) continue;
+                if (Clones.is(e) || Exempt.is(e)) continue;
                 if (puppets.containsKey(e.getUUID())) continue;
                 if (!tracked.contains(e.getUUID())) continue;
 
@@ -206,6 +208,17 @@ public final class ProjectileJournal {
         applyPuppets();
     }
 
+    public static void forget(UUID id) {
+        endPuppet(id);
+        tracked.remove(id);
+        lastSamples.remove(id);
+        if (STORE.entries().removeIf(e -> id.equals(e.uuid))) {
+            STORE.removeUpcoming(e -> id.equals(e.uuid));
+            trails = null;
+            STORE.markDirty();
+        }
+    }
+
     public static boolean isPuppeted(Entity e) {
         return e != null && puppets.containsKey(e.getUUID());
     }
@@ -222,8 +235,9 @@ public final class ProjectileJournal {
             if (level == null) return;
             removeLive(spawn.dim, spawn.uuid);
             CompoundTag tag = TagParser.parseTag(spawn.nbt);
+            Exempt.strip(tag);
             Entity created = EntityType.loadEntityRecursive(tag, level, entity -> entity);
-            if (created == null) return;
+            if (created == null || Exempt.is(created)) return;
             created.setUUID(spawn.uuid);
             created.moveTo(spawn.x, spawn.y, spawn.z, spawn.yRot, spawn.xRot);
             created.setDeltaMovement(spawn.vx, spawn.vy, spawn.vz);

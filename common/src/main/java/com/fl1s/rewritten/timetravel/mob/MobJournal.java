@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -79,7 +80,7 @@ public final class MobJournal {
     }
 
     private static void recordDeath(LivingEntity entity, boolean explode, boolean dig) {
-        if (killing || applying) return;
+        if (killing || applying || Exempt.is(entity)) return;
         if (!TimeTravel.isLooping) return;
         if (MobTrailJournal.isReplaying() && isDoomed(entity)) return;
         if (entity instanceof net.minecraft.world.entity.player.Player) return;
@@ -99,7 +100,7 @@ public final class MobJournal {
     }
 
     public static boolean isDoomed(Entity attacker) {
-        if (!(attacker instanceof Mob)) return false;
+        if (!(attacker instanceof Mob) || Exempt.is(attacker)) return false;
         MobEventJournal.Entry e = MobEventJournal.deathOf(attacker.getUUID());
         if (e == null) return false;
         return e.tick > TimeContext.now();
@@ -113,6 +114,15 @@ public final class MobJournal {
 
     public static void fastForward(long from, long to) {
         MobEventJournal.fastForward(from, to);
+    }
+
+    public static void forget(UUID id) {
+        MobSpawnJournal.forget(id);
+        MobTrailJournal.forget(id);
+        MobEventJournal.forget(id);
+        MobStateJournal.forget(id);
+        WardenEventJournal.forget(id);
+        MobBinding.forget(id);
     }
 
     public static void track(Mob mob, Entity who) {}

@@ -2,6 +2,7 @@ package com.fl1s.rewritten.neoforge;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.client.CloneVanishFx;
+import com.fl1s.rewritten.timetravel.client.ExemptGlow;
 import com.fl1s.rewritten.timetravel.client.TimelineClient;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import net.minecraft.client.KeyMapping;
@@ -36,17 +37,20 @@ public class TimeTravelNeoForgeClient {
         @SubscribeEvent
         public static void onClientTick(ClientTickEvent.Post event) {
             TimelineClient.clientTick(Minecraft.getInstance());
+            ExemptGlow.tick(Minecraft.getInstance());
         }
 
         @SubscribeEvent
         public static void onRenderLevel(RenderLevelStageEvent event) {
             if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
             CloneVanishFx.renderWorld(event.getPoseStack(), event.getCamera().getPosition(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            ExemptGlow.renderWorld(event.getPoseStack(), event.getCamera().getPosition());
         }
 
         @SubscribeEvent
         public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
             TimelineClient.reset();
+            ExemptGlow.reset();
         }
     }
 }

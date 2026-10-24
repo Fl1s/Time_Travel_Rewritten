@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.mixin.ItemEntityAccessor;
 import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.time.TimeHead;
@@ -82,6 +83,7 @@ public final class HeadItemView {
 
     public static boolean canTake(ItemEntity item, Player player) {
         if (!TimeTravel.isLooping || !(player instanceof ServerPlayer taker)) return true;
+        if (Exempt.is(item)) return !Clones.is(taker);
         Copy copy = copies.get(item.getUUID());
         UUID original = copy == null ? item.getUUID() : copy.original();
         if (enabled()) {
@@ -114,7 +116,7 @@ public final class HeadItemView {
             if (mine != null) mine.remove(copy.original());
             return;
         }
-        if (!enabled() || !reason.shouldDestroy() || ItemFlowJournal.isApplying()) return;
+        if (!enabled() || !reason.shouldDestroy() || ItemFlowJournal.isApplying() || Exempt.is(item)) return;
         if (!(item.level() instanceof ServerLevel level)) return;
         long born = ItemFlowJournal.bornOf(item.getUUID());
         if (born == Long.MIN_VALUE) return;
@@ -135,7 +137,7 @@ public final class HeadItemView {
 
     static void spawn(long head, UUID original, ServerLevel level, double x, double y, double z,
                       ItemStack stack, Vec3 motion, int pickupDelay, long age) {
-        if (stack.isEmpty() || age < 0 || age >= LIFESPAN) return;
+        if (stack.isEmpty() || Exempt.is(stack) || age < 0 || age >= LIFESPAN) return;
         Map<UUID, UUID> mine = byHead.computeIfAbsent(head, k -> new HashMap<>());
         if (mine.containsKey(original)) return;
         UUID id = UUID.nameUUIDFromBytes((TimeHeads.toTag(head) + "/" + original).getBytes(StandardCharsets.UTF_8));

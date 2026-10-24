@@ -11,6 +11,7 @@ import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mixin.ItemEntityAccessor;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
@@ -87,7 +88,9 @@ public final class ItemFlowJournal {
     }
 
     public static void forget(UUID id) {
-        if (id == null || !tracked.remove(id)) return;
+        if (id == null) return;
+        HeadItemView.discardFrom(id, Long.MIN_VALUE);
+        if (!tracked.remove(id)) return;
         STORE.entries().removeIf(e -> id.equals(e.itemUuid));
         STORE.removeUpcoming(e -> id.equals(e.itemUuid));
         pending.removeIf(e -> id.equals(e.itemUuid));
@@ -156,7 +159,7 @@ public final class ItemFlowJournal {
     }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
-        if (!(entity instanceof ItemEntity item)) return;
+        if (!(entity instanceof ItemEntity item) || Exempt.is(item)) return;
         if (!TimeTravel.isLooping || applying || ReplayState.SUPPRESS) return;
         if (tracked.contains(item.getUUID())) return;
         if (isReplayCaused(item)) {
@@ -202,7 +205,7 @@ public final class ItemFlowJournal {
     }
 
     public static void recordDestroy(ItemEntity item) {
-        if (!TimeTravel.isLooping || applying || ReplayState.SUPPRESS) return;
+        if (!TimeTravel.isLooping || applying || ReplayState.SUPPRESS || Exempt.is(item)) return;
         if (!(item.level() instanceof ServerLevel level)) return;
         UUID id = item.getUUID();
         if (!tracked.contains(id)) return;
@@ -238,7 +241,7 @@ public final class ItemFlowJournal {
     }
 
     public static void recordPickup(ItemEntity item, Player player, ItemStack picked) {
-        if (!TimeTravel.isLooping || applying) return;
+        if (!TimeTravel.isLooping || applying || Exempt.is(item)) return;
         if (!(item.level() instanceof ServerLevel level)) return;
         if (!(player instanceof ServerPlayer sp)) return;
         if (Clones.is(sp)) return;
@@ -294,6 +297,7 @@ public final class ItemFlowJournal {
         Entity item = findLoaded(level, e.itemUuid);
         if (item == null || item.isRemoved()) item = findNearby(level, e);
         if (item == null || item.isRemoved()) return false;
+        if (Exempt.is(item)) return true;
         applying = true;
         try {
             if (item instanceof ItemEntity ie && TimeTravel.entityOfVisit(e.visit) instanceof LivingEntity taker
@@ -315,7 +319,7 @@ public final class ItemFlowJournal {
             ItemEntity best = null;
             double bestDist = Double.MAX_VALUE;
             for (ItemEntity c : level.getEntitiesOfClass(ItemEntity.class, box)) {
-                if (c.isRemoved() || !ItemStack.isSameItemSameComponents(c.getItem(), stack)) continue;
+                if (c.isRemoved() || Exempt.is(c) || !ItemStack.isSameItemSameComponents(c.getItem(), stack)) continue;
                 double d = c.distanceToSqr(e.x, e.y, e.z);
                 if (d < bestDist) {
                     best = c;
@@ -330,7 +334,7 @@ public final class ItemFlowJournal {
 
     private static ItemStack parseStack(String nbt) throws Exception {
         CompoundTag tag = TagParser.parseTag(nbt);
-        return ItemStack.parse(TimeTravel.server.registryAccess(), tag).orElse(ItemStack.EMPTY);
+        return Exempt.masked(ItemStack.parse(TimeTravel.server.registryAccess(), tag).orElse(ItemStack.EMPTY));
     }
 
     private static long originOf(Entry pickup) {
@@ -354,7 +358,7 @@ public final class ItemFlowJournal {
 
                 if (e.kind == KIND_DROP) {
                     Entity item = findLoaded(level, e.itemUuid);
-                    if (item != null && !item.isRemoved()) item.discard();
+                    if (item != null && !item.isRemoved() && !Exempt.is(item)) item.discard();
                 } else if (e.kind == KIND_PICKUP) {
                     long origin = originOf(e);
                     long age = origin == Long.MIN_VALUE ? 0 : target - origin;
@@ -438,14 +442,14 @@ public final class ItemFlowJournal {
                 if (level == null) continue;
                 Entity item = findLoaded(level, e.itemUuid);
                 if (item == null || item.isRemoved()) item = findNearby(level, e);
-                if (item != null && !item.isRemoved()) item.discard();
+                if (item != null && !item.isRemoved() && !Exempt.is(item)) item.discard();
             }
             for (Entry e : STORE.entries()) {
                 if (e.kind != KIND_DESTROY || e.tick > target) continue;
                 ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
                 if (level == null) continue;
                 Entity item = findLoaded(level, e.itemUuid);
-                if (item != null && !item.isRemoved()) item.discard();
+                if (item != null && !item.isRemoved() && !Exempt.is(item)) item.discard();
             }
         }
         rebuildUpcoming();

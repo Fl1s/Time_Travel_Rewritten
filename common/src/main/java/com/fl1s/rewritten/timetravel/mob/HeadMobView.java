@@ -15,6 +15,7 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.time.TimeHead;
 import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
@@ -69,6 +70,7 @@ public final class HeadMobView {
 
     public static boolean rideVisually(ServerPlayer clone, UUID mob) {
         if (!enabled() || !(MobTrailJournal.tracked(mob) || CarryTrailJournal.has(mob))) return false;
+        if (Exempt.is(clone.serverLevel().getEntity(mob))) return false;
         long head = TimeTravel.cloneHeadOf(clone);
         if (head == CloneManager.NO_HEAD || head <= 0) return false;
         rides.put(clone.getId(), new Ride(head, mob));
@@ -123,7 +125,7 @@ public final class HeadMobView {
             if (viewer.distanceToSqr(sample.x, sample.y, sample.z) > PUPPET_RANGE_SQ) continue;
 
             Entity entity = level.getEntity(id);
-            if (!(entity instanceof Mob mob) || Clones.is(mob)) continue;
+            if (!(entity instanceof Mob mob) || Clones.is(mob) || Exempt.is(mob)) continue;
 
             int puppet = puppetId(mob);
             seen.add(puppet);

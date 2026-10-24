@@ -32,6 +32,9 @@ public final class ConfigOptions {
             new ConfigOption.Int("display", "maxHistorySize",
                     "Uses dark theme for the timeline overlay.",
                     50, 1, 100, v -> TimeTravel.maxHistorySize = v),
+            new ConfigOption.Bool("display", "showExemptGlow",
+                    "Show a green shimmer and sparkles on items and blocks that are exempt from time.",
+                    true, v -> TimeTravel.showExemptGlow = v),
 
             new ConfigOption.Bool("sounds", "oldSfx",
                     "Use the original vanilla-based time travel sounds (v0.8.9 - v0.11.0).",

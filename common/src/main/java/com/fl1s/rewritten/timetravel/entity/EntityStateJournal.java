@@ -7,6 +7,7 @@ import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -15,10 +16,12 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.decoration.Painting;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
@@ -95,6 +98,7 @@ public final class EntityStateJournal {
     private static String signature(Entity entity) {
         CompoundTag full = new CompoundTag();
         entity.saveWithoutId(full);
+        Exempt.strip(full);
         CompoundTag out = new CompoundTag();
         for (String k : keysFor(entity)) {
             if (full.contains(k)) out.put(k, full.get(k));
@@ -117,9 +121,35 @@ public final class EntityStateJournal {
         return level.getEntity(entity.getUUID()) == entity;
     }
 
+    private static Map<EquipmentSlot, ItemStack> exemptItems(Entity entity) {
+        Map<EquipmentSlot, ItemStack> kept = new HashMap<>();
+        if (entity instanceof ItemFrame frame && Exempt.is(frame.getItem())) {
+            kept.put(EquipmentSlot.MAINHAND, frame.getItem().copy());
+        } else if (entity instanceof ArmorStand stand) {
+            for (EquipmentSlot slot : EquipmentSlot.values()) {
+                ItemStack stack = stand.getItemBySlot(slot);
+                if (Exempt.is(stack)) kept.put(slot, stack.copy());
+            }
+        }
+        return kept;
+    }
+
+    private static void restoreItems(Entity entity, Map<EquipmentSlot, ItemStack> kept) {
+        for (Map.Entry<EquipmentSlot, ItemStack> en : kept.entrySet()) {
+            if (entity instanceof ItemFrame frame && frame.getItem().isEmpty()) {
+                frame.setItem(en.getValue(), false);
+            } else if (entity instanceof ArmorStand stand && stand.getItemBySlot(en.getKey()).isEmpty()) {
+                stand.setItemSlot(en.getKey(), en.getValue());
+            } else {
+                entity.spawnAtLocation(en.getValue());
+            }
+        }
+    }
+
     private static void record(ServerLevel level, Entity entity, long tick, int visit) {
         CompoundTag tag = new CompoundTag();
         if (!entity.save(tag)) return;
+        Exempt.strip(tag);
         Entry e = new Entry();
         e.dim = Levels.canonicalId(level);
         e.uuid = entity.getUUID();
@@ -146,14 +176,14 @@ public final class EntityStateJournal {
     }
 
     public static void beforeChange(Entity entity) {
-        if (!isTracked(entity)) return;
+        if (!isTracked(entity) || Exempt.is(entity)) return;
         ServerLevel level = activeLevel(entity);
         if (level == null || !inWorld(level, entity)) return;
         ensureBaseline(level, entity);
     }
 
     public static void onChanged(Entity entity) {
-        if (!isTracked(entity)) return;
+        if (!isTracked(entity) || Exempt.is(entity)) return;
         ServerLevel level = activeLevel(entity);
         if (level == null || !inWorld(level, entity)) return;
         UUID id = entity.getUUID();
@@ -171,7 +201,7 @@ public final class EntityStateJournal {
     }
 
     public static void onRemoved(Entity entity, Entity.RemovalReason reason) {
-        if (!isTracked(entity)) return;
+        if (!isTracked(entity) || Exempt.is(entity)) return;
         if (reason != Entity.RemovalReason.KILLED && reason != Entity.RemovalReason.DISCARDED) return;
         ServerLevel level = activeLevel(entity);
         if (level == null || entity.isRemoved() || !inWorld(level, entity)) return;
@@ -201,11 +231,13 @@ public final class EntityStateJournal {
         applying = true;
         try {
             Entity existing = level.getEntity(e.uuid);
+            if (Exempt.is(existing)) return;
             if (e.nbt == null) {
                 if (existing != null && !existing.isRemoved()) {
                     if (fx && existing instanceof EndCrystal) {
                         level.explode(existing, existing.getX(), existing.getY(), existing.getZ(), 6.0F, Level.ExplosionInteraction.NONE);
                     }
+                    Exempt.eject(existing);
                     existing.discard();
                 }
                 return;
@@ -217,12 +249,16 @@ public final class EntityStateJournal {
             }
             CompoundTag tag = cached.copy();
             if (existing != null && !existing.isRemoved() && isTracked(existing)) {
-                if (!signature(existing).equals(e.sig)) existing.load(tag);
+                if (!signature(existing).equals(e.sig)) {
+                    Map<EquipmentSlot, ItemStack> kept = exemptItems(existing);
+                    existing.load(tag);
+                    restoreItems(existing, kept);
+                }
             } else if (existing == null) {
                 ListTag p = tag.getList("Pos", 6);
                 if (!level.isLoaded(BlockPos.containing(p.getDouble(0), p.getDouble(1), p.getDouble(2)))) return;
                 Entity created = EntityType.loadEntityRecursive(tag, level, en -> en);
-                if (created != null) {
+                if (created != null && !Exempt.is(created)) {
                     created.setUUID(e.uuid);
                     level.addFreshEntity(created);
                 }
@@ -247,9 +283,10 @@ public final class EntityStateJournal {
             ServerLevel level = levelOf(list.get(0).dim);
             if (level == null) continue;
             Entity existing = level.getEntity(en.getKey());
-            if (existing != null && !existing.isRemoved()) {
+            if (existing != null && !existing.isRemoved() && !Exempt.is(existing)) {
                 applying = true;
                 try {
+                    Exempt.eject(existing);
                     existing.discard();
                 } finally {
                     applying = false;
@@ -257,6 +294,13 @@ public final class EntityStateJournal {
             }
         }
         STORE.rebuildUpcoming();
+    }
+
+    public static void forget(UUID id) {
+        if (byUuid.remove(id) == null) return;
+        STORE.entries().removeIf(e -> id.equals(e.uuid));
+        STORE.removeUpcoming(e -> id.equals(e.uuid));
+        STORE.markDirty();
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

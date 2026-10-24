@@ -64,7 +64,8 @@ public final class ProcessJournal {
     private static BlockEntity beAt(ServerLevel level, Key k) {
         BlockPos pos = BlockPos.of(k.pos());
         if (!level.isLoaded(pos)) return null;
-        return level.getBlockEntity(pos);
+        BlockEntity be = level.getBlockEntity(pos);
+        return ExemptBlocks.covers(be) ? null : be;
     }
 
     private static String snapshot(BlockEntity be) {
@@ -81,7 +82,7 @@ public final class ProcessJournal {
 
     public static void trackIfProcess(ServerLevel level, BlockPos pos) {
         BlockEntity be = level.getBlockEntity(pos);
-        if (be == null || !isProcess(be)) return;
+        if (be == null || !isProcess(be) || ExemptBlocks.covers(be)) return;
         Key k = key(level, pos);
         tracked.add(k);
         if (!origins.containsKey(k)) {
@@ -97,7 +98,7 @@ public final class ProcessJournal {
 
     public static void recordEvent(ServerLevel level, BlockPos pos) {
         BlockEntity be = level.getBlockEntity(pos);
-        if (be == null || !isProcess(be)) return;
+        if (be == null || !isProcess(be) || ExemptBlocks.covers(be)) return;
 
         Key k = key(level, pos);
         tracked.add(k);

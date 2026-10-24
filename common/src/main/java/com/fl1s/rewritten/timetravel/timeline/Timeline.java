@@ -13,6 +13,7 @@ import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
+import com.fl1s.rewritten.timetravel.entity.ExemptEntities;
 import com.fl1s.rewritten.timetravel.journal.*;
 import com.fl1s.rewritten.timetravel.mob.*;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
@@ -341,6 +342,7 @@ public final class Timeline {
         }
 
         HeadScope.reset();
+        ExemptBlocks.tick();
         BlockJournal.flushWatches();
         TravelFx.tick();
         HeadTracking.refreshIfDirty();
@@ -348,6 +350,7 @@ public final class Timeline {
         HeadMobView.tick();
         HeadVehicleView.tick();
         HeadCarry.tick();
+        ExemptEntities.tick();
 
         if (!TimeTravel.isLooping || !MocapAdapter.isReady()) return;
 

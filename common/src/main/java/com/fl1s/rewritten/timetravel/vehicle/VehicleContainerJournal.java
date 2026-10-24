@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.Journal;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.clone.HeadCarry;
 import com.google.gson.reflect.TypeToken;
@@ -61,7 +62,7 @@ public final class VehicleContainerJournal {
 
     private static String snapshot(Container container) {
         NonNullList<ItemStack> list = NonNullList.withSize(container.getContainerSize(), ItemStack.EMPTY);
-        for (int i = 0; i < container.getContainerSize(); i++) list.set(i, container.getItem(i));
+        for (int i = 0; i < container.getContainerSize(); i++) list.set(i, Exempt.masked(container.getItem(i)));
         CompoundTag tag = new CompoundTag();
         ContainerHelper.saveAllItems(tag, list, TimeTravel.server.registryAccess());
         return tag.toString();
@@ -76,7 +77,7 @@ public final class VehicleContainerJournal {
             for (Entity e : level.getAllEntities()) {
                 if (!isContainer(e)) continue;
                 if (!(e instanceof Container container)) continue;
-                if (HeadVehicleView.isCopy(e) || HeadCarry.isCarried(e.getUUID())) continue;
+                if (HeadVehicleView.isCopy(e) || HeadCarry.isCarried(e.getUUID()) || Exempt.is(e)) continue;
 
                 UUID id = e.getUUID();
                 String now = snapshot(container);
@@ -130,16 +131,18 @@ public final class VehicleContainerJournal {
             if (level == null) return;
             Entity entity = findLoaded(level, e.uuid);
             if (!(entity instanceof Container container)) return;
-            if (!isContainer(entity)) return;
+            if (!isContainer(entity) || Exempt.is(entity)) return;
 
             String tag = toNew ? e.newItems : e.oldItems;
             int size = container.getContainerSize();
             NonNullList<ItemStack> list = NonNullList.withSize(size, ItemStack.EMPTY);
             CompoundTag parsed = TagParser.parseTag(tag);
             ContainerHelper.loadAllItems(parsed, list, TimeTravel.server.registryAccess());
+            List<ItemStack> displaced = new ArrayList<>();
             for (int i = 0; i < size; i++) {
-                container.setItem(i, list.get(i).copy());
+                Exempt.put(container, i, list.get(i), displaced);
             }
+            Exempt.rehome(container, displaced, level, entity.position());
             container.setChanged();
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to apply vehicle container entry for {}", e.uuid, ex);
@@ -170,7 +173,7 @@ public final class VehicleContainerJournal {
             int size = container.getContainerSize();
             NonNullList<ItemStack> list = NonNullList.withSize(size, ItemStack.EMPTY);
             ContainerHelper.loadAllItems(TagParser.parseTag(items), list, TimeTravel.server.registryAccess());
-            for (int i = 0; i < size; i++) container.setItem(i, list.get(i).copy());
+            for (int i = 0; i < size; i++) container.setItem(i, Exempt.masked(list.get(i)).copy());
             container.setChanged();
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to fill a vehicle container", ex);
@@ -192,6 +195,14 @@ public final class VehicleContainerJournal {
         last.clear();
         for (Map.Entry<UUID, Entry> en : latest.entrySet()) {
             last.put(en.getKey(), en.getValue().newItems);
+        }
+    }
+
+    public static void forget(UUID id) {
+        last.remove(id);
+        if (STORE.entries().removeIf(e -> id.equals(e.uuid))) {
+            STORE.removeUpcoming(e -> id.equals(e.uuid));
+            STORE.markDirty();
         }
     }
 
