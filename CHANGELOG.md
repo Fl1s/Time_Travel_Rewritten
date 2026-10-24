@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Timeline chat messages now optional
  - Timeline hud is now scrollable
 
+### Fixed
+
+ - Mob hurt visuals from past self hits
+
 ## [1.21.1-0.11.3] - 2026-11-24
 
 ### Added
