@@ -140,6 +140,15 @@ public final class DeathChain {
         MobBinding.eraseVisits(ids);
         ChatTimeline.resend(TimeTravel.timelineTick);
 
+        int maxId = 0;
+        for (PlayerData other : scene.getRecordingPlayers()) {
+            for (Visit v : other.getVisits()) maxId = Math.max(maxId, v.id);
+            Visit cur = other.getCurrentVisit();
+            if (cur != null) maxId = Math.max(maxId, cur.id);
+        }
+        TimeTravel.config.nextVisitId = maxId + 1;
+        com.fl1s.rewritten.timetravel.data.ReplayState.reset();
+
         scene.saveRecordingPlayers();
         TimeTravel.config.save();
 

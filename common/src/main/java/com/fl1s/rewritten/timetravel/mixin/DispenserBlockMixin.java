@@ -18,6 +18,11 @@ import java.util.List;
 public class DispenserBlockMixin {
     private static final ThreadLocal<List<ItemStack>> TT_BEFORE = new ThreadLocal<>();
 
+    @Inject(method = "dispenseFrom", at = @At("HEAD"), cancellable = true)
+    private void tt$skipInReplay(ServerLevel level, BlockState state, BlockPos pos, CallbackInfo ci) {
+        if (BlockJournal.shouldSkipAutomation()) ci.cancel();
+    }
+
     @Inject(method = "dispenseFrom", at = @At("HEAD"))
     private void tt$head(ServerLevel level, BlockState state, BlockPos pos, CallbackInfo ci) {
         if (level.getBlockEntity(pos) instanceof Container c) TT_BEFORE.set(BlockJournal.copyOf(c));

@@ -71,6 +71,16 @@ public final class ParticleJournal {
         return replaying;
     }
 
+    public static void silently(Runnable action) {
+        boolean prev = replaying;
+        replaying = true;
+        try {
+            action.run();
+        } finally {
+            replaying = prev;
+        }
+    }
+
     public static void onSpawn(ServerLevel level, ParticleOptions type, double x, double y, double z, int count, double dx, double dy, double dz, double speed, boolean force) {
         record(level, type, x, y, z, count, dx, dy, dz, speed, force, false);
     }
@@ -83,6 +93,7 @@ public final class ParticleJournal {
         if (!TimeTravel.isLooping) return;
         if (ReplayState.SUPPRESS) return;
         if (replaying) return;
+        if (com.fl1s.rewritten.timetravel.mob.MobEventJournal.isCreeperExploding()) return;
         if (TimeTravel.timelineSceneManager == null) return;
         if (count < 0 || options == null) return;
         if (PuppetGuard.isTickingPuppetMob()) return;

@@ -7,6 +7,9 @@ import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
+import com.fl1s.rewritten.timetravel.mixin.AbstractArrowAccessor;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.projectile.AbstractArrow;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
@@ -56,11 +59,28 @@ public final class ProjectileJournal {
     private static final Map<UUID, Entry> lastSamples = new HashMap<>();
     private static final Map<UUID, Puppet> puppets = new HashMap<>();
     private static Map<UUID, List<Entry>> trails;
+    private static boolean silentDiscard = false;
+
+    private static void removeLive(String dim, UUID uuid) {
+        ServerLevel level = TimeTravel.server.getLevel(Levels.key(dim));
+        if (level == null) return;
+        Entity existing = level.getEntity(uuid);
+        if (existing == null || existing.isRemoved() || puppets.containsKey(uuid)) return;
+        silentDiscard = true;
+        try {
+            existing.discard();
+        } finally {
+            silentDiscard = false;
+        }
+        lastSamples.remove(uuid);
+    }
 
     private static final class Puppet {
         Entity entity;
         UUID uuid;
         String dim;
+        boolean landed;
+        Entry spawnEntry;
     }
 
     private static boolean skip(Entity e) {
@@ -109,6 +129,7 @@ public final class ProjectileJournal {
 
     public static void onRemoved(Entity entity) {
         if (!TimeTravel.isLooping || !(entity instanceof Projectile)) return;
+        if (silentDiscard) return;
         if (puppets.containsKey(entity.getUUID())) return;
         if (skip(entity)) return;
         if (!tracked.contains(entity.getUUID())) return;
@@ -136,11 +157,22 @@ public final class ProjectileJournal {
                 if (!(e instanceof Projectile)) continue;
                 if (skip(e)) continue;
                 if (Clones.is(e)) continue;
+                if (puppets.containsKey(e.getUUID())) continue;
                 if (!tracked.contains(e.getUUID())) continue;
 
                 Entry last = lastSamples.get(e.getUUID());
-                if (last != null && Math.abs(last.x - e.getX()) < 0.02 && Math.abs(last.y - e.getY()) < 0.02 && Math.abs(last.z - e.getZ()) < 0.02 && Math.abs(last.vx - e.getDeltaMovement().x) < 0.02) {
-                    continue;
+                if (last != null) {
+                    double dx = last.x - e.getX();
+                    double dy = last.y - e.getY();
+                    double dz = last.z - e.getZ();
+                    Vec3 v = e.getDeltaMovement();
+                    double dvx = last.vx - v.x;
+                    double dvy = last.vy - v.y;
+                    double dvz = last.vz - v.z;
+                    if (dx * dx + dy * dy + dz * dz < 0.0004
+                            && dvx * dvx + dvy * dvy + dvz * dvz < 0.0004) {
+                        continue;
+                    }
                 }
 
                 Entry s = new Entry();
@@ -164,6 +196,7 @@ public final class ProjectileJournal {
                 STORE.markDirty();
             }
         }
+        ReplayState.observe(now);
     }
 
     public static void tick() {
@@ -187,6 +220,7 @@ public final class ProjectileJournal {
         try {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(spawn.dim));
             if (level == null) return;
+            removeLive(spawn.dim, spawn.uuid);
             CompoundTag tag = TagParser.parseTag(spawn.nbt);
             Entity created = EntityType.loadEntityRecursive(tag, level, entity -> entity);
             if (created == null) return;
@@ -194,14 +228,64 @@ public final class ProjectileJournal {
             created.moveTo(spawn.x, spawn.y, spawn.z, spawn.yRot, spawn.xRot);
             created.setDeltaMovement(spawn.vx, spawn.vy, spawn.vz);
             created.addTag(EntityJournal.TAG);
+
+            boolean landed = false;
+            long nowTick = TimeTravel.timelineTick;
+            List<Entry> trail = getTrails().get(spawn.uuid);
+
+            if (created instanceof AbstractArrow) {
+                if (trail != null && !trail.isEmpty()) {
+                    Entry last = trail.get(trail.size() - 1);
+                    boolean stopped = last.vx * last.vx + last.vy * last.vy + last.vz * last.vz < 0.0001;
+                    if (last.tick <= nowTick - 3 || stopped) {
+                        freezeLanded(created, last);
+                        landed = true;
+                    } else {
+                        Entry best = null;
+                        for (Entry s : trail) {
+                            if (s.tick > nowTick) break;
+                            best = s;
+                        }
+                        if (best != null) {
+                            created.moveTo(best.x, best.y, best.z, best.yRot, best.xRot);
+                            created.setDeltaMovement(best.vx, best.vy, best.vz);
+                        }
+                    }
+                } else {
+                    landed = true;
+                }
+            }
+
             if (!level.addFreshEntity(created)) return;
             Puppet p = new Puppet();
+            p.landed = landed;
             p.entity = created;
             p.uuid = spawn.uuid;
             p.dim = spawn.dim;
+            p.spawnEntry = spawn;
             puppets.put(spawn.uuid, p);
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("[TT-PROJ] start failed {}", spawn.uuid, ex);
+        }
+    }
+
+    private static void freezeLanded(Entity e, Entry last) {
+        if (last == null) return;
+        e.moveTo(last.x, last.y, last.z, last.yRot, last.xRot);
+        Vec3 motion = new Vec3(last.vx, last.vy, last.vz);
+        if (motion.lengthSqr() < 0.0004) {
+            double yaw = Math.toRadians(last.yRot);
+            double pitch = Math.toRadians(last.xRot);
+            motion = new Vec3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).scale(0.3);
+        }
+        e.setDeltaMovement(motion);
+        e.setNoGravity(true);
+        e.setOldPosAndRot();
+        if (e instanceof AbstractArrow arrow) {
+            arrow.setCritArrow(false);
+            AbstractArrowAccessor acc = (AbstractArrowAccessor) arrow;
+            acc.tt$setInGround(true);
+            acc.tt$setLastState(e.level().getBlockState(BlockPos.containing(e.position().add(motion.normalize().scale(0.1)))));
         }
     }
 
@@ -219,14 +303,31 @@ public final class ProjectileJournal {
                 puppets.remove(p.uuid);
                 continue;
             }
+            if (p.landed) continue;
+
             List<Entry> trail = trails.get(p.uuid);
-            if (trail == null) continue;
+            if (trail == null || trail.isEmpty()) {
+                if (p.entity instanceof AbstractArrow && p.spawnEntry != null) {
+                    p.landed = true;
+                }
+                continue;
+            }
+
             Entry best = null;
             for (Entry s : trail) {
                 if (s.tick > now) break;
                 best = s;
             }
             if (best == null) continue;
+
+            if (p.entity instanceof AbstractArrow
+                    && best == trail.get(trail.size() - 1)
+                    && best.tick <= now - 2) {
+                freezeLanded(p.entity, best);
+                p.landed = true;
+                continue;
+            }
+
             p.entity.moveTo(best.x, best.y, best.z, best.yRot, best.xRot);
             p.entity.setDeltaMovement(best.vx, best.vy, best.vz);
         }
@@ -262,7 +363,10 @@ public final class ProjectileJournal {
         }
         for (Map.Entry<UUID, Entry> en : lastSpawn.entrySet()) {
             Entry spawn = en.getValue();
-            if (spawn.tick > now) continue;
+            if (spawn.tick > now) {
+                removeLive(spawn.dim, spawn.uuid);
+                continue;
+            }
             Entry end = lastEnd.get(en.getKey());
             if (end != null && end.tick <= now) continue;
             startPuppet(spawn);

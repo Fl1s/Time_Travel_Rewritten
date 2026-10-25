@@ -17,7 +17,7 @@ public abstract class LevelTicksMixin<T> {
     @Inject(method = "schedule", at = @At("HEAD"), cancellable = true)
     private void tt$schedule(ScheduledTick<T> tick, CallbackInfo ci) {
         if (BlockJournal.isApplying()) {
-            ci.cancel();
+            if (!(tick.type() instanceof Block applied) || !RedstoneJournal.isOutput(applied.defaultBlockState())) ci.cancel();
             return;
         }
         if (!TimeTravel.isLooping) return;

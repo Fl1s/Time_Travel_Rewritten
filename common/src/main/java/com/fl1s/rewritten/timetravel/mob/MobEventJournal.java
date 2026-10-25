@@ -10,7 +10,12 @@ import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
+import com.fl1s.rewritten.timetravel.journal.EffectJournal;
+import com.fl1s.rewritten.timetravel.journal.ParticleJournal;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
@@ -34,6 +39,7 @@ public final class MobEventJournal {
         public String dim;
         public boolean explode;
         public boolean dig;
+        public float radius;
         public boolean hasPosition;
         public double x, y, z;
         public float yRot, xRot;
@@ -43,6 +49,12 @@ public final class MobEventJournal {
             "timetravel_rewritten_mob_events.json",
             new TypeToken<ArrayList<Entry>>() {}.getType(),
             e -> e.tick, e -> e.seq, e -> e.visit);
+
+    private static int creeperExplosionDepth = 0;
+
+    public static void enterCreeperExplosion() { creeperExplosionDepth++; }
+    public static void exitCreeperExplosion() { creeperExplosionDepth = Math.max(0, creeperExplosionDepth - 1); }
+    public static boolean isCreeperExploding() { return creeperExplosionDepth > 0; }
 
     private static final Map<UUID, Entry> latestDeath = new HashMap<>();
     private static final PriorityQueue<Entry> pendingDeaths = new PriorityQueue<>(
@@ -66,6 +78,9 @@ public final class MobEventJournal {
         e.dim = level.dimension().location().toString().intern();
         e.explode = explode;
         e.dig = dig;
+        if (explode && victim instanceof Creeper c) {
+            e.radius = ((CreeperAccessor) c).tt$getExplosionRadius() * (c.isPowered() ? 2.0f : 1.0f);
+        }
         e.hasPosition = true;
         e.x = victim.getX();
         e.y = victim.getY();
@@ -92,18 +107,26 @@ public final class MobEventJournal {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
             if (level == null) continue;
             Entity entity = level.getEntity(e.uuid);
+            if (e.explode && (!(entity instanceof LivingEntity ll) || ll.isDeadOrDying() || ll.isRemoved())) {
+                playExplosionFx(level, e.x, e.y, e.z, e.radius > 0 ? e.radius : 3.0f);
+                continue;
+            }
             if (!(entity instanceof LivingEntity living)) continue;
             if (living.isDeadOrDying() || living.isRemoved()) continue;
 
             ItemFlowJournal.setSuppressDrop(true);
             try {
                 if (e.explode && living instanceof net.minecraft.world.entity.monster.Creeper creeper) {
+                    double fx = e.hasPosition ? e.x : creeper.getX();
+                    double fy = e.hasPosition ? e.y : creeper.getY();
+                    double fz = e.hasPosition ? e.z : creeper.getZ();
                     MobJournal.enterApplying();
                     try {
                         ((CreeperAccessor) creeper).tt$explode();
                     } finally {
                         MobJournal.exitApplying();
                     }
+                    playExplosionFx(level, fx, fy, fz, e.radius > 0 ? e.radius : 3.0f);
                 } else if (living instanceof EnderDragon || e.dig) {
                     MobJournal.enterApplying();
                     try {
@@ -129,6 +152,16 @@ public final class MobEventJournal {
                 ItemFlowJournal.setSuppressDrop(false);
             }
         }
+    }
+
+    private static void playExplosionFx(ServerLevel level, double x, double y, double z, float radius) {
+        Runnable fx = () -> {
+            level.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0f,
+                    (1.0f + (level.random.nextFloat() - level.random.nextFloat()) * 0.2f) * 0.7f);
+            level.sendParticles(radius >= 2.0f ? ParticleTypes.EXPLOSION_EMITTER : ParticleTypes.EXPLOSION,
+                    x, y, z, 1, 0, 0, 0, 0);
+        };
+        EffectJournal.silently(() -> ParticleJournal.silently(fx));
     }
 
     public static void onJump(long from, long to) { rebuildUpcoming(); }

@@ -49,6 +49,7 @@ public final class JournalRegistry {
 
     public JournalRegistry() {
         register("blocks", BlockJournal::load, BlockJournal::save, BlockJournal::saveIfDirty, BlockJournal::clear, BlockJournal::rebuildUpcoming, BlockJournal::tick, BlockJournal::onJump, BlockJournal::eraseVisits);
+        register("redstone", RedstoneJournal::load, RedstoneJournal::save, RedstoneJournal::saveIfDirty, RedstoneJournal::clear, RedstoneJournal::rebuildUpcoming, RedstoneJournal::tick, RedstoneJournal::onJump, RedstoneJournal::eraseVisits);
         register("block_entities", BlockEntityJournal::load, BlockEntityJournal::save, BlockEntityJournal::saveIfDirty, BlockEntityJournal::clear, BlockEntityJournal::rebuildUpcoming, BlockEntityJournal::tick, BlockEntityJournal::onJump, BlockEntityJournal::eraseVisits);
         register("entities", EntityJournal::load, EntityJournal::save, EntityJournal::saveIfDirty, EntityJournal::clear, EntityJournal::rebuildUpcoming, EntityJournal::tick, EntityJournal::onJump, EntityJournal::eraseVisits);
         register("entity_states", EntityStateJournal::load, EntityStateJournal::save, EntityStateJournal::saveIfDirty, EntityStateJournal::clear, EntityStateJournal::rebuildUpcoming, EntityStateJournal::tick, EntityStateJournal::onJump, EntityStateJournal::eraseVisits);

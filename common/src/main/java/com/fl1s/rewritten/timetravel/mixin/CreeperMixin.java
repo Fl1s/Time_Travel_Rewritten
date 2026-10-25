@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
+import com.fl1s.rewritten.timetravel.mob.MobEventJournal;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import net.minecraft.world.entity.monster.Creeper;
 import org.spongepowered.asm.mixin.Mixin;
@@ -11,6 +12,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Creeper.class)
 public abstract class CreeperMixin {
     @Shadow private int swell;
+
+    @Inject(method = "explodeCreeper", at = @At("HEAD"))
+    private void tt$explodeBegin(CallbackInfo ci) {
+        MobEventJournal.enterCreeperExplosion();
+    }
+
+    @Inject(method = "explodeCreeper", at = @At("RETURN"))
+    private void tt$explodeEnd(CallbackInfo ci) {
+        MobEventJournal.exitCreeperExplosion();
+    }
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void tt$preTickCreeper(CallbackInfo ci) {
