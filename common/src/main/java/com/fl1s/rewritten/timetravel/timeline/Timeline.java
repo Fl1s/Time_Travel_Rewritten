@@ -139,6 +139,7 @@ public final class Timeline {
 
         TimelineEventBus.fireBeforeJump(from, target);
         BlockJournal.flushWatches();
+        BlockJournal.beforeJump();
         EntityJournal.fastForward(from, target);
         MobJournal.fastForward(from, target);
         ProcessJournal.beforeJump();
@@ -169,10 +170,10 @@ public final class Timeline {
         TimelineEventBus.fireAfterJump(from, target);
 
         if (TimeTravel.showTimelineMessages){
-        String msg = initiatorName + " jumped " + (target > from ? "forward" : "back") + " to "
-                + TimeFormat.format(target, TimeTravel.displayTimeInTicks) + " ("
-                + TimeFormat.delta(target - from, TimeTravel.displayTimeInTicks) + ")";
-        TimeTravel.server.getPlayerList().broadcastSystemMessage(Component.literal(msg), false);
+            String msg = initiatorName + " jumped " + (target > from ? "forward" : "back") + " to "
+                    + TimeFormat.format(target, TimeTravel.displayTimeInTicks) + " ("
+                    + TimeFormat.delta(target - from, TimeTravel.displayTimeInTicks) + ")";
+            TimeTravel.server.getPlayerList().broadcastSystemMessage(Component.literal(msg), false);
         }
         return null;
     }

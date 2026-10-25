@@ -38,6 +38,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonHeadBlock;
+import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FlowingFluid;
 import net.minecraft.world.level.material.Fluid;
@@ -81,11 +82,15 @@ public final class BlockJournal {
         String oldItems;
         String newItems;
         boolean piston;
+        boolean mech;
         transient BlockState oldParsed;
         transient BlockState newParsed;
     }
 
     private record Watch(ServerLevel level, long[] positions) {
+    }
+
+    private record MovingOrigin(BlockState state, long tick) {
     }
 
     private static final class SetFrame {
@@ -125,6 +130,7 @@ public final class BlockJournal {
     private static final Map<ServerLevel, Set<BlockPos>> jukeboxes = new HashMap<>();
     private static int actionDepth = 0;
     private static int buildDepth = 0;
+    private static final Map<ServerLevel, Map<Long, MovingOrigin>> moving = new HashMap<>();
 
     public static boolean isApplying() {
         return applying;
@@ -264,10 +270,22 @@ public final class BlockJournal {
     }
 
     private static void record(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
-        boolean pistonPart = actionDepth == 0 && (RedstoneJournal.isNaturalPhysics(old) || RedstoneJournal.isNaturalPhysics(now));
-        if (pistonPart && ReplayState.isReplaying()) return;
-        if (old.is(Blocks.MOVING_PISTON)) old = Blocks.AIR.defaultBlockState();
-        if (now.is(Blocks.MOVING_PISTON)) now = Blocks.AIR.defaultBlockState();
+        boolean mechanical = RedstoneJournal.isMechanical(old) || RedstoneJournal.isMechanical(now);
+        boolean derived = actionDepth == 0 && mechanical;
+        if (actionDepth == 0 && old.getBlock() == now.getBlock() && RedstoneJournal.isOutput(now)) return;
+        if (derived && ReplayState.isReplaying()) return;
+        long tick = TimeTravel.timelineTick;
+        Map<Long, MovingOrigin> inFlight = moving.computeIfAbsent(level, l -> new HashMap<>());
+        if (now.is(Blocks.MOVING_PISTON)) {
+            if (!old.is(Blocks.MOVING_PISTON)) inFlight.put(pos.asLong(), new MovingOrigin(old, tick));
+            return;
+        }
+        if (old.is(Blocks.MOVING_PISTON)) {
+            MovingOrigin origin = inFlight.remove(pos.asLong());
+            if (origin == null) return;
+            old = origin.state();
+            tick = origin.tick();
+        }
         if (old.equals(now) || !shouldTrack(old, now)) return;
 
         PlayerData pd = nearestRecorder(level, pos);
@@ -294,9 +312,12 @@ public final class BlockJournal {
         if (same != null) {
             for (Entry e : same) {
                 if (isPistonStruct(old) || isPistonStruct(now)) break;
-                if (e.visit == visit) continue;
                 if (!e.dim.equals(dim)) continue;
-                if (Math.abs(e.tick - TimeTravel.timelineTick) > DEDUP_TICKS) continue;
+                if (e.visit == visit) {
+                    if (e.tick != tick) continue;
+                } else {
+                    if (Math.abs(e.tick - tick) > DEDUP_TICKS) continue;
+                }
                 if (!oldS.equals(e.oldState) || !newS.equals(e.newState)) continue;
                 return;
             }
@@ -311,12 +332,12 @@ public final class BlockJournal {
         entry.newState = newS;
         entry.oldParsed = old;
         entry.newParsed = now;
-        entry.tick = TimeTravel.timelineTick;
+        entry.tick = tick;
         entry.seq = STORE.nextSeq();
         entry.visit = visit;
         entry.root = actionDepth > 0 && !(old.getBlock() instanceof RedStoneWireBlock && now.getBlock() instanceof RedStoneWireBlock);
         entry.build = buildDepth > 0;
-        entry.piston = pistonPart;
+        entry.mech = derived;
         STORE.entries().add(entry);
         index(entry);
         STORE.markDirty();
@@ -343,7 +364,6 @@ public final class BlockJournal {
         if (a == b && (a instanceof AbstractFurnaceBlock || a instanceof BrewingStandBlock)) return false;
         if (a instanceof FireBlock && (b instanceof FireBlock || now.isAir())) return false;
         if (b instanceof FireBlock && old.isAir()) return false;
-        if (a instanceof LeavesBlock && (a == b || (now.isAir() && actionDepth == 0))) return false;
         return true;
     }
 
@@ -455,6 +475,7 @@ public final class BlockJournal {
     }
 
     private static void applyLive(Entry e) {
+        if (e.mech || e.piston) return;
         if (e.oldItems != null) {
             applyContainer(e, true, true);
             return;
@@ -465,11 +486,12 @@ public final class BlockJournal {
             if (level == null || state == null) return;
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
             BlockState before = level.getBlockState(pos);
+            if (before.is(Blocks.MOVING_PISTON)) return;
             if (before.equals(state)) return;
-            if (e.piston) return;
             if (!e.root) {
                 BlockState old = oldState(e);
-                if (RedstoneJournal.isNaturalPhysics(state) || RedstoneJournal.isNaturalPhysics(before) || (old != null && RedstoneJournal.isNaturalPhysics(old)) || nearPistonPart(level, pos))
+                if (RedstoneJournal.isNaturalPhysics(state) || RedstoneJournal.isNaturalPhysics(before)
+                        || (old != null && RedstoneJournal.isNaturalPhysics(old)) || nearPistonPart(level, pos))
                     return;
             }
             clearContainerBeforeRemoval(level, pos, before, state);
@@ -498,12 +520,27 @@ public final class BlockJournal {
             if (!before.getFluidState().isEmpty() || !state.getFluidState().isEmpty()) nudgeFluids(level, pos);
             if (state.getBlock() instanceof ButtonBlock && state.getValue(ButtonBlock.POWERED)) {
                 level.scheduleTick(pos, state.getBlock(), state.is(BlockTags.WOODEN_BUTTONS) ? 30 : 20);
-            } else if (state.getBlock() instanceof net.minecraft.world.level.block.BasePressurePlateBlock && state.getSignal(level, pos, Direction.UP) > 0) {
-                level.scheduleTick(pos, state.getBlock(), state.getBlock() instanceof net.minecraft.world.level.block.WeightedPressurePlateBlock ? 10 : 20);
+            } else if (state.getBlock() instanceof net.minecraft.world.level.block.BasePressurePlateBlock
+                    && state.getSignal(level, pos, Direction.UP) > 0) {
+                level.scheduleTick(pos, state.getBlock(),
+                        state.getBlock() instanceof net.minecraft.world.level.block.WeightedPressurePlateBlock ? 10 : 20);
             }
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to replay block journal entry at {} {} {}", e.x, e.y, e.z, ex);
         }
+    }
+
+    public static void beforeJump() {
+        for (Map.Entry<ServerLevel, Map<Long, MovingOrigin>> en : moving.entrySet()) {
+            ServerLevel level = en.getKey();
+            for (long key : new ArrayList<>(en.getValue().keySet())) {
+                BlockPos pos = BlockPos.of(key);
+                for (int i = 0; i < 4 && level.getBlockEntity(pos) instanceof PistonMovingBlockEntity be; i++) {
+                    PistonMovingBlockEntity.tick(level, pos, level.getBlockState(pos), be);
+                }
+            }
+        }
+        moving.clear();
     }
 
     public static void onJump(long from, long to) {
@@ -550,7 +587,7 @@ public final class BlockJournal {
                     clearContainerBeforeRemoval(level, pos, current, state);
                     level.removeBlockEntity(pos);
                 }
-                int flags = (rail && !toNew) ? QUIET_FLAGS : (rail ? Block.UPDATE_ALL : SET_FLAGS);
+                int flags = e.mech || (rail && !toNew) ? QUIET_FLAGS : (rail ? Block.UPDATE_ALL : SET_FLAGS);
                 level.setBlock(pos, state, flags);
                 if (!current.getFluidState().isEmpty() || !state.getFluidState().isEmpty()) {
                     fluidTouched.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
@@ -663,25 +700,6 @@ public final class BlockJournal {
             TimeTravel.TIMELINE_LOGGER.error("Failed to settle redstone after jump", ex);
         } finally {
             settleTouched.clear();
-        }
-    }
-
-    private static void nudgePistons() {
-        if (applying) return;
-        for (Map.Entry<ServerLevel, Set<BlockPos>> en : touched.entrySet()) {
-            ServerLevel level = en.getKey();
-            int radius = en.getValue().size() <= 400 ? 2 : 0;
-            Set<BlockPos> bases = new HashSet<>();
-            for (BlockPos p : en.getValue()) {
-                for (BlockPos q : BlockPos.betweenClosed(p.offset(-radius, -radius, -radius), p.offset(radius, radius, radius))) {
-                    BlockState st = level.getBlockState(q);
-                    if (st.getBlock() instanceof PistonBaseBlock) bases.add(q.immutable());
-                }
-            }
-            for (BlockPos q : bases) {
-                BlockState st = level.getBlockState(q);
-                if (st.getBlock() instanceof PistonBaseBlock) level.neighborChanged(q, st.getBlock(), q);
-            }
         }
     }
 
@@ -919,7 +937,9 @@ public final class BlockJournal {
 
     public static void load() {
         STORE.load();
+        STORE.entries().removeIf(e -> e.oldItems == null && e.piston);
         rebuildIndex();
+        STORE.rebuildUpcoming();
     }
 
     public static void saveIfDirty() {
@@ -938,6 +958,7 @@ public final class BlockJournal {
         jukeboxes.clear();
         fluidTouched.clear();
         drainSeeds.clear();
+        moving.clear();
         STORE.clear();
     }
 }

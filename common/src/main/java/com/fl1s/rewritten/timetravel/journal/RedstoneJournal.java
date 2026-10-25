@@ -95,9 +95,19 @@ public final class RedstoneJournal {
         STORE.markDirty();
     }
 
-    public static boolean isNaturalPhysics(BlockState s) {
+    public static boolean isOutput(BlockState s) {
         Block b = s.getBlock();
-        return b instanceof PistonBaseBlock || b instanceof PistonHeadBlock || s.is(Blocks.MOVING_PISTON) || b instanceof FallingBlock || b instanceof RedStoneWireBlock || b instanceof DiodeBlock || b instanceof RedstoneTorchBlock || b instanceof ObserverBlock || b instanceof RedstoneLampBlock || b instanceof TargetBlock;
+        return b instanceof RedStoneWireBlock || b instanceof DiodeBlock || b instanceof RedstoneTorchBlock
+                || b instanceof ObserverBlock || b instanceof RedstoneLampBlock || b instanceof TargetBlock;
+    }
+
+    public static boolean isMechanical(BlockState s) {
+        Block b = s.getBlock();
+        return b instanceof PistonBaseBlock || b instanceof PistonHeadBlock || s.is(Blocks.MOVING_PISTON) || b instanceof FallingBlock;
+    }
+
+    public static boolean isNaturalPhysics(BlockState s) {
+        return isOutput(s) || isMechanical(s);
     }
 
     public static boolean needsSettle(BlockState s) {
@@ -115,7 +125,7 @@ public final class RedstoneJournal {
                     if (!seen.add(iq) || !level.isLoaded(iq)) continue;
                     BlockState st = level.getBlockState(iq);
                     Block b = st.getBlock();
-                    if (b instanceof PistonBaseBlock) {
+                    if (isOutput(st)) {
                         level.neighborChanged(iq, b, iq);
                     } else if (b instanceof BasePressurePlateBlock && st.getSignal(level, iq, Direction.UP) > 0) {
                         level.scheduleTick(iq, b, b instanceof WeightedPressurePlateBlock ? 10 : 20);
