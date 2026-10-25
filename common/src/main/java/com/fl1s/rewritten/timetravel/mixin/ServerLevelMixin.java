@@ -61,6 +61,15 @@ public abstract class ServerLevelMixin {
         EffectJournal.recordLevelEvent((ServerLevel) (Object) this, except, type, pos, data);
     }
 
+    @Inject(method = "globalLevelEvent(ILnet/minecraft/core/BlockPos;I)V", at = @At("HEAD"), cancellable = true)
+    private void tt$globalEvent(int type, BlockPos pos, int data, CallbackInfo ci) {
+        if (BlockJournal.isApplying()) {
+            ci.cancel();
+            return;
+        }
+        EffectJournal.recordGlobalEvent((ServerLevel) (Object) this, type, pos, data);
+    }
+
     @Inject(method = "broadcastEntityEvent(Lnet/minecraft/world/entity/Entity;B)V", at = @At("HEAD"))
     private void tt$entityEvent(Entity entity, byte event, CallbackInfo ci) {
         EffectJournal.recordEntityEvent((ServerLevel) (Object) this, entity, event);

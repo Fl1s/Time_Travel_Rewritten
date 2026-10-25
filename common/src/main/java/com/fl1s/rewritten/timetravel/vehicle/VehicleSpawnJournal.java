@@ -8,6 +8,8 @@ import com.fl1s.rewritten.timetravel.mob.MobEventJournal;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.Removal;
+import com.fl1s.rewritten.timetravel.data.ReplayState;
+import net.minecraft.server.level.ServerPlayer;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
@@ -29,7 +31,8 @@ import java.util.UUID;
  * {@code AbstractBoat}) as a full NBT snapshot plus spawn tick.
  */
 public final class VehicleSpawnJournal {
-    private VehicleSpawnJournal() {}
+    private VehicleSpawnJournal() {
+    }
 
     public static final class Entry {
         public long tick;
@@ -43,16 +46,27 @@ public final class VehicleSpawnJournal {
         public int endVisit = -1;
     }
 
-    private static final Journal<Entry> STORE = new Journal<>(
-            "timetravel_rewritten_vehicle_spawns.json",
-            new TypeToken<ArrayList<Entry>>() {}.getType(),
-            e -> e.tick, e -> e.seq, e -> e.visit);
+    private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_vehicle_spawns.json", new TypeToken<ArrayList<Entry>>() {
+    }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
+
+    private static boolean reviving = false;
+
+    public static boolean shouldBlockReplaySpawn(Entity e) {
+        if (reviving || !TimeTravel.isLooping || !ReplayState.isReplaying()) return false;
+        if (!VehicleJournal.isTracked(e) || Clones.is(e)) return false;
+        if (!(e.level() instanceof ServerLevel level)) return false;
+        boolean clone = false, real = false;
+        for (ServerPlayer p : level.players()) {
+            if (p.distanceToSqr(e) > 36.0) continue;
+            if (Clones.is(p)) clone = true;
+            else real = true;
+        }
+        return clone && !real;
+    }
 
     private static final Map<UUID, Entry> canon = new HashMap<>();
-    private static final PriorityQueue<Entry> pending = new PriorityQueue<>(
-            Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
-    private static final PriorityQueue<Entry> pendingRemovals = new PriorityQueue<>(
-            Comparator.comparingLong((Entry e) -> e.endTick).thenComparingLong(e -> e.seq));
+    private static final PriorityQueue<Entry> pending = new PriorityQueue<>(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
+    private static final PriorityQueue<Entry> pendingRemovals = new PriorityQueue<>(Comparator.comparingLong((Entry e) -> e.endTick).thenComparingLong(e -> e.seq));
 
     public static void snapshotInitial() {
         if (TimeTravel.server == null) return;
@@ -204,7 +218,12 @@ public final class VehicleSpawnJournal {
             Vec3 at = VehicleTrailJournal.positionAt(e.uuid, now);
             if (at == null) at = new Vec3(e.x, e.y, e.z);
             revived.moveTo(at.x, at.y, at.z, revived.getYRot(), revived.getXRot());
-            level.addFreshEntity(revived);
+            reviving = true;
+            try {
+                level.addFreshEntity(revived);
+            } finally {
+                reviving = false;
+            }
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to revive vehicle {}", e.uuid, ex);
         }
@@ -242,8 +261,13 @@ public final class VehicleSpawnJournal {
         rebuildUpcoming();
     }
 
-    public static void save() { STORE.save(); }
-    public static void saveIfDirty() { STORE.saveIfDirty(); }
+    public static void save() {
+        STORE.save();
+    }
+
+    public static void saveIfDirty() {
+        STORE.saveIfDirty();
+    }
 
     public static void clear() {
         canon.clear();

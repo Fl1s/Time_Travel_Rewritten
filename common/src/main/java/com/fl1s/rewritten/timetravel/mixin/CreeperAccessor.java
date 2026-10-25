@@ -18,4 +18,7 @@ public interface CreeperAccessor {
 
     @Accessor("maxSwell")
     int tt$getMaxSwell();
+
+    @Accessor("explosionRadius")
+    int tt$getExplosionRadius();
 }

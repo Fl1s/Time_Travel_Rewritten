@@ -5,6 +5,7 @@ import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.mob.MobEventJournal;
 import com.fl1s.rewritten.timetravel.mob.WardenEventJournal;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
@@ -36,6 +37,8 @@ public final class EffectJournal {
     private static final int LEVEL_EVENT = 1;
     private static final int BLOCK_EVENT = 2;
     private static final int ENTITY_EVENT = 3;
+    private static final int GLOBAL_EVENT = 4;
+    private static final Set<Integer> PLAYERLESS_EVENTS = Set.of(1000, 1001, 1002, 2000, 1503, 1038);
     private static final double NEAR_SQ = 8.0 * 8.0;
 
     public static final class Entry {
@@ -58,8 +61,19 @@ public final class EffectJournal {
 
     private static boolean replaying = false;
 
+    public static void silently(Runnable action) {
+        boolean prev = replaying;
+        replaying = true;
+        try {
+            action.run();
+        } finally {
+            replaying = prev;
+        }
+    }
+
     public static void recordSound(ServerLevel level, Player except, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch) {
-        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || WardenEventJournal.suppressesEffects())
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || WardenEventJournal.suppressesEffects()
+                || MobEventJournal.isCreeperExploding())
             return;
         PlayerData pd = recorder(level, except, x, y, z);
         if (pd == null) return;
@@ -77,11 +91,22 @@ public final class EffectJournal {
     }
 
     public static void recordLevelEvent(ServerLevel level, Player except, int type, BlockPos pos, int data) {
-        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS || except == null) return;
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
+        if (except == null && !PLAYERLESS_EVENTS.contains(type)) return;
         PlayerData pd = recorder(level, except, pos.getX(), pos.getY(), pos.getZ());
         if (pd == null) return;
 
         Entry e = create(LEVEL_EVENT, level, pd, pos.getX(), pos.getY(), pos.getZ());
+        e.a = type;
+        e.b = data;
+        add(e);
+    }
+
+    public static void recordGlobalEvent(ServerLevel level, int type, BlockPos pos, int data) {
+        if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
+        PlayerData pd = recorder(level, null, pos.getX(), pos.getY(), pos.getZ());
+        if (pd == null) return;
+        Entry e = create(GLOBAL_EVENT, level, pd, pos.getX(), pos.getY(), pos.getZ());
         e.a = type;
         e.b = data;
         add(e);
@@ -163,16 +188,28 @@ public final class EffectJournal {
         return e;
     }
 
-    public static void onJumpBack(long to) {
-        if (TimeTravel.server == null) return;
-        Set<String> ids = new HashSet<>();
-        for (Entry e : STORE.entries()) {
-            if (e.kind != SOUND) continue;
-            if (e.tick <= to) continue;
-            if (e.id == null) continue;
-            ids.add(e.id);
+    private static final Map<Integer, String> EVENT_SOUNDS = Map.of(
+            1038, "minecraft:block.end_portal.spawn",
+            1503, "minecraft:block.end_portal_frame.fill",
+            1028, "minecraft:entity.ender_dragon.death",
+            1023, "minecraft:entity.wither.spawn",
+            1000, "minecraft:block.dispenser.dispense",
+            1001, "minecraft:block.dispenser.fail",
+            1002, "minecraft:block.dispenser.launch");
+
+    private static final long STILL_AUDIBLE_TICKS = 600;
+
+    private static void collectSoundIds(Entry e, Set<String> ids) {
+        if (e.kind == SOUND) {
+            if (e.id != null) ids.add(e.id);
+        } else if (e.kind == LEVEL_EVENT || e.kind == GLOBAL_EVENT) {
+            String id = EVENT_SOUNDS.get(e.a);
+            if (id != null) ids.add(id);
         }
-        if (ids.isEmpty()) return;
+    }
+
+    private static void stopSounds(Set<String> ids) {
+        if (ids.isEmpty() || TimeTravel.server == null) return;
         for (String id : ids) {
             ResourceLocation loc = ResourceLocation.tryParse(id);
             if (loc == null) continue;
@@ -182,6 +219,25 @@ public final class EffectJournal {
                 p.connection.send(packet);
             }
         }
+    }
+
+    public static void onJumpBack(long to) {
+        if (TimeTravel.server == null) return;
+        Set<String> ids = new HashSet<>();
+        for (Entry e : STORE.entries()) {
+            if (e.tick <= to) continue;
+            collectSoundIds(e, ids);
+        }
+        stopSounds(ids);
+    }
+
+    public static void onJumpForward(long from) {
+        Set<String> ids = new HashSet<>();
+        for (Entry e : STORE.entries()) {
+            if (e.tick > from || e.tick < from - STILL_AUDIBLE_TICKS) continue;
+            collectSoundIds(e, ids);
+        }
+        stopSounds(ids);
     }
 
     private static void add(Entry e) {
@@ -198,6 +254,7 @@ public final class EffectJournal {
     }
 
     public static void onJump(long from, long to) {
+        if (to > from) onJumpForward(from);
         rebuildUpcoming();
     }
 
@@ -228,6 +285,7 @@ public final class EffectJournal {
                     }
                 }
                 case LEVEL_EVENT -> level.levelEvent(null, e.a, BlockPos.containing(e.x, e.y, e.z), e.b);
+                case GLOBAL_EVENT -> level.globalLevelEvent(e.a, BlockPos.containing(e.x, e.y, e.z), e.b);
                 case BLOCK_EVENT -> {
                     ResourceLocation loc = cachedLocation(e);
                     if (loc != null) {

@@ -76,10 +76,11 @@ public final class EntityJournal {
 
     public static boolean shouldBlock(Entity e) {
         if (replaying) return false;
+        if (com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal.shouldBlockReplaySpawn(e)) return true;
         if (ItemFlowJournal.isCloneKill()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (MobJournal.isKilling()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (suppress) return isTracked(e);
-        if (BlockJournal.isApplying())
+        if (BlockJournal.isApplying() || BlockJournal.isErasing())
             return e instanceof PrimedTnt || e instanceof FallingBlockEntity || e instanceof ItemEntity;
         if (BlockJournal.isReplayingLive()) return e instanceof ItemEntity;
         return false;

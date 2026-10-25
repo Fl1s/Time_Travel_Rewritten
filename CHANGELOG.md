@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### [Unreleased]
 
+### Fixed
+
+ - Creeper explosion effects
+ - Redstone update edgecases
+ - Dispenser block duplication
+ - Vehicles not spawning after creeper's explosion rewind
+
 ## [1.21.1-0.11.4] - 2026-11-24
 
 ### Changed

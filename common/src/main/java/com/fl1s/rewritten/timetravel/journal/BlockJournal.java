@@ -80,6 +80,7 @@ public final class BlockJournal {
         boolean build;
         String oldItems;
         String newItems;
+        boolean piston;
         transient BlockState oldParsed;
         transient BlockState newParsed;
     }
@@ -112,11 +113,13 @@ public final class BlockJournal {
     private static final List<ContainerWatch> containerWatches = new ArrayList<>();
     private static final List<Watch> watches = new ArrayList<>();
     private static final Map<ServerLevel, Set<BlockPos>> touched = new HashMap<>();
+    private static final Map<ServerLevel, Set<BlockPos>> settleTouched = new HashMap<>();
     private static final Map<ServerLevel, Set<BlockPos>> fluidTouched = new HashMap<>();
     private static final Map<ServerLevel, Map<BlockPos, Fluid>> drainSeeds = new HashMap<>();
     private static final int DRAIN_LIMIT = 8192;
     private static final Map<Long, List<Entry>> byPos = new HashMap<>();
     private static boolean applying = false;
+    private static boolean erasing = false;
     private static boolean replayingLive = false;
     private static final ArrayDeque<SetFrame> setFrames = new ArrayDeque<>();
     private static final Map<ServerLevel, Set<BlockPos>> jukeboxes = new HashMap<>();
@@ -125,6 +128,19 @@ public final class BlockJournal {
 
     public static boolean isApplying() {
         return applying;
+    }
+
+    public static boolean isErasing() {
+        return erasing;
+    }
+
+    private static boolean isPistonStruct(BlockState st) {
+        Block b = st.getBlock();
+        return b instanceof PistonBaseBlock || b instanceof PistonHeadBlock;
+    }
+
+    public static boolean shouldSkipAutomation() {
+        return TimeTravel.isLooping && ReplayState.isReplaying();
     }
 
     public static boolean isReplayingLive() {
@@ -199,12 +215,19 @@ public final class BlockJournal {
     }
 
     public static void endSet(ServerLevel level, BlockPos pos, boolean changed) {
-        SetFrame top = setFrames.peek();
-        if (top == null || top.level != level || top.pos != pos.asLong()) return;
+        SetFrame top = null;
+        for (SetFrame f : setFrames) {
+            if (f.level == level && f.pos == pos.asLong()) {
+                top = f;
+                break;
+            }
+        }
+        if (top == null) return;
+        while (setFrames.peek() != top) setFrames.pop();
         setFrames.pop();
 
-        if (!changed || top.notified || applying || !TimeTravel.isLooping
-                || TimeTravel.timelineSceneManager == null) return;
+        if (!changed || top.notified || applying || !TimeTravel.isLooping || TimeTravel.timelineSceneManager == null)
+            return;
 
         BlockState now = level.getBlockState(pos);
         if (!now.equals(top.before)) record(level, pos, top.before, now);
@@ -231,8 +254,7 @@ public final class BlockJournal {
             top.notified = true;
         }
         for (SetFrame f : setFrames) {
-            if (!f.notified && f.pos == pos.asLong() && f.level == level
-                    && f.requested.equals(old) && !f.before.equals(old)) {
+            if (!f.notified && f.pos == pos.asLong() && f.level == level && f.requested.equals(old) && !f.before.equals(old)) {
                 old = f.before;
                 f.notified = true;
                 break;
@@ -240,7 +262,10 @@ public final class BlockJournal {
         }
         record(level, pos, old, now);
     }
+
     private static void record(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
+        boolean pistonPart = actionDepth == 0 && (RedstoneJournal.isNaturalPhysics(old) || RedstoneJournal.isNaturalPhysics(now));
+        if (pistonPart && ReplayState.isReplaying()) return;
         if (old.is(Blocks.MOVING_PISTON)) old = Blocks.AIR.defaultBlockState();
         if (now.is(Blocks.MOVING_PISTON)) now = Blocks.AIR.defaultBlockState();
         if (old.equals(now) || !shouldTrack(old, now)) return;
@@ -252,7 +277,10 @@ public final class BlockJournal {
         } else {
             boolean hasRealPlayer = false;
             for (ServerPlayer p : level.players()) {
-                if (!Clones.is(p)) { hasRealPlayer = true; break; }
+                if (!Clones.is(p)) {
+                    hasRealPlayer = true;
+                    break;
+                }
             }
             if (!hasRealPlayer) return;
             visit = -1;
@@ -265,6 +293,8 @@ public final class BlockJournal {
         List<Entry> same = byPos.get(pos.asLong());
         if (same != null) {
             for (Entry e : same) {
+                if (isPistonStruct(old) || isPistonStruct(now)) break;
+                if (e.visit == visit) continue;
                 if (!e.dim.equals(dim)) continue;
                 if (Math.abs(e.tick - TimeTravel.timelineTick) > DEDUP_TICKS) continue;
                 if (!oldS.equals(e.oldState) || !newS.equals(e.newState)) continue;
@@ -284,9 +314,9 @@ public final class BlockJournal {
         entry.tick = TimeTravel.timelineTick;
         entry.seq = STORE.nextSeq();
         entry.visit = visit;
-        entry.root = actionDepth > 0
-                && !(old.getBlock() instanceof RedStoneWireBlock && now.getBlock() instanceof RedStoneWireBlock);
+        entry.root = actionDepth > 0 && !(old.getBlock() instanceof RedStoneWireBlock && now.getBlock() instanceof RedStoneWireBlock);
         entry.build = buildDepth > 0;
+        entry.piston = pistonPart;
         STORE.entries().add(entry);
         index(entry);
         STORE.markDirty();
@@ -305,7 +335,8 @@ public final class BlockJournal {
         Block a = old.getBlock();
         Block b = now.getBlock();
         if (a instanceof LiquidBlock || b instanceof LiquidBlock) {
-            if (a instanceof LiquidBlock && b instanceof LiquidBlock) return actionDepth > 0 && (isSourceLiquid(old) || isSourceLiquid(now));
+            if (a instanceof LiquidBlock && b instanceof LiquidBlock)
+                return actionDepth > 0 && (isSourceLiquid(old) || isSourceLiquid(now));
             if (b instanceof LiquidBlock && !old.isAir()) return true;
             return actionDepth > 0 && (isSourceLiquid(old) || isSourceLiquid(now));
         }
@@ -332,6 +363,7 @@ public final class BlockJournal {
         FluidState fs = state.getFluidState();
         return !fs.isSource() && !fs.isEmpty() && sourceOf(fs) == source;
     }
+
     private static void drainAll() {
         if (drainSeeds.isEmpty()) return;
         Map<ServerLevel, Map<BlockPos, Fluid>> copy = new HashMap<>(drainSeeds);
@@ -434,6 +466,13 @@ public final class BlockJournal {
             BlockPos pos = new BlockPos(e.x, e.y, e.z);
             BlockState before = level.getBlockState(pos);
             if (before.equals(state)) return;
+            if (e.piston) return;
+            if (!e.root) {
+                BlockState old = oldState(e);
+                if (RedstoneJournal.isNaturalPhysics(state) || RedstoneJournal.isNaturalPhysics(before) || (old != null && RedstoneJournal.isNaturalPhysics(old)) || nearPistonPart(level, pos))
+                    return;
+            }
+            clearContainerBeforeRemoval(level, pos, before, state);
 
             replayingLive = true;
             try {
@@ -459,6 +498,8 @@ public final class BlockJournal {
             if (!before.getFluidState().isEmpty() || !state.getFluidState().isEmpty()) nudgeFluids(level, pos);
             if (state.getBlock() instanceof ButtonBlock && state.getValue(ButtonBlock.POWERED)) {
                 level.scheduleTick(pos, state.getBlock(), state.is(BlockTags.WOODEN_BUTTONS) ? 30 : 20);
+            } else if (state.getBlock() instanceof net.minecraft.world.level.block.BasePressurePlateBlock && state.getSignal(level, pos, Direction.UP) > 0) {
+                level.scheduleTick(pos, state.getBlock(), state.getBlock() instanceof net.minecraft.world.level.block.WeightedPressurePlateBlock ? 10 : 20);
             }
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to replay block journal entry at {} {} {}", e.x, e.y, e.z, ex);
@@ -477,6 +518,7 @@ public final class BlockJournal {
             for (Entry e : affected) apply(e, true);
         }
         finishBatch();
+        settleAfterBatch();
         flushFluids();
         flushJukeboxes();
         rebuildUpcoming();
@@ -491,6 +533,7 @@ public final class BlockJournal {
             applyContainer(e, toNew, false);
             return;
         }
+        final boolean prevApplying = applying;
         applying = true;
         try {
             ServerLevel level = levelOf(e.dim);
@@ -504,6 +547,7 @@ public final class BlockJournal {
             boolean rail = current.getBlock() instanceof BaseRailBlock || state.getBlock() instanceof BaseRailBlock;
             if (!current.equals(state)) {
                 if (!current.is(state.getBlock()) && level.getBlockEntity(pos) != null) {
+                    clearContainerBeforeRemoval(level, pos, current, state);
                     level.removeBlockEntity(pos);
                 }
                 int flags = (rail && !toNew) ? QUIET_FLAGS : (rail ? Block.UPDATE_ALL : SET_FLAGS);
@@ -512,8 +556,7 @@ public final class BlockJournal {
                     fluidTouched.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
                 }
                 if (!toNew && isSourceLiquid(current) && !isSourceLiquid(state)) {
-                    drainSeeds.computeIfAbsent(level, l -> new HashMap<>())
-                            .put(pos.immutable(), sourceOf(current.getFluidState()));
+                    drainSeeds.computeIfAbsent(level, l -> new HashMap<>()).put(pos.immutable(), sourceOf(current.getFluidState()));
                 }
                 if (rail) {
                     BlockPos ip = pos.immutable();
@@ -529,14 +572,40 @@ public final class BlockJournal {
             if (rail) {
                 touched.computeIfAbsent(level, l -> new HashSet<>()).add(pos);
             }
+            if (RedstoneJournal.needsSettle(current) || RedstoneJournal.needsSettle(state)) {
+                settleTouched.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
+            }
             if (current.getBlock() instanceof JukeboxBlock || state.getBlock() instanceof JukeboxBlock) {
                 markJukebox(level, pos);
             }
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to apply block journal entry at {} {} {}", e.x, e.y, e.z, ex);
         } finally {
-            applying = false;
+            applying = prevApplying;
         }
+    }
+
+    private static void clearContainerBeforeRemoval(ServerLevel level, BlockPos pos, BlockState current, BlockState next) {
+        if (current.is(next.getBlock())) return;
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof Container container) {
+            container.clearContent();
+            container.setChanged();
+        }
+    }
+
+    private static void discardNearbyItems(ServerLevel level, Entry e) {
+        net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(e.x + 0.5 - 1.5, e.y + 0.5 - 1.5, e.z + 0.5 - 1.5, e.x + 0.5 + 1.5, e.y + 0.5 + 1.5, e.z + 0.5 + 1.5);
+        for (net.minecraft.world.entity.item.ItemEntity item : level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, box)) {
+            if (!item.isRemoved()) item.discard();
+        }
+    }
+
+    private static boolean nearPistonPart(ServerLevel level, BlockPos pos) {
+        for (Direction d : DIRECTIONS) {
+            if (isPistonPart(level.getBlockState(pos.relative(d)))) return true;
+        }
+        return false;
     }
 
     private static boolean isPistonPart(BlockState st) {
@@ -546,6 +615,7 @@ public final class BlockJournal {
 
     private static void finishBatch() {
         if (touched.isEmpty()) return;
+        final boolean prevApplying = applying;
         applying = true;
         try {
             for (Map.Entry<ServerLevel, Set<BlockPos>> en : touched.entrySet()) {
@@ -580,8 +650,38 @@ public final class BlockJournal {
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to refresh block connections", ex);
         } finally {
-            applying = false;
+            applying = prevApplying;
             touched.clear();
+        }
+    }
+
+    private static void settleAfterBatch() {
+        if (settleTouched.isEmpty()) return;
+        try {
+            RedstoneJournal.settle(settleTouched);
+        } catch (Exception ex) {
+            TimeTravel.TIMELINE_LOGGER.error("Failed to settle redstone after jump", ex);
+        } finally {
+            settleTouched.clear();
+        }
+    }
+
+    private static void nudgePistons() {
+        if (applying) return;
+        for (Map.Entry<ServerLevel, Set<BlockPos>> en : touched.entrySet()) {
+            ServerLevel level = en.getKey();
+            int radius = en.getValue().size() <= 400 ? 2 : 0;
+            Set<BlockPos> bases = new HashSet<>();
+            for (BlockPos p : en.getValue()) {
+                for (BlockPos q : BlockPos.betweenClosed(p.offset(-radius, -radius, -radius), p.offset(radius, radius, radius))) {
+                    BlockState st = level.getBlockState(q);
+                    if (st.getBlock() instanceof PistonBaseBlock) bases.add(q.immutable());
+                }
+            }
+            for (BlockPos q : bases) {
+                BlockState st = level.getBlockState(q);
+                if (st.getBlock() instanceof PistonBaseBlock) level.neighborChanged(q, st.getBlock(), q);
+            }
         }
     }
 
@@ -784,13 +884,13 @@ public final class BlockJournal {
     }
 
     private static void syncJukebox(ServerLevel level, BlockPos pos, JukeboxBlockEntity jukebox) {
+        level.levelEvent(LevelEvent.SOUND_STOP_JUKEBOX_SONG, pos, 0);
         JukeboxSongPlayer player = jukebox.getSongPlayer();
         player.stop(level, level.getBlockState(pos));
 
         ItemStack disc = jukebox.getTheItem();
         if (disc.isEmpty()) return;
-        JukeboxSong.fromStack(level.registryAccess(), disc)
-                .ifPresent(song -> player.play(level, song));
+        JukeboxSong.fromStack(level.registryAccess(), disc).ifPresent(song -> player.play(level, song));
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
@@ -798,11 +898,19 @@ public final class BlockJournal {
         for (Entry e : STORE.entries()) if (visitIds.contains(e.visit)) mine.add(e);
         mine.sort(Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq).reversed());
 
-        for (Entry e : mine) {
-            if (e.tick <= TimeTravel.timelineTick) apply(e, false);
+        erasing = true;
+        try {
+            for (Entry e : mine) {
+                apply(e, false);
+                ServerLevel level = levelOf(e.dim);
+                if (level != null && e.oldItems == null) discardNearbyItems(level, e);
+            }
+            finishBatch();
+            settleAfterBatch();
+            flushFluids();
+        } finally {
+            erasing = false;
         }
-        finishBatch();
-        flushFluids();
         STORE.entries().removeAll(mine);
         STORE.upcoming().removeAll(mine);
         rebuildIndex();
