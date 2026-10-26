@@ -87,7 +87,7 @@ public final class ExemptGlow {
     public static MultiBufferSource wrap(MultiBufferSource inner) {
         MultiBufferSource.BufferSource main = Minecraft.getInstance().renderBuffers().bufferSource();
         return type -> ExemptRenderTypes.isGlint(type) ? inner.getBuffer(type)
-                : VertexMultiConsumer.create(main.getBuffer(ExemptRenderTypes.ITEM), inner.getBuffer(type));
+                : VertexMultiConsumer.create(main.getBuffer(ExemptRenderTypes.itemFor(type)), inner.getBuffer(type));
     }
 
     public static void tick(Minecraft mc) {

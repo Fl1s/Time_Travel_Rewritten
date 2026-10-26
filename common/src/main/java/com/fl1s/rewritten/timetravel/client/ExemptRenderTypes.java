@@ -8,6 +8,7 @@ import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.Sheets;
 import net.minecraft.resources.ResourceLocation;
 import org.joml.Matrix4f;
 
@@ -27,7 +28,10 @@ public final class ExemptRenderTypes extends RenderType {
             TimeTravel.MOD_ID + "_exempt_glint_texturing", () -> scroll(32.0F), RenderSystem::resetTextureMatrix);
 
     public static final RenderType ITEM = layer("exempt_glint", new TextureStateShard(TEXTURE, true, false),
-            RENDERTYPE_GLINT_SHADER, GLINT_TRANSPARENCY, LEQUAL_DEPTH_TEST, NO_CULL, POLYGON_OFFSET_LAYERING, TEXTURING, COLOR_WRITE);
+            RENDERTYPE_GLINT_SHADER, GLINT_TRANSPARENCY, EQUAL_DEPTH_TEST, NO_CULL, TEXTURING, COLOR_WRITE);
+
+    public static final RenderType ITEM_TRANSLUCENT = layer("exempt_glint_translucent", new TextureStateShard(TEXTURE, true, false),
+            RENDERTYPE_GLINT_SHADER, GLINT_TRANSPARENCY, EQUAL_DEPTH_TEST, NO_CULL, TEXTURING, COLOR_WRITE, ITEM_ENTITY_TARGET);
 
     public static final RenderType BLOCK = layer("exempt_block_glint", new TextureStateShard(TEXTURE, true, false),
             RENDERTYPE_GLINT_SHADER, GLINT_TRANSPARENCY, LEQUAL_DEPTH_TEST, CULL, POLYGON_OFFSET_LAYERING, TEXTURING, COLOR_WRITE);
@@ -41,11 +45,15 @@ public final class ExemptRenderTypes extends RenderType {
     }
 
     public static List<RenderType> all() {
-        return List.of(ITEM, BLOCK);
+        return List.of(ITEM, ITEM_TRANSLUCENT, BLOCK);
+    }
+
+    public static RenderType itemFor(RenderType type) {
+        return Minecraft.useShaderTransparency() && type == Sheets.translucentItemSheet() ? ITEM_TRANSLUCENT : ITEM;
     }
 
     public static boolean isGlint(RenderType type) {
-        return type == ITEM || type == BLOCK || type == glint() || type == glintTranslucent()
+        return type == ITEM || type == ITEM_TRANSLUCENT || type == BLOCK || type == glint() || type == glintTranslucent()
                 || type == entityGlint() || type == entityGlintDirect() || type == armorEntityGlint();
     }
 
