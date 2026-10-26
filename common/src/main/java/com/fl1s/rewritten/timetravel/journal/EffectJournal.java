@@ -60,6 +60,8 @@ public final class EffectJournal {
     }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
 
     private static boolean replaying = false;
+    private static final Set<String> blockEventThisTick = new HashSet<>();
+    private static long blockEventTick = -1;
 
     public static void silently(Runnable action) {
         boolean prev = replaying;
@@ -117,15 +119,18 @@ public final class EffectJournal {
         if (!level.isLoaded(pos)) return;
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof LidBlockEntity) && !(be instanceof ShulkerBoxBlockEntity)) return;
+
+        long now = TimeTravel.timelineTick;
+        if (blockEventTick != now) {
+            blockEventThisTick.clear();
+            blockEventTick = now;
+        }
+        String key = pos.asLong() + "|" + a + "|" + b;
+        if (!blockEventThisTick.add(key)) return;
+
         PlayerData pd = recorder(level, null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
         if (pd == null) return;
 
-        for (int i = STORE.entries().size() - 1; i >= 0; i--) {
-            Entry p = STORE.entries().get(i);
-            if (p.tick != TimeTravel.timelineTick) break;
-            if (p.kind == BLOCK_EVENT && p.x == pos.getX() && p.y == pos.getY() && p.z == pos.getZ() && p.a == a && p.b == b)
-                return;
-        }
         Entry e = create(BLOCK_EVENT, level, pd, pos.getX(), pos.getY(), pos.getZ());
         e.id = BuiltInRegistries.BLOCK.getKey(block).toString();
         e.a = a;
@@ -352,6 +357,8 @@ public final class EffectJournal {
     }
 
     public static void clear() {
+        blockEventThisTick.clear();
+        blockEventTick = -1;
         STORE.clear();
     }
 }

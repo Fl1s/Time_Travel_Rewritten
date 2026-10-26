@@ -10,6 +10,7 @@ import net.minecraft.server.network.ServerGamePacketListenerImpl;
 
 public class PlayConnectionEvent {
     public static void onJoin(ServerGamePacketListenerImpl handler, MinecraftServer server) {
+        TimeTravel.invalidatePlayersSnapshot();
         ServerPlayer player = handler.player;
         String playerName = player.getName().getString();
 
@@ -40,6 +41,7 @@ public class PlayConnectionEvent {
     }
 
     public static void onDisconnect(ServerGamePacketListenerImpl handler) {
+        TimeTravel.invalidatePlayersSnapshot();
         ServerPlayer player = handler.player;
         String playerName = player.getName().getString();
 

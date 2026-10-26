@@ -270,6 +270,8 @@ public final class BlockJournal {
     }
 
     private static void record(ServerLevel level, BlockPos pos, BlockState old, BlockState now) {
+        if (old.equals(now)) return;
+
         boolean mechanical = RedstoneJournal.isMechanical(old) || RedstoneJournal.isMechanical(now);
         boolean derived = actionDepth == 0 && mechanical;
         if (actionDepth == 0 && old.getBlock() == now.getBlock() && RedstoneJournal.isOutput(now)) return;

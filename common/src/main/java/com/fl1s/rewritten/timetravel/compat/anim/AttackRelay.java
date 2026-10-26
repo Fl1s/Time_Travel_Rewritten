@@ -25,6 +25,11 @@ public final class AttackRelay {
     private final Constructor<?> c2sCtor;
     private final Method handleAttackRequest;
     private final Field useVanillaPacket;
+    private final Method mComboCount;
+    private final Method mIsSneaking;
+    private final Method mSelectedSlot;
+    private final Method mCursorTarget;
+    private final Method mEntityIds;
 
     private AttackRelay() throws Exception {
         this.c2sClass = Class.forName("net.bettercombat.network.Packets$C2S_AttackRequest");
@@ -32,6 +37,11 @@ public final class AttackRelay {
         Class<?> serverNetwork = Class.forName("net.bettercombat.network.ServerNetwork");
         this.handleAttackRequest = serverNetwork.getMethod("handleAttackRequest", c2sClass, MinecraftServer.class, ServerPlayer.class, ServerGamePacketListenerImpl.class);
         this.useVanillaPacket = c2sClass.getField("UseVanillaPacket");
+        this.mComboCount = c2sClass.getMethod("comboCount");
+        this.mIsSneaking = c2sClass.getMethod("isSneaking");
+        this.mSelectedSlot = c2sClass.getMethod("selectedSlot");
+        this.mCursorTarget = c2sClass.getMethod("cursorTarget");
+        this.mEntityIds = c2sClass.getMethod("entityIds");
     }
 
     public static void init() {
@@ -60,12 +70,11 @@ public final class AttackRelay {
         if (pd == null || !pd.getActive() || pd.getCurrentVisit() == null) return;
 
         try {
-            Class<?> c = payload.getClass();
-            int comboCount = (Integer) c.getMethod("comboCount").invoke(payload);
-            boolean isSneaking = (Boolean) c.getMethod("isSneaking").invoke(payload);
-            int selectedSlot = (Integer) c.getMethod("selectedSlot").invoke(payload);
-            int cursorTarget = (Integer) c.getMethod("cursorTarget").invoke(payload);
-            int[] entityIds = (int[]) c.getMethod("entityIds").invoke(payload);
+            int comboCount = (Integer) INSTANCE.mComboCount.invoke(payload);
+            boolean isSneaking = (Boolean) INSTANCE.mIsSneaking.invoke(payload);
+            int selectedSlot = (Integer) INSTANCE.mSelectedSlot.invoke(payload);
+            int cursorTarget = (Integer) INSTANCE.mCursorTarget.invoke(payload);
+            int[] entityIds = (int[]) INSTANCE.mEntityIds.invoke(payload);
 
             AttackJournal.record(TimeTravel.timelineTick, pd.getCurrentVisit().id, player.level().dimension().location().toString(), comboCount, isSneaking, selectedSlot, cursorTarget, entityIds);
 

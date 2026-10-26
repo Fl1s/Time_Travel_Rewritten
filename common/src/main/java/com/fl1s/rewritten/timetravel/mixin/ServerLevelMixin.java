@@ -103,17 +103,31 @@ public abstract class ServerLevelMixin {
         }
         ServerLevel self = (ServerLevel) (Object) this;
         if (entity instanceof ThrownEnderpearl pearl && pearl.getOwner() instanceof ServerPlayer owner) {
-            if (Clones.is(owner)) ((ClonePearlExt) pearl).tt$markClone();
-            else tt$guard("pearls", () -> CloneTracks.onPearlThrown(owner));
+            try {
+                if (Clones.is(owner)) ((ClonePearlExt) pearl).tt$markClone();
+                else CloneTracks.onPearlThrown(owner);
+            } catch (Throwable t) {
+                TimeTravel.TIMELINE_LOGGER.error("Journal 'pearls' failed on entity spawn", t);
+            }
         }
-        if (entity instanceof FishingHook hook) tt$guard("fishing", () -> CloneTracks.onHookSpawned(hook));
-        tt$guard("entities", () -> EntityJournal.onSpawn(self, entity));
-        tt$guard("projectiles", () -> ProjectileJournal.onSpawn(self, entity));
-        tt$guard("tracked_entities", () -> TrackedEntityJournal.onSpawn(self, entity));
-        tt$guard("mobs", () -> MobJournal.onEntitySpawn(self, entity));
-        tt$guard("item_flow", () -> ItemFlowJournal.onEntitySpawn(self, entity));
-        tt$guard("vehicles", () -> VehicleJournal.onEntitySpawn(self, entity));
-        tt$guard("entity_states", () -> EntityStateJournal.onSpawn(self, entity));
+        if (entity instanceof FishingHook hook) {
+            try { CloneTracks.onHookSpawned(hook); }
+            catch (Throwable t) { TimeTravel.TIMELINE_LOGGER.error("Journal 'fishing' failed on entity spawn", t); }
+        }
+        try { EntityJournal.onSpawn(self, entity); }
+        catch (Throwable t) { TimeTravel.TIMELINE_LOGGER.error("Journal 'entities' failed on entity spawn", t); }
+        try { ProjectileJournal.onSpawn(self, entity); }
+        catch (Throwable t) { TimeTravel.TIMELINE_LOGGER.error("Journal 'projectiles' failed on entity spawn", t); }
+        try { TrackedEntityJournal.onSpawn(self, entity); }
+        catch (Throwable t) { TimeTravel.TIMELINE_LOGGER.error("Journal 'tracked_entities' failed on entity spawn", t); }
+        try { MobJournal.onEntitySpawn(self, entity); }
+        catch (Throwable t) { TimeTravel.TIMELINE_LOGGER.error("Journal 'mobs' failed on entity spawn", t); }
+        try { ItemFlowJournal.onEntitySpawn(self, entity); }
+        catch (Throwable t) { TimeTravel.TIMELINE_LOGGER.error("Journal 'item_flow' failed on entity spawn", t); }
+        try { VehicleJournal.onEntitySpawn(self, entity); }
+        catch (Throwable t) { TimeTravel.TIMELINE_LOGGER.error("Journal 'vehicles' failed on entity spawn", t); }
+        try { EntityStateJournal.onSpawn(self, entity); }
+        catch (Throwable t) { TimeTravel.TIMELINE_LOGGER.error("Journal 'entity_states' failed on entity spawn", t); }
     }
 
     @Inject(method = "tickNonPassenger(Lnet/minecraft/world/entity/Entity;)V", at = @At("HEAD"), cancellable = true)

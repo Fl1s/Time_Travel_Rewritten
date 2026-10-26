@@ -58,9 +58,13 @@ public class TimelineSceneManager {
     }
 
     public PlayerData getRecordingPlayer(String playerName) {
-        PlayerData direct = playerName == null ? null : recordingPlayers.get(playerName);
+        if (playerName == null) return null;
+        PlayerData direct = recordingPlayers.get(playerName);
         if (direct != null) return direct;
-        return getRecordingPlayers().stream().filter(playerData -> playerData.getName().equalsIgnoreCase(playerName)).findFirst().orElse(null);
+        for (PlayerData pd : recordingPlayers.values()) {
+            if (pd.getName().equalsIgnoreCase(playerName)) return pd;
+        }
+        return null;
     }
 
     // Method to perform an action for each recording player

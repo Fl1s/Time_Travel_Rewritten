@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-
 public final class BlockEntityJournal {
     private BlockEntityJournal() {}
 
@@ -60,6 +59,7 @@ public final class BlockEntityJournal {
             e -> e.tick, e -> e.seq, e -> e.visit);
 
     private static final Map<Long, Entry> last = new HashMap<>();
+    private static final Map<Long, Long> lastPollTick = new HashMap<>();
     private static boolean applying = false;
 
     public static boolean isApplying() { return applying; }
@@ -169,6 +169,12 @@ public final class BlockEntityJournal {
 
         String dim = level.dimension().location().toString().intern();
         long key = keyOf(dim, pos);
+        long now = TimeTravel.timelineTick;
+
+        Long prevTick = lastPollTick.get(key);
+        if (prevTick != null && prevTick.longValue() == now) return;
+        lastPollTick.put(key, now);
+
         Entry prev = last.get(key);
 
         PlayerData pd = null;
@@ -288,6 +294,7 @@ public final class BlockEntityJournal {
 
     public static void load() {
         last.clear();
+        lastPollTick.clear();
         STORE.load();
         rebuildLastIndex();
     }
@@ -297,6 +304,7 @@ public final class BlockEntityJournal {
 
     public static void clear() {
         last.clear();
+        lastPollTick.clear();
         STORE.clear();
     }
 }
