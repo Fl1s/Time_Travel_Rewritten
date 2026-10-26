@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
@@ -66,7 +67,7 @@ public final class BossFightJournal {
     }
 
     private static String dimOf(ServerLevel level) {
-        return level.dimension().location().toString();
+        return Levels.canonicalId(level);
     }
 
     private static int visitAt(ServerLevel level) {
@@ -136,7 +137,7 @@ public final class BossFightJournal {
 
     public static void onChanged(ServerLevel level, EndDragonFight fight) {
         if (!active()) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         Entry cur = capture(level, fight, now, visitAt(level));
         Entry at = stateAt(cur.dim, now);
         if (at != null && same(at, cur)) return;
@@ -146,7 +147,7 @@ public final class BossFightJournal {
     public static boolean isProtected(ServerLevel level) {
         if (!TimeTravel.isLooping) return false;
         String dim = dimOf(level);
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (Entry e : STORE.entries()) if (e.tick > now && e.dim.equals(dim)) return true;
         return false;
     }
@@ -235,7 +236,7 @@ public final class BossFightJournal {
         }
         acc.tt$setRespawnCrystals(crystals);
         acc.tt$setRespawnStage(want);
-        acc.tt$setRespawnTime((int) Math.max(0, TimeTravel.timelineTick - e.tick));
+        acc.tt$setRespawnTime((int) Math.max(0, TimeTravel.sharedTick - e.tick));
     }
 
     private static void apply(Entry e, boolean jump) {
@@ -290,7 +291,7 @@ public final class BossFightJournal {
     }
 
     private static void driveDeaths() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         driven.removeIf(id -> findDragon(id) == null);
         for (UUID id : known) {
             if (driven.contains(id)) continue;
@@ -339,7 +340,7 @@ public final class BossFightJournal {
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
         driven.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         Set<String> dims = new HashSet<>();
         for (Entry e : STORE.entries()) dims.add(e.dim);
         for (String dim : dims) {
@@ -353,7 +354,7 @@ public final class BossFightJournal {
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.eraseVisits(visitIds);
         rebuildKnown();
-        onJump(TimeTravel.timelineTick, TimeTravel.timelineTick);
+        onJump(TimeContext.now(), TimeContext.now());
     }
 
     public static void rebuildUpcoming() {

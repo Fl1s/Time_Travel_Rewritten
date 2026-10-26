@@ -1,10 +1,12 @@
 package com.fl1s.rewritten.timetravel.entity;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -74,7 +76,7 @@ public final class EntityContainerJournal {
             if (visit == null) return;
             for (Slot slot : player.containerMenu.slots) {
                 if (!(slot.container instanceof ContainerEntity)) continue;
-                if (!(slot.container instanceof Entity entity)) continue;
+                if (!(slot.container instanceof Entity entity) || Exempt.is(entity)) continue;
                 if (!(entity.level() instanceof ServerLevel level)) continue;
                 Snap snap = snaps.get(entity.getUUID());
                 if (snap == null) {
@@ -97,11 +99,11 @@ public final class EntityContainerJournal {
             List<ItemStack> now = BlockJournal.copyOf(container);
             if (!BlockJournal.sameItems(snap.last, now)) {
                 Entry e = new Entry();
-                e.tick = TimeTravel.timelineTick;
+                e.tick = TimeContext.now();
                 e.seq = STORE.nextSeq();
                 e.visit = snap.visit;
                 e.uuid = en.getKey();
-                e.dim = snap.level.dimension().location().toString();
+                e.dim = Levels.canonicalId(snap.level);
                 e.oldItems = BlockJournal.serializeItems(snap.last);
                 e.newItems = BlockJournal.serializeItems(now);
                 STORE.entries().add(e);
@@ -117,9 +119,11 @@ public final class EntityContainerJournal {
         ServerLevel level = TimeTravel.server.getLevel(Levels.key(dim));
         if (level == null) return;
         Entity entity = level.getEntity(id);
-        if (!(entity instanceof Container container) || entity.isRemoved()) return;
+        if (!(entity instanceof Container container) || entity.isRemoved() || Exempt.is(entity)) return;
         List<ItemStack> list = BlockJournal.parseItems(items, container.getContainerSize());
-        for (int i = 0; i < list.size(); i++) container.setItem(i, list.get(i).copy());
+        List<ItemStack> displaced = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) Exempt.put(container, i, list.get(i), displaced);
+        Exempt.rehome(container, displaced, level, entity.position());
         container.setChanged();
         snaps.remove(id);
     }
@@ -145,6 +149,14 @@ public final class EntityContainerJournal {
             else apply(en.getValue().uuid, en.getValue().dim, en.getValue().oldItems);
         }
         rebuildUpcoming();
+    }
+
+    public static void forget(UUID id) {
+        snaps.remove(id);
+        if (STORE.entries().removeIf(e -> id.equals(e.uuid))) {
+            STORE.removeUpcoming(e -> id.equals(e.uuid));
+            STORE.markDirty();
+        }
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

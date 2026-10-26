@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.journal;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -99,9 +100,10 @@ public final class TrackedEntityJournal {
 
         CompoundTag tag = new CompoundTag();
         if (!entity.save(tag)) return;
+        Exempt.strip(tag);
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.kind = KIND_SPAWN;
@@ -125,13 +127,13 @@ public final class TrackedEntityJournal {
 
     public static void onRemoved(Entity entity) {
         if (!TimeTravel.isLooping || ReplayState.SUPPRESS) return;
-        if (puppets.containsKey(entity.getUUID())) return;
+        if (puppets.containsKey(entity.getUUID()) || Exempt.is(entity)) return;
         if (entity.getTags().contains(EntityJournal.TAG)) return;
         if (!tracked.contains(entity.getUUID())) return;
         if (!(entity.level() instanceof ServerLevel level)) return;
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = -1;
         e.kind = KIND_END;
@@ -144,19 +146,30 @@ public final class TrackedEntityJournal {
         STORE.markDirty();
     }
 
+    public static void forget(UUID id) {
+        endPuppet(id);
+        tracked.remove(id);
+        lastSamples.remove(id);
+        if (STORE.entries().removeIf(e -> id.equals(e.uuid))) {
+            STORE.removeUpcoming(e -> id.equals(e.uuid));
+            trails = null;
+            STORE.markDirty();
+        }
+    }
+
     public static boolean isPuppeted(Entity e) {
         return e != null && puppets.containsKey(e.getUUID());
     }
 
     private static void sample() {
         if (TimeTravel.server == null || tracked.isEmpty()) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             String dim = level.dimension().location().toString();
             for (Entity e : level.getAllEntities()) {
                 if (!tracked.contains(e.getUUID())) continue;
                 if (e.getTags().contains(EntityJournal.TAG)) continue;
-                if (Clones.is(e)) continue;
+                if (Clones.is(e) || Exempt.is(e)) continue;
 
                 Entry last = lastSamples.get(e.getUUID());
                 Vec3 v = e.getDeltaMovement();
@@ -205,8 +218,9 @@ public final class TrackedEntityJournal {
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(spawn.dim));
             if (level == null) return;
             CompoundTag tag = TagParser.parseTag(spawn.nbt);
+            Exempt.strip(tag);
             Entity created = EntityType.loadEntityRecursive(tag, level, entity -> entity);
-            if (created == null) return;
+            if (created == null || Exempt.is(created)) return;
             created.setUUID(spawn.uuid);
             created.moveTo(spawn.x, spawn.y, spawn.z, spawn.yRot, spawn.xRot);
             created.setDeltaMovement(spawn.vx, spawn.vy, spawn.vz);
@@ -229,7 +243,7 @@ public final class TrackedEntityJournal {
 
     private static void applyPuppets() {
         if (puppets.isEmpty()) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         Map<UUID, List<Entry>> map = getTrails();
         for (Puppet p : new ArrayList<>(puppets.values())) {
             if (p.entity == null || p.entity.isRemoved()) {
@@ -270,7 +284,7 @@ public final class TrackedEntityJournal {
         puppets.clear();
         trails = null;
 
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
         Map<UUID, Entry> lastSpawn = new HashMap<>();
         Map<UUID, Entry> lastEnd = new HashMap<>();
         for (Entry e : STORE.entries()) {

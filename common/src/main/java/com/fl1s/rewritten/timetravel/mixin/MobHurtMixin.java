@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.clone.CloneFx;
+import com.fl1s.rewritten.timetravel.clone.HeadVisibility;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.journal.ProjectileJournal;
 import com.fl1s.rewritten.timetravel.journal.TrackedEntityJournal;
@@ -13,6 +14,7 @@ import com.fl1s.rewritten.timetravel.net.HurtFlashPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -62,6 +64,14 @@ public abstract class MobHurtMixin {
         return v;
     }
 
+    @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
+    private void tt$unseenAttacker(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ServerPlayer player) || Clones.is(player)) return;
+        Entity attacker = source.getEntity();
+        if (attacker == null || attacker == player || attacker instanceof net.minecraft.world.entity.player.Player) return;
+        if (!HeadVisibility.visibleTo(attacker, player)) cir.setReturnValue(false);
+    }
+
     @Inject(method = "hurt", at = @At("HEAD"))
     private void tt$hpHead(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         tt$hpBefore = ((LivingEntity) (Object) this).getHealth();
@@ -78,7 +88,7 @@ public abstract class MobHurtMixin {
         Entity direct = source.getDirectEntity();
         if (direct != null && direct.getTags().contains(EntityJournal.TAG)) return;
         float lost = before - dragon.getHealth();
-        if (lost > 0.0f) MobTrailJournal.rewriteHealth(dragon.getUUID(), TimeTravel.timelineTick, lost);
+        if (lost > 0.0f) MobTrailJournal.rewriteHealth(dragon.getUUID(), TimeTravel.personalTick(sp), lost);
     }
 
     @Unique
@@ -111,6 +121,11 @@ public abstract class MobHurtMixin {
         }
 
         if (MobJournal.isApplying()) return;
+
+        if (Exempt.is(self) && Clones.is(source.getEntity())) {
+            cir.setReturnValue(false);
+            return;
+        }
 
         if (tt$isPuppetAttacker(source.getEntity()) || tt$isPuppetAttacker(source.getDirectEntity())) {
             if (self.level() instanceof ServerLevel sl) {

@@ -15,6 +15,26 @@ version = project.mod_version
 
 loom {
     mixin.useLegacyMixinAp = false
+
+    runs {
+        client {
+            client()
+            programArgs("--username", "Dev1")
+        }
+
+        client2 {
+            client()
+            configName = "Fabric Client 2 (Dev2)"
+            runDir("run/client2")
+            programArgs("--username", "Dev2")
+        }
+
+        server {
+            server()
+            runDir("run/server")
+            programArgs("--nogui")
+        }
+    }
 }
 
 dependencies {

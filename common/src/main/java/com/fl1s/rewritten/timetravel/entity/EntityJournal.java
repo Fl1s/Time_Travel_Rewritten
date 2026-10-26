@@ -1,5 +1,8 @@
 package com.fl1s.rewritten.timetravel.entity;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHead;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -7,6 +10,7 @@ import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
@@ -68,6 +72,7 @@ public final class EntityJournal {
     public static boolean suppress = false;
 
     private static boolean isTracked(Entity e) {
+        if (Exempt.is(e)) return false;
         if (e instanceof ExperienceOrb) return true;
         if (e instanceof PrimedTnt) return true;
         if (e instanceof ItemEntity item) return !(item.getOwner() instanceof Player);
@@ -79,6 +84,7 @@ public final class EntityJournal {
         if (com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal.shouldBlockReplaySpawn(e)) return true;
         if (ItemFlowJournal.isCloneKill()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
         if (MobJournal.isKilling()) return e instanceof ItemEntity || e instanceof ExperienceOrb;
+        if (Exempt.is(e)) return false;
         if (suppress) return isTracked(e);
         if (BlockJournal.isApplying() || BlockJournal.isErasing())
             return e instanceof PrimedTnt || e instanceof FallingBlockEntity || e instanceof ItemEntity;
@@ -93,8 +99,9 @@ public final class EntityJournal {
         if (ItemFlowJournal.isCapturingDeath() && !orb) return;
         if (orb && ItemFlowJournal.isCloneKill()) return;
         if (MobJournal.isApplying()) return;
+        if (Exempt.is(entity)) return;
         if (entity instanceof AreaEffectCloud) {
-            clouds.put(entity.getUUID(), new CloudRef(level.dimension().location().toString(), TimeTravel.timelineTick));
+            clouds.put(entity.getUUID(), new CloudRef(Levels.canonicalId(level), TimeContext.now()));
             return;
         }
         if (!isTracked(entity)) return;
@@ -105,12 +112,13 @@ public final class EntityJournal {
         CompoundTag tag = new CompoundTag();
         if (!entity.save(tag)) return;
         tag.remove("UUID");
+        Exempt.strip(tag);
 
         Entry e = new Entry();
-        e.dim = level.dimension().location().toString();
+        e.dim = Levels.canonicalId(level);
         e.nbt = tag.toString();
         e.item = entity instanceof ItemEntity;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.uuid = entity.getUUID();
@@ -120,6 +128,7 @@ public final class EntityJournal {
             if (owner != null && !(owner instanceof Player)) e.owner = owner.getUUID().toString();
         }
         STORE.entries().add(e);
+        publishToTrailingHeads(e);
         live.put(entity.getUUID(), e.dim);
         if (entity instanceof AbstractArrow) flying.put(entity.getUUID(), e);
         STORE.markDirty();
@@ -128,6 +137,40 @@ public final class EntityJournal {
     public static void tick() {
         STORE.tick(e -> spawn(e, e.fuse, e.nbt));
         trackLanding();
+    }
+
+    public static void openHead(long head, long position) {
+        STORE.rebuildUpcoming(head, position);
+    }
+
+    public static void dropHead(long head) {
+        STORE.dropCursor(head);
+    }
+
+    public static void tickHead(long head, long position) {
+        STORE.tick(head, position, EntityJournal::spawnIfAbsent);
+    }
+
+    private static void spawnIfAbsent(Entry e) {
+        if (e.item) return;
+        ServerLevel level = levelOf(e.dim);
+        if (level == null) return;
+        if (e.uuid != null) {
+            Entity existing = findLoaded(level, e.uuid);
+            if (existing != null && !existing.isRemoved()) return;
+        }
+        spawn(e, e.fuse, e.nbt);
+    }
+
+    private static void publishToTrailingHeads(Entry e) {
+        if (!TimeTravel.individualTime) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (head.offset() <= 0 || head.isEmpty()) continue;
+            if (head.position() >= e.tick) continue;
+            STORE.addUpcoming(head.offset(), e);
+        }
     }
 
     private static void trackLanding() {
@@ -146,7 +189,7 @@ public final class EntityJournal {
             if (arrow.save(t) && t.getBoolean("inGround")) {
                 t.remove("UUID");
                 e.landNbt = t.toString();
-                e.landTick = TimeTravel.timelineTick;
+                e.landTick = TimeContext.now();
                 STORE.markDirty();
                 it.remove();
             }
@@ -193,7 +236,7 @@ public final class EntityJournal {
             tag.putBoolean("DropItem", false);
             Entity entity = EntityType.loadEntityRecursive(tag, level, en -> en);
             if (entity instanceof Projectile) return;
-            if (entity == null) return;
+            if (entity == null || Exempt.is(entity)) return;
             entity.setUUID(e.uuid);
             entity.addTag(TAG);
             if (level.addFreshEntity(entity)) {
@@ -212,7 +255,7 @@ public final class EntityJournal {
 
     public static void onJump() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
 
         for (Entry e : STORE.entries()) {
             ServerLevel level = levelOf(e.dim);
@@ -221,6 +264,7 @@ public final class EntityJournal {
             boolean shouldExist = e.tick <= now
                     && (e.fuse <= 0 || now < e.tick + e.fuse);
             Entity existing = findLoaded(level, e.uuid);
+            if (Exempt.is(existing)) continue;
 
             boolean projectile = !e.item && e.fuse <= 0;
             if (projectile) {
@@ -273,19 +317,19 @@ public final class EntityJournal {
             ServerLevel level = levelOf(en.getValue());
             if (level == null) continue;
             Entity entity = findLoaded(level, en.getKey());
-            if (entity != null) entity.discard();
+            if (entity != null && !Exempt.is(entity)) entity.discard();
         }
         live.clear();
     }
 
     private static void discardClouds() {
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         Iterator<Map.Entry<UUID, CloudRef>> it = clouds.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<UUID, CloudRef> en = it.next();
             ServerLevel level = levelOf(en.getValue().dim());
             Entity cloud = level == null ? null : findLoaded(level, en.getKey());
-            if (cloud == null || cloud.isRemoved()) {
+            if (cloud == null || cloud.isRemoved() || Exempt.is(cloud)) {
                 it.remove();
             } else if (en.getValue().tick() > now) {
                 cloud.discard();
@@ -308,17 +352,15 @@ public final class EntityJournal {
         Set<UUID> seen = new HashSet<>();
         collect(from, to, q, seen);
         int guard = 0;
-        try {
-            while (!q.isEmpty() && guard++ < 512) {
-                Due d = q.poll();
-                if (d.tnt().isRemoved()) continue;
-                TimeTravel.timelineTick = d.tick();
+        while (!q.isEmpty() && guard++ < 512) {
+            Due d = q.poll();
+            if (d.tnt().isRemoved()) continue;
+            long at = d.tick();
+            TimeContext.runAt(at, () -> {
                 d.tnt().setFuse(1);
                 d.tnt().tick();
-                collect(d.tick(), to, q, seen);
-            }
-        } finally {
-            TimeTravel.timelineTick = from;
+            });
+            collect(at, to, q, seen);
         }
     }
 
@@ -327,11 +369,21 @@ public final class EntityJournal {
             if (seen.contains(en.getKey())) continue;
             ServerLevel level = levelOf(en.getValue());
             if (level == null) continue;
-            if (findLoaded(level, en.getKey()) instanceof PrimedTnt t) {
+            if (findLoaded(level, en.getKey()) instanceof PrimedTnt t && !Exempt.is(t)) {
                 seen.add(t.getUUID());
                 long due = base + t.getFuse();
                 if (due <= to) q.add(new Due(due, t));
             }
+        }
+    }
+
+    public static void forget(UUID id) {
+        live.remove(id);
+        flying.remove(id);
+        clouds.remove(id);
+        if (STORE.entries().removeIf(e -> id.equals(e.uuid))) {
+            STORE.removeUpcoming(e -> id.equals(e.uuid));
+            STORE.markDirty();
         }
     }
 

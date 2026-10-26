@@ -1,14 +1,21 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.mob.MobEventJournal;
 import com.fl1s.rewritten.timetravel.mob.WardenEventJournal;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
+import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.network.protocol.game.ClientboundLevelEventPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ClientboundStopSoundPacket;
@@ -93,6 +100,7 @@ public final class EffectJournal {
     public static void recordLevelEvent(ServerLevel level, Player except, int type, BlockPos pos, int data) {
         if (!TimeTravel.isLooping || replaying || ReplayState.SUPPRESS) return;
         if (except == null && !PLAYERLESS_EVENTS.contains(type)) return;
+        if (ExemptBlocks.recentlyAt(level, pos)) return;
         PlayerData pd = recorder(level, except, pos.getX(), pos.getY(), pos.getZ());
         if (pd == null) return;
 
@@ -117,12 +125,13 @@ public final class EffectJournal {
         if (!level.isLoaded(pos)) return;
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof LidBlockEntity) && !(be instanceof ShulkerBoxBlockEntity)) return;
+        if (ExemptBlocks.covers(be)) return;
         PlayerData pd = recorder(level, null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
         if (pd == null) return;
 
         for (int i = STORE.entries().size() - 1; i >= 0; i--) {
             Entry p = STORE.entries().get(i);
-            if (p.tick != TimeTravel.timelineTick) break;
+            if (p.tick != TimeContext.now()) break;
             if (p.kind == BLOCK_EVENT && p.x == pos.getX() && p.y == pos.getY() && p.z == pos.getZ() && p.a == a && p.b == b)
                 return;
         }
@@ -138,6 +147,7 @@ public final class EffectJournal {
         boolean tameableEvent = entity instanceof TamableAnimal && (event == 6 || event == 7);
         boolean hurtFlash = event == 2 && entity instanceof net.minecraft.world.entity.player.Player && !Clones.is(entity);
         if (!tameableEvent && !hurtFlash) return;
+        if (Exempt.is(entity)) return;
         PlayerData pd = recorder(level, null, entity.getX(), entity.getY(), entity.getZ());
         if (pd == null) return;
         Entry e = create(ENTITY_EVENT, level, pd, entity.getX(), entity.getY(), entity.getZ());
@@ -178,11 +188,11 @@ public final class EffectJournal {
     private static Entry create(int kind, ServerLevel level, PlayerData pd, double x, double y, double z) {
         Entry e = new Entry();
         e.kind = kind;
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = x;
         e.y = y;
         e.z = z;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = BlockJournal.positionOf(pd);
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         return e;
@@ -243,6 +253,71 @@ public final class EffectJournal {
     private static void add(Entry e) {
         STORE.entries().add(e);
         STORE.markDirty();
+        HeadWorldView.onEffect(e);
+    }
+
+    static void addUpcoming(long head, Entry e) {
+        STORE.addUpcoming(head, e);
+    }
+
+    static void openHead(long head, long position) {
+        STORE.rebuildUpcoming(head, position);
+    }
+
+    static void dropHead(long head) {
+        STORE.dropCursor(head);
+    }
+
+    static long tickOf(Entry e) {
+        return e.tick;
+    }
+
+    static void tickHead(long head, long position, List<ServerPlayer> viewers) {
+        if (viewers.isEmpty()) return;
+        STORE.tick(head, position, e -> playFor(e, viewers));
+    }
+
+    private static void playFor(Entry e, List<ServerPlayer> viewers) {
+        if (e.kind == SOUND && isPlayerHurt(e.id)) return;
+        ServerLevel level = TimeTravel.server == null ? null : TimeTravel.server.getLevel(Levels.key(e.dim));
+        if (level == null) return;
+        BlockPos pos = BlockPos.containing(e.x, e.y, e.z);
+
+        switch (e.kind) {
+            case SOUND -> {
+                ResourceLocation loc = cachedLocation(e);
+                if (loc == null) return;
+                BuiltInRegistries.SOUND_EVENT.getOptional(loc).ifPresent(sound -> {
+                    ClientboundSoundPacket packet = new ClientboundSoundPacket(
+                            BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), SoundSource.valueOf(e.source),
+                            e.x, e.y, e.z, e.volume, e.pitch, level.getRandom().nextLong());
+                    dispatch(viewers, e.dim, packet);
+                });
+            }
+            case LEVEL_EVENT -> dispatch(viewers, e.dim, new ClientboundLevelEventPacket(e.a, pos, e.b, false));
+            case ENTITY_EVENT -> {
+                Entity target = level.getEntity(UUID.fromString(e.id));
+                if (target != null && !target.isRemoved()) {
+                    dispatch(viewers, e.dim, new ClientboundEntityEventPacket(target, (byte) e.a));
+                }
+            }
+            case BLOCK_EVENT -> {
+                ResourceLocation loc = cachedLocation(e);
+                if (loc == null) return;
+                BuiltInRegistries.BLOCK.getOptional(loc).ifPresent(block ->
+                        dispatch(viewers, e.dim, new ClientboundBlockEventPacket(pos, block, e.a, e.b)));
+            }
+            default -> {
+            }
+        }
+    }
+
+    private static void dispatch(List<ServerPlayer> viewers, String dim, Packet<?> packet) {
+        for (ServerPlayer viewer : viewers) {
+            if (viewer.connection == null) continue;
+            if (!Levels.canonicalId(viewer.level()).equals(dim)) continue;
+            viewer.connection.send(packet);
+        }
     }
 
     public static void tick() {

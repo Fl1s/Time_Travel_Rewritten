@@ -1,7 +1,10 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.clone.HeadVisibility;
+import net.minecraft.server.level.ServerPlayer;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
@@ -26,6 +29,8 @@ public final class MobBinding {
 
     public static boolean allows(Mob mob, LivingEntity target) {
         if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.timelineSceneManager == null) return true;
+        if (Exempt.is(mob)) return !Clones.is(target);
+        if (target instanceof ServerPlayer player && !HeadVisibility.visibleTo(mob, player)) return false;
         if (MobSpawnJournal.isOutOfTime(mob.getUUID()) && !MobTrailJournal.isPuppeted(mob)) return !Clones.is(target);
         int visit = TimeTravel.visitIdOf(target);
         if (visit < 0) return true;
@@ -42,6 +47,7 @@ public final class MobBinding {
     }
 
     public static void onHurt(Mob mob, Entity attacker) {
+        if (Exempt.is(mob)) return;
         if (MobSpawnJournal.isOutOfTime(mob.getUUID()) && !MobTrailJournal.isPuppeted(mob)) return;
         if (!TimeTravel.isLooping || TimeTravel.server == null || TimeTravel.timelineSceneManager == null) return;
         if (!(mob.level() instanceof ServerLevel)) return;
@@ -58,6 +64,10 @@ public final class MobBinding {
         Entity owner = TimeTravel.entityOfVisit(visit);
         if (owner == null) return TimeTravel.visitPending(visit);
         return owner.isAlive() && owner.level() == mob.level() && owner.distanceToSqr(mob) <= RANGE_SQ;
+    }
+
+    public static void forget(UUID id) {
+        if (bound.remove(id) != null) dirty = true;
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

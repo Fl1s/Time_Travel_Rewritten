@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -15,7 +16,8 @@ public class DispenserBlockEntityMixin {
     private RandomSource tt$seeded(RandomSource random) {
         BlockEntity self = (BlockEntity) (Object) this;
         if (!TimeTravel.isLooping || !(self.getLevel() instanceof ServerLevel)) return random;
-        long seed = self.getBlockPos().asLong() * 31L + TimeTravel.timelineTick * 0x9E3779B97F4A7C15L;
+        long seed = self.getBlockPos().asLong() * 31L
+                + TimeContext.positionIn(self.getLevel()) * 0x9E3779B97F4A7C15L;
         return RandomSource.create(seed);
     }
 }

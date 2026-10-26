@@ -47,9 +47,13 @@ public class TimeTravelVoicechatPlugin {
         Visit visit = data.getCurrentVisit();
         if (visit == null) return;
 
+        long position = TimeTravel.heads() == null
+                ? TimeTravel.sharedTick
+                : TimeTravel.heads().positionOf(data);
+
         data.addVoiceFrame(
                 visit.id,
-                (int) (TimeTravel.timelineTick - visit.startTick),
+                (int) (position - visit.startTick),
                 opusData,
                 player.position()
         );

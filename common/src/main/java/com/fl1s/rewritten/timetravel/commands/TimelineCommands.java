@@ -15,6 +15,7 @@ public class TimelineCommands {
         LiteralArgumentBuilder<CommandSourceStack> commandBuilder = Commands.literal("timetravel");
 
         BaseCommands.register(commandBuilder);
+        ExemptCommands.register(commandBuilder);
         SettingsCommands.register(commandBuilder);
 
         LiteralCommandNode<CommandSourceStack> node = dispatcher.register(commandBuilder);

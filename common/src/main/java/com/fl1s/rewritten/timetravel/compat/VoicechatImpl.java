@@ -362,14 +362,13 @@ public final class VoicechatImpl {
     private static void processScheduledRegions() {
         if (scheduledRegions.isEmpty()) return;
 
-        long now = TimeTravel.timelineTick;
-
         List<ScheduledSpeechRegion> snapshot;
         synchronized (scheduledRegions) {
             snapshot = new ArrayList<>(scheduledRegions);
         }
 
         for (ScheduledSpeechRegion region : snapshot) {
+            long now = TimeTravel.clonePosition(region.entity);
             if (now < region.absStartTick) continue;
             scheduledRegions.remove(region);
 

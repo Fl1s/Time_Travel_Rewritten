@@ -5,15 +5,24 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.fl1s.rewritten.timetravel.util.TimeFormat;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.time.TimeHead;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.commands.SharedSuggestionProvider;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class BaseCommands {
@@ -30,6 +39,15 @@ public class BaseCommands {
                 .then(jumpNode("forward", JumpMode.FORWARD))
                 .then(jumpNode("back", JumpMode.BACK))
                 .then(Commands.literal("return").executes(BaseCommands::jumpReturn))
+                .then(Commands.literal("present")
+                        .executes(context -> jumpPresent(context, false))
+                        .then(Commands.literal("bring")
+                                .then(Commands.argument("targets", EntityArgument.entities())
+                                        .executes(context -> jumpPresent(context, true)))))
+                .then(Commands.literal("join")
+                        .then(Commands.argument("player", StringArgumentType.word())
+                                .suggests((context, builder) -> CommandUtils.PlayerSuggestion(builder))
+                                .executes(BaseCommands::jumpJoin)))
                 .then(Commands.literal("mark")
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .suggests(BaseCommands::suggestMarks)
@@ -54,7 +72,44 @@ public class BaseCommands {
         return Commands.literal(literal)
                 .then(Commands.argument("time", StringArgumentType.word())
                         .suggests(CommandUtils::TimeSuggestion)
-                        .executes(context -> jump(context, mode)));
+                        .executes(context -> jump(context, mode, false))
+                        .then(Commands.literal("bring")
+                                .then(Commands.argument("targets", EntityArgument.entities())
+                                        .executes(context -> jump(context, mode, true)))));
+    }
+
+    private static int runJump(CommandContext<CommandSourceStack> context, long target, boolean withBring) {
+        CommandSourceStack source = context.getSource();
+        List<ServerPlayer> passengers = new ArrayList<>();
+        int nonPlayers = 0;
+
+        if (withBring) {
+            try {
+                for (Entity found : EntityArgument.getEntities(context, "targets")) {
+                    if (found instanceof ServerPlayer sp && !Clones.is(sp)) passengers.add(sp);
+                    else nonPlayers++;
+                }
+            } catch (CommandSyntaxException e) {
+                source.sendFailure(Component.literal(e.getMessage()));
+                return 0;
+            }
+        }
+
+        String error = TimeTravel.jumpTo(target, source.getTextName(), passengers);
+        if (error != null) {
+            source.sendFailure(Component.literal(error));
+            return 0;
+        }
+
+        if (withBring && !TimeTravel.individualTime) {
+            source.sendSuccess(() -> Component.literal(
+                    "bring had no effect: individualTime is off, so the whole server moved together"), false);
+        } else if (nonPlayers > 0) {
+            final int ignored = nonPlayers;
+            source.sendSuccess(() -> Component.literal(ignored
+                    + " non-player target(s) ignored - only players carry their own time"), false);
+        }
+        return 1;
     }
 
     private static int help(CommandContext<CommandSourceStack> context) {
@@ -65,11 +120,17 @@ public class BaseCommands {
                 "jump to <time> - jump to an exact server time (e.g. 5m, 1h30m)",
                 "jump forward <time> | jump back <time> - jump relative to the current time",
                 "jump return - go back to where you were before your last jump",
+                "jump present - jump to the newest point the timeline has reached",
+                "jump join <player> - match another traveller's time (needs individualTime)",
+                "jump <to|forward|back> <time> bring <targets> - take other players along",
                 "mark <name> | unmark <name> | marks | jump mark <name> - bookmark time point",
                 "visits [player] - list a player's recorded visits",
+                "exempt <targets> [true/false] - take entities out of time, or check whether they are",
+                "exempt hand [true/false] - take the item you are holding out of time, or check it",
+                "exempt position <pos> [<to>] [true/false] - keep a spot or region out of time, or check it",
                 "settings - show all settings",
                 "settings toggles <option> [true/false] - turn an option on or off:",
-                "  syncDayTime, jumpRequiresOp, chainDeath, trackItems, trackChat,",
+                "  syncDayTime, individualTime, jumpRequiresOp, chainDeath, noDuplication, trackItems, trackChat,",
                 "  hurtClones, showTimer, timerInTicks",
                 "settings maxJump <time> - cap the length of a single jump (0 = no limit)",
                 "settings preload <ticks> - how far ahead past selves are preloaded (0 = off)",
@@ -92,7 +153,7 @@ public class BaseCommands {
             return 0;
         }
         TimeTravel.startTimeline();
-        source.sendSuccess(() -> Component.literal("Timeline started at " + TimeFormat.clock(TimeTravel.timelineTick)), true);
+        source.sendSuccess(() -> Component.literal("Timeline started at " + TimeFormat.clock(TimeTravel.sharedTick)), true);
         return 1;
     }
 
@@ -103,7 +164,7 @@ public class BaseCommands {
             return 0;
         }
         TimeTravel.stopTimeline();
-        source.sendSuccess(() -> Component.literal("Timeline stopped at " + TimeFormat.clock(TimeTravel.timelineTick)), true);
+        source.sendSuccess(() -> Component.literal("Timeline stopped at " + TimeFormat.clock(TimeTravel.sharedTick)), true);
         return 1;
     }
 
@@ -113,11 +174,57 @@ public class BaseCommands {
 
 
     private static int jumpReturn(CommandContext<CommandSourceStack> context) {
-        if (TimeTravel.lastJumpOrigin() < 0) {
-            context.getSource().sendFailure(Component.literal("No previous jump to return to"));
+        CommandSourceStack source = context.getSource();
+        long origin = TimeTravel.lastJumpOrigin(source.getTextName());
+        if (origin < 0) {
+            source.sendFailure(Component.literal("No previous jump to return to"));
             return 0;
         }
-        return runJump(context.getSource(), TimeTravel.lastJumpOrigin());
+        return runJump(source, origin);
+    }
+
+    private static int jumpJoin(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null || TimeTravel.timelineSceneManager == null) {
+            source.sendFailure(Component.literal("Time Travel is not ready yet"));
+            return 0;
+        }
+        if (!TimeTravel.individualTime) {
+            source.sendFailure(Component.literal(
+                    "Everyone already shares one clock - turn on individualTime to travel separately"));
+            return 0;
+        }
+
+        String targetName = StringArgumentType.getString(context, "player");
+        PlayerData target = TimeTravel.timelineSceneManager.getRecordingPlayer(targetName);
+        if (target == null) {
+            source.sendFailure(Component.literal("No recorded player named '" + targetName + "'"));
+            return 0;
+        }
+        if (targetName.equalsIgnoreCase(source.getTextName())) {
+            source.sendFailure(Component.literal("You are already in your own time"));
+            return 0;
+        }
+        return runJump(source, heads.positionOf(target));
+    }
+
+    private static long positionOf(CommandSourceStack source) {
+        TimeHeads heads = TimeTravel.heads();
+        if (!TimeTravel.individualTime || TimeTravel.timelineSceneManager == null || heads == null) {
+            return TimeTravel.sharedTick;
+        }
+        return heads.positionOf(TimeTravel.timelineSceneManager.getRecordingPlayer(source.getTextName()));
+    }
+
+    private static int jumpPresent(CommandContext<CommandSourceStack> context, boolean withBring) {
+        CommandSourceStack source = context.getSource();
+        long here = positionOf(source);
+        if (TimeTravel.presentTick <= here) {
+            source.sendFailure(Component.literal("Already at the present (" + TimeFormat.clock(here) + ")"));
+            return 0;
+        }
+        return runJump(context, TimeTravel.presentTick, withBring);
     }
 
     private static int jumpMark(CommandContext<CommandSourceStack> context) {
@@ -141,7 +248,7 @@ public class BaseCommands {
 
     private static int setMark(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
-        long tick = TimeTravel.timelineTick;
+        long tick = positionOf(context.getSource());
         TimeTravel.config.marks.put(name, tick);
         TimeTravel.config.save();
         context.getSource().sendSuccess(() -> Component.literal("Mark '" + name + "' saved at " + TimeFormat.clock(tick)
@@ -205,7 +312,7 @@ public class BaseCommands {
         return 1;
     }
 
-    private static int jump(CommandContext<CommandSourceStack> context, JumpMode mode) {
+    private static int jump(CommandContext<CommandSourceStack> context, JumpMode mode, boolean withBring) {
         CommandSourceStack source = context.getSource();
         long ticks;
         try {
@@ -215,18 +322,14 @@ public class BaseCommands {
             return 0;
         }
 
+        long here = positionOf(source);
         long target = switch (mode) {
             case TO -> ticks;
-            case FORWARD -> TimeTravel.timelineTick + ticks;
-            case BACK -> TimeTravel.timelineTick - ticks;
+            case FORWARD -> here + ticks;
+            case BACK -> here - ticks;
         };
 
-        String error = TimeTravel.jumpTo(target, source.getTextName());
-        if (error != null) {
-            source.sendFailure(Component.literal(error));
-            return 0;
-        }
-        return 1;
+        return runJump(context, target, withBring);
     }
 
     private static int status(CommandContext<CommandSourceStack> context) {
@@ -241,8 +344,26 @@ public class BaseCommands {
         String voice = "Simple Voice Chat: " + (TimeTravel.voiceChatLoaded ? "Installed" : "Not present")
                 + " (voice of clones: " + (TimeTravel.trackVoice ? "on" : "off") + ").\n";
 
+        long here = positionOf(source);
+        String heads = "";
+        TimeHeads headRegistry = TimeTravel.heads();
+        if (TimeTravel.individualTime && headRegistry != null) {
+            StringBuilder sb = new StringBuilder("Individual time is on. Heads:\n");
+            for (TimeHead head : headRegistry.occupied()) {
+                sb.append("  ").append(TimeFormat.clock(head.position()))
+                        .append(head.isPresent() ? " (present)" : " (-" + TimeFormat.clock(head.offset()) + ")")
+                        .append(" - ")
+                        .append(head.occupants().isEmpty() ? "nobody" : CommandUtils.formatList(new ArrayList<>(head.occupants())))
+                        .append("\n");
+            }
+            heads = sb.toString();
+        }
+
         String status = (TimeTravel.isLooping ? "Timeline is running.\n" : "Timeline is not running.\n")
-                + "Server time: " + TimeFormat.clock(TimeTravel.timelineTick) + " (tick " + TimeTravel.timelineTick + ").\n"
+                + "Your time: " + TimeFormat.clock(here) + " (tick " + here + ").\n"
+                + "Present: " + TimeFormat.clock(TimeTravel.presentTick)
+                + (TimeTravel.presentTick > here ? " (you are in the past).\n" : " (you are at the present).\n")
+                + heads
                 + "Recorded visits: " + visits[0] + ", past selves queued: " + TimeTravel.countPendingClones() + ".\n"
                 + "Sync day time: " + TimeTravel.syncDayTime + ".\n"
                 + tracking + voice;

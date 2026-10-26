@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.mixin;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.mob.MobStateJournal;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
 import net.minecraft.server.level.ServerLevel;
@@ -21,9 +22,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class PlayerInteractMixin {
     @Inject(method = "interactOn", at = @At("HEAD"), cancellable = true, require = 0)
     private void tt$reserved(Entity target, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
-        if (!TimeTravel.isLooping || !(target instanceof LivingEntity)) return;
+        if (!TimeTravel.isLooping || !(target instanceof LivingEntity) || Exempt.is(target)) return;
         if (!((Object) this instanceof ServerPlayer sp) || !TimeTravel.isRealPlayer(sp)) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.personalTick(sp);
         boolean reserved = CloneTracks.isReservedByClone(target.getUUID(), now);
         boolean future = target instanceof Mob mob && MobStateJournal.hasFutureChange(mob.getUUID(), now);
         if (!reserved && !future) return;

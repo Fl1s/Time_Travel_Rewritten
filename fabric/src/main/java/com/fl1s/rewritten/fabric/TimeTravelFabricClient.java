@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.fabric;
 
 import com.fl1s.rewritten.timetravel.client.CloneVanishFx;
+import com.fl1s.rewritten.timetravel.client.ExemptGlow;
 import com.fl1s.rewritten.timetravel.client.TimelineClient;
 import com.fl1s.rewritten.timetravel.net.*;
 import net.fabricmc.api.ClientModInitializer;
@@ -32,7 +33,9 @@ public class TimeTravelFabricClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(CloneAppearPayload.TYPE, (payload, context) -> CloneVanishFx.handleAppear(payload));
         ClientPlayNetworking.registerGlobalReceiver(HurtFlashPayload.TYPE,
                 (payload, context) -> HurtFlashClient.handle(payload));
+        ClientPlayNetworking.registerGlobalReceiver(ExemptBlocksPayload.TYPE, (payload, context) -> ExemptGlow.handle(payload));
         WorldRenderEvents.AFTER_TRANSLUCENT.register(context -> CloneVanishFx.renderWorld(context.matrixStack(), context.camera().getPosition(), context.tickCounter().getGameTimeDeltaPartialTick(false)));
+        WorldRenderEvents.AFTER_TRANSLUCENT.register(context -> ExemptGlow.renderWorld(context.matrixStack(), context.camera().getPosition()));
 
         ClientPlayNetworking.registerGlobalReceiver(ClearChatPayload.TYPE,
                 (payload, context) -> TimelineClient.onClearChat());
@@ -44,7 +47,11 @@ public class TimeTravelFabricClient implements ClientModInitializer {
         };
 
         ClientTickEvents.END_CLIENT_TICK.register(TimelineClient::clientTick);
+        ClientTickEvents.END_CLIENT_TICK.register(ExemptGlow::tick);
         HudRenderCallback.EVENT.register(TimelineClient::render);
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> TimelineClient.reset());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            TimelineClient.reset();
+            ExemptGlow.reset();
+        });
     }
 }

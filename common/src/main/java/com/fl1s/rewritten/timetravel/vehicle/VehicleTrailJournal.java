@@ -1,9 +1,12 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
+import com.fl1s.rewritten.timetravel.clone.HeadCarry;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
@@ -73,12 +76,12 @@ public final class VehicleTrailJournal {
 
     public static void seedInitial() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             for (Entity entity : level.getAllEntities()) {
                 if (!VehicleJournal.isTracked(entity)) continue;
-                if (Clones.is(entity)) continue;
+                if (Clones.is(entity) || Exempt.is(entity) || HeadVehicleView.isCopy(entity)) continue;
                 Track t = tracks.computeIfAbsent(entity.getUUID(), k -> new Track(dim));
                 if (t.samples.isEmpty()) {
                     t.samples.add(makeSample(entity, now));
@@ -94,13 +97,13 @@ public final class VehicleTrailJournal {
 
     public static void sample() {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         sampledThisTick.clear();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             for (Entity e : level.getAllEntities()) {
                 if (!VehicleJournal.isTracked(e)) continue;
-                if (Clones.is(e)) continue;
+                if (Clones.is(e) || Exempt.is(e) || HeadVehicleView.isCopy(e) || HeadCarry.isCarried(e.getUUID())) continue;
                 if (!sampledThisTick.add(e.getUUID())) continue;
                 record(e, dim, now);
             }
@@ -150,7 +153,7 @@ public final class VehicleTrailJournal {
 
     public static void apply() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             Track t = en.getValue();
             if (t.samples.isEmpty()) continue;
@@ -161,7 +164,7 @@ public final class VehicleTrailJournal {
             if (level == null) continue;
             Entity e = level.getEntity(en.getKey());
             if (e == null || e.isRemoved()) continue;
-            if (!VehicleJournal.isTracked(e)) continue;
+            if (!VehicleJournal.isTracked(e) || Exempt.is(e)) continue;
             e.setDeltaMovement(Vec3.ZERO);
             e.moveTo(s.x, s.y, s.z, s.yRot, s.xRot);
             e.setDeltaMovement(s.deltaX, s.deltaY, s.deltaZ);
@@ -182,6 +185,16 @@ public final class VehicleTrailJournal {
             else hi = mid - 1;
         }
         return s.get(Math.max(0, lo - 1));
+    }
+
+    public static void forget(UUID id) {
+        if (tracks.remove(id) != null) dirty = true;
+    }
+
+    public static Sample sampleOf(UUID id, long tick) {
+        Track t = tracks.get(id);
+        if (t == null || t.samples.isEmpty()) return null;
+        return sampleAt(t.samples, tick);
     }
 
     public static Vec3 positionAt(UUID id, long tick) {

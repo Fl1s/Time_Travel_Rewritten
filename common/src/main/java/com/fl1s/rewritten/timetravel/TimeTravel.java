@@ -9,6 +9,7 @@ import com.fl1s.rewritten.timetravel.compat.anim.BetterCombatIdleRelay;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.journal.ExemptBlocks;
 import com.fl1s.rewritten.timetravel.journal.JournalRegistry;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
@@ -17,6 +18,8 @@ import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Skin;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.network.protocol.game.ClientboundStopSoundPacket;
 import net.minecraft.resources.ResourceKey;
@@ -46,17 +49,21 @@ public class TimeTravel {
 	public static boolean isDarkHud;
 
 	public static boolean isLooping;
-	public static long timelineTick;
+	public static long sharedTick;
+	public static long presentTick;
 	public static long dayTimeOrigin;
 	public static boolean syncDayTime;
+	public static boolean individualTime;
 	public static boolean jumpRequiresOp;
 	public static long maxJumpTicks;
 	public static int jumpCooldownTicks = 20;
 	public static boolean showTimelineMessages;
 
 	public static boolean chainDeath;
+	public static boolean noDuplication;
 
 	public static boolean showTimelineInfo;
+	public static boolean showExemptGlow = true;
 	public static boolean knightOfTimeMode;
 	public static boolean flowerManMode;
 	public static boolean displayTimeInTicks;
@@ -92,6 +99,7 @@ public class TimeTravel {
 
 	public static void resetSession() {
 		session = new TimelineSession();
+		TimeContext.reset();
 		MocapAdapter.reset();
 	}
 
@@ -103,9 +111,22 @@ public class TimeTravel {
 		return s;
 	}
 
+	public static TimeHeads heads() {
+		TimelineSession s = session;
+		return s == null ? null : s.heads;
+	}
+
 	public static long lastJumpOrigin() {
 		TimelineSession s = session;
 		return s == null ? -1 : s.lastJumpOrigin;
+	}
+
+	public static long lastJumpOrigin(String playerName) {
+		if (timelineSceneManager != null) {
+			PlayerData pd = timelineSceneManager.getRecordingPlayer(playerName);
+			if (pd != null && pd.getLastJumpOrigin() >= 0) return pd.getLastJumpOrigin();
+		}
+		return lastJumpOrigin();
 	}
 
 	public static void queueTask(Runnable task) {
@@ -136,11 +157,16 @@ public class TimeTravel {
 		return session().timeline.jumpTo(target, initiatorName);
 	}
 
+	public static String jumpTo(long target, String initiatorName, java.util.List<ServerPlayer> bring) {
+		return session().timeline.jumpTo(target, initiatorName, bring);
+	}
+
 	public static void onServerTick() {
 		session().timeline.tick();
 	}
 
 	public static void handlePlayerDimensionChange(ServerPlayer player) {
+		ExemptBlocks.sendTo(player);
 		if (!isLooping) return;
 
 		PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getName().getString());
@@ -149,16 +175,20 @@ public class TimeTravel {
 		ResourceKey<Level> currentDimension = player.level().dimension();
 		if (currentDimension.equals(pd.getLastDimensionKey())) return;
 
-		pd.addPieceStart(timelineTick);
+		long position = personalTick(player);
+		pd.addPieceStart(position);
 		pd.nextSegment();
 		pd.setLastDimensionKey(currentDimension);
 
 		TIMELINE_LOGGER.info("Player '{}' changed dimension at tick {} (pieces in chunk: {})",
-				player.getName().getString(), timelineTick, pd.getPieceStarts().size());
+				player.getName().getString(), position, pd.getPieceStarts().size());
 	}
 
 	//player lifecycle
 	public static void onPlayerJoined(ServerPlayer player, PlayerData pd) {
+		TimeHeads h = heads();
+		if (h != null) h.move(pd, individualTime ? pd.getTimeOffset() : h.sharedOffset());
+		ExemptBlocks.sendTo(player);
 		if (isLooping && MocapAdapter.isReady() && pd.getCurrentVisit() == null) {
 			TimelineSession s = session();
 			s.visits.beginVisit(player, pd);
@@ -172,6 +202,8 @@ public class TimeTravel {
 	}
 
 	public static void onPlayerLeft(PlayerData pd) {
+		TimeHeads h = heads();
+		if (h != null) h.release(pd);
 		if (isLooping && pd != null && pd.getCurrentVisit() != null) {
 			session().visits.endVisit(pd);
 			timelineSceneManager.saveRecordingPlayers();
@@ -186,7 +218,7 @@ public class TimeTravel {
 			session().clones.stopAll();
 			timelineSceneManager.saveRecordingPlayers();
 			config.isLooping = true;
-			config.timelineTick = timelineTick;
+			config.timelineTick = sharedTick;
 		}
 		BlockJournal.flushWatches();
 		JOURNALS.saveAll();
@@ -224,6 +256,24 @@ public class TimeTravel {
 		return s.getPlayerList().getPlayer(player.getUUID()) == player;
 	}
 
+	public static long headOffsetOf(ServerPlayer player) {
+		TimeHeads h = heads();
+		if (h == null || timelineSceneManager == null) return 0;
+		PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+		return h.headOf(pd).offset();
+	}
+
+	public static long cloneHeadOf(Entity e) {
+		TimelineSession s = session;
+		return s == null ? CloneManager.NO_HEAD : s.clones.headOf(e);
+	}
+
+	public static long clonePosition(Entity e) {
+		long head = cloneHeadOf(e);
+		if (head == CloneManager.NO_HEAD) return sharedTick;
+		return Math.max(0, presentTick - head);
+	}
+
 	public static int visitIdOf(Entity e) {
 		TimelineSession s = session;
 		return s == null ? -1 : s.clones.visitIdOf(e);
@@ -254,16 +304,27 @@ public class TimeTravel {
 		return s == null ? 0 : s.clones.countPending();
 	}
 
+	public static long personalTick(ServerPlayer player) {
+		TimeHeads h = heads();
+		if (!individualTime || timelineSceneManager == null || h == null) return sharedTick;
+		PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
+		return pd == null ? sharedTick : h.positionOf(pd);
+	}
+
+	private static TimelineSyncPayload syncFor(ServerPlayer player) {
+		return new TimelineSyncPayload(personalTick(player), sharedTick, presentTick, isLooping,
+				displayTimeInTicks, showTimelineInfo, individualTime);
+	}
+
 	public static void sendSync(ServerPlayer player) {
-		TimelineNet.sendToPlayer(player, new TimelineSyncPayload(timelineTick, isLooping, displayTimeInTicks, showTimelineInfo));
+		TimelineNet.sendToPlayer(player, syncFor(player));
 	}
 
 	public static void broadcastSync() {
 		if (server == null) return;
-		TimelineSyncPayload payload = new TimelineSyncPayload(timelineTick, isLooping, displayTimeInTicks, showTimelineInfo);
 		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
 			if (isClone(player)) continue;
-			TimelineNet.sendToPlayer(player, payload);
+			TimelineNet.sendToPlayer(player, syncFor(player));
 		}
 	}
 

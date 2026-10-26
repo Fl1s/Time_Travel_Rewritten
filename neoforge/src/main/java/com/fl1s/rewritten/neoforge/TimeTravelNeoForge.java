@@ -2,6 +2,7 @@ package com.fl1s.rewritten.neoforge;
 
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.client.CloneVanishFx;
+import com.fl1s.rewritten.timetravel.client.ExemptGlow;
 import com.fl1s.rewritten.timetravel.commands.TimelineCommands;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
@@ -143,6 +144,9 @@ public class TimeTravelNeoForge {
         registrar.playToClient(ClearChatPayload.TYPE, ClearChatPayload.CODEC,
                 (payload, context) -> context.enqueueWork(TimelineClient::onClearChat));
 
+        registrar.playToClient(ExemptBlocksPayload.TYPE, ExemptBlocksPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> ExemptGlow.handle(payload)));
+
         registrar.playToServer(ToggleTimelinePayload.TYPE, ToggleTimelinePayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> {
                     if (context.player() instanceof ServerPlayer player) {
@@ -154,6 +158,13 @@ public class TimeTravelNeoForge {
                 (payload, context) -> context.enqueueWork(() -> {
                     if (context.player() instanceof ServerPlayer player) {
                         TimelineNet.handleJumpRequest(player, payload.targetTick());
+                    }
+                }));
+
+        registrar.playToServer(ReturnPresentPayload.TYPE, ReturnPresentPayload.CODEC,
+                (payload, context) -> context.enqueueWork(() -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        TimelineNet.handleReturnToPresent(player);
                     }
                 }));
     }

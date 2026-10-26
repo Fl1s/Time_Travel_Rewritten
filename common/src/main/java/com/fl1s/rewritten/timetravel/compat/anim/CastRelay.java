@@ -98,7 +98,7 @@ public final class CastRelay implements RelayAdapter {
                 data = GSON.toJson(new FinishedData(spellId, cancelled));
             }
 
-            AnimJournal.record(TimeTravel.timelineTick, pd.getCurrentVisit().id, pid, data);
+            AnimJournal.record(TimeTravel.sharedTick, pd.getCurrentVisit().id, pid, data);
         } catch (Throwable t) {
             TimeTravel.TIMELINE_LOGGER.error("Failed to record cast packet", t);
         }

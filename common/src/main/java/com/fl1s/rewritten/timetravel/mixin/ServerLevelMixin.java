@@ -3,9 +3,11 @@ package com.fl1s.rewritten.timetravel.mixin;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.entity.ClonePearlExt;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.entity.EntityStateJournal;
+import com.fl1s.rewritten.timetravel.entity.ExemptEntities;
 import com.fl1s.rewritten.timetravel.journal.*;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleJournal;
@@ -49,6 +51,7 @@ public abstract class ServerLevelMixin {
             ci.cancel();
             return;
         }
+        if (Exempt.is(entity)) return;
         EffectJournal.recordSound((ServerLevel) (Object) this, except, entity.getX(), entity.getY(), entity.getZ(), sound, source, volume, pitch);
     }
 
@@ -107,6 +110,10 @@ public abstract class ServerLevelMixin {
             else tt$guard("pearls", () -> CloneTracks.onPearlThrown(owner));
         }
         if (entity instanceof FishingHook hook) tt$guard("fishing", () -> CloneTracks.onHookSpawned(hook));
+        if (Exempt.is(entity)) {
+            ExemptEntities.born(entity);
+            return;
+        }
         tt$guard("entities", () -> EntityJournal.onSpawn(self, entity));
         tt$guard("projectiles", () -> ProjectileJournal.onSpawn(self, entity));
         tt$guard("tracked_entities", () -> TrackedEntityJournal.onSpawn(self, entity));

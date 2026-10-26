@@ -1,5 +1,8 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.clone.HeadCarry;
+import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.BossFightJournal;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
@@ -8,6 +11,7 @@ import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.mixin.LivingEntityAccessor;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.registries.Registries;
@@ -152,7 +156,7 @@ public final class MobTrailJournal {
         bosses.clear();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
-                if (isBoss(entity) && !entity.isRemoved()) bosses.add(entity.getUUID());
+                if (isBoss(entity) && !entity.isRemoved() && !Exempt.is(entity)) bosses.add(entity.getUUID());
             }
         }
     }
@@ -176,7 +180,7 @@ public final class MobTrailJournal {
     }
 
     static void seedFor(Mob mob, String dim, long now) {
-        if (mob.isDeadOrDying()) return;
+        if (mob.isDeadOrDying() || Exempt.is(mob)) return;
         Track t = tracks.computeIfAbsent(mob.getUUID(), k -> new Track(dim));
         if (t.samples.isEmpty()) {
             t.samples.add(makeSample(mob, now));
@@ -186,9 +190,9 @@ public final class MobTrailJournal {
 
     public static void seedInitial() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             for (Entity entity : level.getAllEntities()) {
                 if (!(entity instanceof Mob mob) || Clones.is(mob)) continue;
                 if (Clones.isVisualOnly(mob)) continue;
@@ -207,7 +211,7 @@ public final class MobTrailJournal {
 
     private static void sample(boolean onlyOutOfTime) {
         if (!TimeTravel.isLooping || TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
 
         if (now % 100 == 0) discoverBosses();
         sampledThisTick.clear();
@@ -215,13 +219,13 @@ public final class MobTrailJournal {
         double r2 = r * r;
 
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             List<ServerPlayer> viewers = new ArrayList<>(level.players());
             if (viewers.isEmpty()) continue;
 
             for (ServerPlayer p : viewers) {
                 for (Mob mob : candidates(level, p, r)) {
-                    if (Clones.is(mob)) continue;
+                    if (Clones.is(mob) || Exempt.is(mob) || HeadCarry.isCarried(mob.getUUID())) continue;
                     if (Clones.isVisualOnly(mob)) continue;
                     if (mob.isDeadOrDying()) continue;
                     UUID id = mob.getUUID();
@@ -308,7 +312,7 @@ public final class MobTrailJournal {
 
     public static void apply() {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
 
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             UUID id = en.getKey();
@@ -340,6 +344,10 @@ public final class MobTrailJournal {
 
             Entity e = level.getEntity(id);
             if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+            if (Exempt.is(mob)) {
+                releasePuppet(id);
+                continue;
+            }
             if (mob.isDeadOrDying() && !MobJournal.isDoomed(mob)) continue;
             if (mob instanceof EnderDragon d && BossFightJournal.isDrivenDeath(d)) continue;
 
@@ -371,7 +379,7 @@ public final class MobTrailJournal {
     }
     private static void applySpawned() {
         if (spawnedPuppets.isEmpty() || TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeTravel.sharedTick;
 
         for (UUID id : new ArrayList<>(spawnedPuppets)) {
             Track t = tracks.get(id);
@@ -589,11 +597,33 @@ public final class MobTrailJournal {
         return t == null ? null : t.samples;
     }
 
+    public static Sample sampleOf(UUID id, long tick) {
+        Track t = tracks.get(id);
+        if (t == null || t.samples.isEmpty()) return null;
+        return sampleAt(t.samples, tick);
+    }
+
+    public static boolean tracked(UUID id) {
+        Track t = tracks.get(id);
+        return t != null && !t.samples.isEmpty();
+    }
+
+    public static Set<UUID> trackedIds() {
+        return new HashSet<>(tracks.keySet());
+    }
+
     public static Vec3 positionAt(UUID id, long tick) {
         Track t = tracks.get(id);
         if (t == null || t.samples.isEmpty()) return null;
         Sample s = sampleAt(t.samples, tick);
         return s == null ? null : new Vec3(s.x, s.y, s.z);
+    }
+
+    public static void forget(UUID id) {
+        releasePuppet(id);
+        bosses.remove(id);
+        lastBossHealth.remove(id);
+        if (tracks.remove(id) != null) dirty = true;
     }
 
     public static void rewriteHealth(UUID id, long tick, float lost) {
@@ -616,7 +646,7 @@ public final class MobTrailJournal {
                 releaseTemporaryPuppets();
                 wasReplaying = false;
             }
-            if (TimeTravel.timelineTick % 100 == 0) sweepStrayPuppets(false);
+            if (TimeTravel.sharedTick % 100 == 0) sweepStrayPuppets(false);
             sample();
             applySpawned();
         }
@@ -624,7 +654,7 @@ public final class MobTrailJournal {
 
     public static void onJump(long from, long to) {
         if (TimeTravel.server == null) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         lastBossHealth.clear();
         for (Map.Entry<UUID, Track> en : tracks.entrySet()) {
             Track t = en.getValue();
@@ -635,7 +665,7 @@ public final class MobTrailJournal {
             ServerLevel level = levelOf(t);
             if (level == null) continue;
             Entity e = level.getEntity(en.getKey());
-            if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
+            if (!(e instanceof Mob mob) || mob.isRemoved() || Exempt.is(mob)) continue;
 
             mob.setHealth(Math.min(s.health, mob.getMaxHealth()));
             applyBossState(mob, s);

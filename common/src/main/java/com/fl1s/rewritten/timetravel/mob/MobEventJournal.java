@@ -1,5 +1,6 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -8,6 +9,7 @@ import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import com.fl1s.rewritten.timetravel.journal.EffectJournal;
@@ -71,11 +73,11 @@ public final class MobEventJournal {
         PlayerData pd = BlockJournal.nearestRecorder(level, victim.blockPosition());
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = (pd != null && pd.getCurrentVisit() != null) ? pd.getCurrentVisit().id : -1;
         e.uuid = victim.getUUID();
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.explode = explode;
         e.dig = dig;
         if (explode && victim instanceof Creeper c) {
@@ -99,9 +101,17 @@ public final class MobEventJournal {
 
     public static Entry deathOf(UUID id) { return latestDeath.get(id); }
 
+    public static void forget(UUID id) {
+        if (latestDeath.remove(id) == null) return;
+        STORE.entries().removeIf(e -> id.equals(e.uuid));
+        STORE.removeUpcoming(e -> id.equals(e.uuid));
+        pendingDeaths.removeIf(e -> id.equals(e.uuid));
+        STORE.markDirty();
+    }
+
     public static void tick() {
         if (!TimeTravel.isLooping) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         while (!pendingDeaths.isEmpty() && pendingDeaths.peek().tick <= now) {
             Entry e = pendingDeaths.poll();
             ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
@@ -111,9 +121,10 @@ public final class MobEventJournal {
                 playExplosionFx(level, e.x, e.y, e.z, e.radius > 0 ? e.radius : 3.0f);
                 continue;
             }
-            if (!(entity instanceof LivingEntity living)) continue;
+            if (!(entity instanceof LivingEntity living) || Exempt.is(living)) continue;
             if (living.isDeadOrDying() || living.isRemoved()) continue;
 
+            Exempt.eject(living);
             ItemFlowJournal.setSuppressDrop(true);
             try {
                 if (e.explode && living instanceof net.minecraft.world.entity.monster.Creeper creeper) {
@@ -168,7 +179,7 @@ public final class MobEventJournal {
 
     public static void eraseVisits(Set<Integer> visitIds) {
         STORE.entries().removeIf(e -> visitIds.contains(e.visit));
-        STORE.upcoming().removeIf(e -> visitIds.contains(e.visit));
+        STORE.removeUpcoming(e -> visitIds.contains(e.visit));
         latestDeath.clear();
         for (Entry e : STORE.entries()) {
             Entry prev = latestDeath.get(e.uuid);
@@ -184,30 +195,27 @@ public final class MobEventJournal {
         List<Creeper> fusing = new ArrayList<>();
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
-                if (entity instanceof Creeper c && c.isAlive() && !Clones.is(c) && c.getSwellDir() > 0) fusing.add(c);
+                if (entity instanceof Creeper c && c.isAlive() && !Clones.is(c) && !Exempt.is(c) && c.getSwellDir() > 0) fusing.add(c);
             }
         }
-        try {
-            for (Creeper c : fusing) {
-                CreeperAccessor acc = (CreeperAccessor) c;
-                long due = from + Math.max(1, acc.tt$getMaxSwell() - acc.tt$getSwell());
-                if (due > to) {
-                    acc.tt$setSwell(Math.min(acc.tt$getMaxSwell() - 1, acc.tt$getSwell() + (int) (to - from)));
-                    continue;
-                }
-                TimeTravel.timelineTick = due;
+        for (Creeper c : fusing) {
+            CreeperAccessor acc = (CreeperAccessor) c;
+            long due = from + Math.max(1, acc.tt$getMaxSwell() - acc.tt$getSwell());
+            if (due > to) {
+                acc.tt$setSwell(Math.min(acc.tt$getMaxSwell() - 1, acc.tt$getSwell() + (int) (to - from)));
+                continue;
+            }
+            TimeContext.runAt(due, () -> {
                 MobJournal.onEntityDeath(c, true);
                 acc.tt$explode();
-            }
-        } finally {
-            TimeTravel.timelineTick = from;
+            });
         }
     }
 
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
         pendingDeaths.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.tick > now && latestDeath.get(e.uuid) == e) pendingDeaths.add(e);
         }

@@ -1,11 +1,17 @@
 package com.fl1s.rewritten.timetravel.journal;
 
+import com.fl1s.rewritten.timetravel.clone.HeadTracking;
+import com.fl1s.rewritten.timetravel.time.HeadScope;
+import com.fl1s.rewritten.timetravel.time.TimeContext;
+import com.fl1s.rewritten.timetravel.time.TimeHead;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.mixin.ItemEntityAccessor;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
@@ -22,6 +28,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
 /**
  * Records mob death loot and player pickups, then replays both at their
@@ -58,6 +65,8 @@ public final class ItemFlowJournal {
             Comparator.comparingLong((Entry e) -> e.tick).thenComparingLong(e -> e.seq));
     private static final ArrayList<Entry> retry = new ArrayList<>();
     private static final Set<UUID> tracked = new HashSet<>();
+    private static final Map<UUID, Long> born = new HashMap<>();
+    private static final Map<UUID, Long> lastPickup = new HashMap<>();
     private static final List<ItemEntity> toDiscard = new ArrayList<>();
 
     private static boolean applying = false;
@@ -72,6 +81,67 @@ public final class ItemFlowJournal {
     public static void beginDeathCapture(LivingEntity e) { capturingEntity = e; }
     public static void endDeathCapture() { capturingEntity = null; }
     public static boolean isTracked(UUID id) { return tracked.contains(id); }
+
+    public static long bornOf(UUID id) {
+        Long tick = born.get(id);
+        return tick == null ? Long.MIN_VALUE : tick;
+    }
+
+    public static void forget(UUID id) {
+        if (id == null) return;
+        HeadItemView.discardFrom(id, Long.MIN_VALUE);
+        if (!tracked.remove(id)) return;
+        STORE.entries().removeIf(e -> id.equals(e.itemUuid));
+        STORE.removeUpcoming(e -> id.equals(e.itemUuid));
+        pending.removeIf(e -> id.equals(e.itemUuid));
+        retry.removeIf(e -> id.equals(e.itemUuid));
+        born.remove(id);
+        lastPickup.remove(id);
+        STORE.markDirty();
+    }
+
+    public static boolean pickedUpAfter(UUID id, long position) {
+        Long tick = lastPickup.get(id);
+        return tick != null && tick >= position;
+    }
+
+    static boolean whileApplying(BooleanSupplier body) {
+        boolean was = applying;
+        applying = true;
+        try {
+            return body.getAsBoolean();
+        } finally {
+            applying = was;
+        }
+    }
+
+    private static long stampOf(ItemEntity item, PlayerData pd) {
+        if (!TimeTravel.individualTime) return TimeContext.now();
+        long scoped = HeadScope.current();
+        if (scoped != HeadScope.NONE && scoped > 0) return Math.max(0, TimeTravel.presentTick - scoped);
+        if (item.getOwner() instanceof ServerPlayer owner && !Clones.is(owner)) {
+            return Math.max(0, TimeTravel.presentTick - TimeTravel.headOffsetOf(owner));
+        }
+        return BlockJournal.positionOf(pd);
+    }
+
+    private static void index(Entry e) {
+        if (e.itemUuid == null) return;
+        tracked.add(e.itemUuid);
+        if (e.kind == KIND_DROP) born.merge(e.itemUuid, e.tick, Math::min);
+        else if (e.kind == KIND_PICKUP) lastPickup.merge(e.itemUuid, e.tick, Math::max);
+    }
+
+    private static void publishToTrailingHeads(Entry e) {
+        if (!TimeTravel.individualTime) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (head.offset() <= 0 || head.isEmpty()) continue;
+            if (head.position() >= e.tick) continue;
+            STORE.addUpcoming(head.offset(), e);
+        }
+    }
 
     public static void pushReplay() { replayDepth++; }
     public static void popReplay() { replayDepth = Math.max(0, replayDepth - 1); }
@@ -89,7 +159,7 @@ public final class ItemFlowJournal {
     }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
-        if (!(entity instanceof ItemEntity item)) return;
+        if (!(entity instanceof ItemEntity item) || Exempt.is(item)) return;
         if (!TimeTravel.isLooping || applying || ReplayState.SUPPRESS) return;
         if (tracked.contains(item.getUUID())) return;
         if (isReplayCaused(item)) {
@@ -113,11 +183,11 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_DROP;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = stampOf(item, pd);
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = "";
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = item.getX();
         e.y = item.getY();
         e.z = item.getZ();
@@ -129,12 +199,13 @@ public final class ItemFlowJournal {
         e.stack = item.getItem().save(TimeTravel.server.registryAccess()).toString();
         e.itemUuid = item.getUUID();
         STORE.entries().add(e);
-        tracked.add(e.itemUuid);
+        index(e);
+        publishToTrailingHeads(e);
         STORE.markDirty();
     }
 
     public static void recordDestroy(ItemEntity item) {
-        if (!TimeTravel.isLooping || applying || ReplayState.SUPPRESS) return;
+        if (!TimeTravel.isLooping || applying || ReplayState.SUPPRESS || Exempt.is(item)) return;
         if (!(item.level() instanceof ServerLevel level)) return;
         UUID id = item.getUUID();
         if (!tracked.contains(id)) return;
@@ -154,7 +225,7 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_DESTROY;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = drop.visit;
         e.player = "";
@@ -165,11 +236,12 @@ public final class ItemFlowJournal {
         e.stack = drop.stack;
         e.itemUuid = id;
         STORE.entries().add(e);
+        publishToTrailingHeads(e);
         STORE.markDirty();
     }
 
     public static void recordPickup(ItemEntity item, Player player, ItemStack picked) {
-        if (!TimeTravel.isLooping || applying) return;
+        if (!TimeTravel.isLooping || applying || Exempt.is(item)) return;
         if (!(item.level() instanceof ServerLevel level)) return;
         if (!(player instanceof ServerPlayer sp)) return;
         if (Clones.is(sp)) return;
@@ -179,19 +251,21 @@ public final class ItemFlowJournal {
 
         Entry e = new Entry();
         e.kind = KIND_PICKUP;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.individualTime ? BlockJournal.positionOf(pd) : TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.player = sp.getName().getString().intern();
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = item.getX();
         e.y = item.getY();
         e.z = item.getZ();
         e.stack = picked.save(TimeTravel.server.registryAccess()).toString();
-        e.itemUuid = item.getUUID();
+        e.itemUuid = HeadItemView.originalOf(item);
         e.originTick = e.tick - item.getAge();
         STORE.entries().add(e);
-        tracked.add(e.itemUuid);
+        index(e);
+        publishToTrailingHeads(e);
+        HeadItemView.discardFrom(e.itemUuid, e.tick);
         STORE.markDirty();
     }
 
@@ -201,7 +275,7 @@ public final class ItemFlowJournal {
             for (ItemEntity i : toDiscard) if (!i.isRemoved()) i.discard();
             toDiscard.clear();
         }
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (Iterator<Entry> it = retry.iterator(); it.hasNext(); ) {
             Entry r = it.next();
             ServerLevel rl = TimeTravel.server.getLevel(Levels.key(r.dim));
@@ -223,6 +297,7 @@ public final class ItemFlowJournal {
         Entity item = findLoaded(level, e.itemUuid);
         if (item == null || item.isRemoved()) item = findNearby(level, e);
         if (item == null || item.isRemoved()) return false;
+        if (Exempt.is(item)) return true;
         applying = true;
         try {
             if (item instanceof ItemEntity ie && TimeTravel.entityOfVisit(e.visit) instanceof LivingEntity taker
@@ -244,7 +319,7 @@ public final class ItemFlowJournal {
             ItemEntity best = null;
             double bestDist = Double.MAX_VALUE;
             for (ItemEntity c : level.getEntitiesOfClass(ItemEntity.class, box)) {
-                if (c.isRemoved() || !ItemStack.isSameItemSameComponents(c.getItem(), stack)) continue;
+                if (c.isRemoved() || Exempt.is(c) || !ItemStack.isSameItemSameComponents(c.getItem(), stack)) continue;
                 double d = c.distanceToSqr(e.x, e.y, e.z);
                 if (d < bestDist) {
                     best = c;
@@ -259,7 +334,7 @@ public final class ItemFlowJournal {
 
     private static ItemStack parseStack(String nbt) throws Exception {
         CompoundTag tag = TagParser.parseTag(nbt);
-        return ItemStack.parse(TimeTravel.server.registryAccess(), tag).orElse(ItemStack.EMPTY);
+        return Exempt.masked(ItemStack.parse(TimeTravel.server.registryAccess(), tag).orElse(ItemStack.EMPTY));
     }
 
     private static long originOf(Entry pickup) {
@@ -283,7 +358,7 @@ public final class ItemFlowJournal {
 
                 if (e.kind == KIND_DROP) {
                     Entity item = findLoaded(level, e.itemUuid);
-                    if (item != null && !item.isRemoved()) item.discard();
+                    if (item != null && !item.isRemoved() && !Exempt.is(item)) item.discard();
                 } else if (e.kind == KIND_PICKUP) {
                     long origin = originOf(e);
                     long age = origin == Long.MIN_VALUE ? 0 : target - origin;
@@ -367,14 +442,14 @@ public final class ItemFlowJournal {
                 if (level == null) continue;
                 Entity item = findLoaded(level, e.itemUuid);
                 if (item == null || item.isRemoved()) item = findNearby(level, e);
-                if (item != null && !item.isRemoved()) item.discard();
+                if (item != null && !item.isRemoved() && !Exempt.is(item)) item.discard();
             }
             for (Entry e : STORE.entries()) {
                 if (e.kind != KIND_DESTROY || e.tick > target) continue;
                 ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
                 if (level == null) continue;
                 Entity item = findLoaded(level, e.itemUuid);
-                if (item != null && !item.isRemoved()) item.discard();
+                if (item != null && !item.isRemoved() && !Exempt.is(item)) item.discard();
             }
         }
         rebuildUpcoming();
@@ -410,8 +485,58 @@ public final class ItemFlowJournal {
 
     private static void rebuildTracked() {
         tracked.clear();
+        born.clear();
+        lastPickup.clear();
+        for (Entry e : STORE.entries()) index(e);
+    }
+
+    public static void openHead(long head, long position) {
+        STORE.rebuildUpcoming(head, position);
+        if (TimeTravel.server == null) return;
+
+        Map<UUID, Entry> earliestDrop = new HashMap<>();
+        Set<UUID> gone = new HashSet<>();
         for (Entry e : STORE.entries()) {
-            if (e.itemUuid != null) tracked.add(e.itemUuid);
+            if (e.tick > position || e.itemUuid == null) continue;
+            if (e.kind == KIND_DROP) earliestDrop.merge(e.itemUuid, e, (a, b) -> a.tick <= b.tick ? a : b);
+            else gone.add(e.itemUuid);
+        }
+        for (Entry drop : earliestDrop.values()) {
+            if (gone.contains(drop.itemUuid)) continue;
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(drop.dim));
+            if (level == null || findLoaded(level, drop.itemUuid) != null) continue;
+            spawnCopy(head, level, drop, position - drop.tick);
+        }
+    }
+
+    public static void tickHead(long head, long position) {
+        if (TimeTravel.server == null) return;
+        STORE.tick(head, position, e -> {
+            if (e.itemUuid == null) return;
+            if (e.kind != KIND_DROP) {
+                HeadItemView.discard(head, e.itemUuid);
+                return;
+            }
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(e.dim));
+            if (level == null) return;
+            if (findLoaded(level, e.itemUuid) != null) HeadTracking.markDirty();
+            else spawnCopy(head, level, e, 0);
+        });
+    }
+
+    public static void dropHead(long head) {
+        STORE.dropCursor(head);
+        HeadItemView.discardHead(head);
+    }
+
+    private static void spawnCopy(long head, ServerLevel level, Entry drop, long age) {
+        try {
+            ItemStack stack = parseStack(drop.stack);
+            Vec3 motion = age > 0 ? Vec3.ZERO : new Vec3(drop.vx, drop.vy, drop.vz);
+            HeadItemView.spawn(head, drop.itemUuid, level, drop.x, drop.y, drop.z, stack, motion,
+                    drop.pickupDelay, age);
+        } catch (Exception ex) {
+            TimeTravel.TIMELINE_LOGGER.error("Failed to replay an item for a time head", ex);
         }
     }
 
@@ -425,7 +550,7 @@ public final class ItemFlowJournal {
         pending.clear();
         retry.clear();
         toDiscard.clear();
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.tick > now) pending.add(e);
         }
@@ -446,6 +571,8 @@ public final class ItemFlowJournal {
         retry.clear();
         toDiscard.clear();
         tracked.clear();
+        born.clear();
+        lastPickup.clear();
         replayDepth = 0;
         STORE.clear();
     }

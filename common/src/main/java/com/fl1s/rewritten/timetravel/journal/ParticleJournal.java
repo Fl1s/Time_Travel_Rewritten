@@ -119,7 +119,7 @@ public final class ParticleJournal {
         }
 
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.sharedTick;
         e.seq = STORE.nextSeq();
         e.visit = visitId;
         e.dim = level.dimension().location().toString();

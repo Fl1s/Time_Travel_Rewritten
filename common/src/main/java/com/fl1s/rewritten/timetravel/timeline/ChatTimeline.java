@@ -1,5 +1,7 @@
 package com.fl1s.rewritten.timetravel.timeline;
 
+import com.fl1s.rewritten.timetravel.time.TimeHead;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.Journal;
@@ -41,13 +43,64 @@ public final class ChatTimeline {
         PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(player.getName().getString());
         if (pd == null || !pd.getActive()) return;
         Entry e = new Entry();
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeTravel.personalTick(player);
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit() != null ? pd.getCurrentVisit().id : -1;
         e.player = player.getName().getString();
         e.text = text;
         STORE.entries().add(e);
         STORE.markDirty();
+        publishToTrailingHeads(e);
+    }
+
+    private static void publishToTrailingHeads(Entry e) {
+        if (!TimeTravel.individualTime) return;
+        TimeHeads heads = TimeTravel.heads();
+        if (heads == null) return;
+        for (TimeHead head : heads.occupied()) {
+            if (head.offset() <= 0 || head.isEmpty()) continue;
+            if (head.position() >= e.tick) continue;
+            STORE.addUpcoming(head.offset(), e);
+        }
+    }
+
+    public static void openHead(long head, long position) {
+        STORE.rebuildUpcoming(head, position);
+    }
+
+    public static void dropHead(long head) {
+        STORE.dropCursor(head);
+    }
+
+    public static void tickHead(long head, long position, List<ServerPlayer> viewers) {
+        if (!TimeTravel.trackChat || viewers.isEmpty()) return;
+        STORE.tick(head, position, e -> {
+            Component line = component(e);
+            for (ServerPlayer viewer : viewers) viewer.sendSystemMessage(line);
+        });
+    }
+
+    public static void resendFor(ServerPlayer player) {
+        if (!TimeTravel.trackChat || player == null) return;
+        List<Line> history = historyUpTo(TimeTravel.personalTick(player));
+        TimelineNet.sendToPlayer(player, ClearChatPayload.INSTANCE);
+        for (Line l : history) player.sendSystemMessage(l.text());
+    }
+
+    private static long liveHead = Long.MIN_VALUE;
+
+    public static void beginBroadcast(ServerPlayer sender) {
+        liveHead = sender == null ? Long.MIN_VALUE : TimeTravel.headOffsetOf(sender);
+    }
+
+    public static void endBroadcast() {
+        liveHead = Long.MIN_VALUE;
+    }
+
+    public static boolean blocksLive(ServerPlayer recipient) {
+        if (!TimeTravel.individualTime || !TimeTravel.isLooping) return false;
+        if (liveHead == Long.MIN_VALUE || recipient == null || Clones.is(recipient)) return false;
+        return TimeTravel.headOffsetOf(recipient) != liveHead;
     }
 
     private static Component component(Entry e) {
@@ -100,17 +153,23 @@ public final class ChatTimeline {
     public static void resend(long upTo) {
         if (!TimeTravel.trackChat || TimeTravel.server == null) return;
 
+        List<Line> shared = TimeTravel.individualTime ? null : historyUpTo(upTo);
+
+        for (ServerPlayer player : new ArrayList<>(TimeTravel.server.getPlayerList().getPlayers())) {
+            if (Clones.is(player)) continue;
+            List<Line> history = shared != null ? shared : historyUpTo(TimeTravel.personalTick(player));
+            TimelineNet.sendToPlayer(player, ClearChatPayload.INSTANCE);
+            for (Line l : history) player.sendSystemMessage(l.text());
+        }
+    }
+
+    private static List<Line> historyUpTo(long upTo) {
         List<Line> history = new ArrayList<>();
         for (Entry e : STORE.entries()) if (e.tick <= upTo) history.add(new Line(e.tick, e.seq, component(e)));
         AdvancementTimeline.collect(upTo, history);
         history.sort(Comparator.comparingLong(Line::tick).thenComparingLong(Line::seq));
         if (history.size() > RESEND_LIMIT) history = history.subList(history.size() - RESEND_LIMIT, history.size());
-
-        for (ServerPlayer player : new ArrayList<>(TimeTravel.server.getPlayerList().getPlayers())) {
-            if (Clones.is(player)) continue;
-            TimelineNet.sendToPlayer(player, ClearChatPayload.INSTANCE);
-            for (Line l : history) player.sendSystemMessage(l.text());
-        }
+        return history;
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

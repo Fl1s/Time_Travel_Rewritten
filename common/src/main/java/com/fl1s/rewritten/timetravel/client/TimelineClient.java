@@ -2,6 +2,7 @@ package com.fl1s.rewritten.timetravel.client;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.net.JumpRequestPayload;
+import com.fl1s.rewritten.timetravel.net.ReturnPresentPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
 import com.fl1s.rewritten.timetravel.net.ToggleTimelinePayload;
@@ -33,7 +34,8 @@ public final class TimelineClient {
     public static final KeyMapping KEY_CANCEL = new KeyMapping("key.timetravel_rewritten.cancel", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_BACKSPACE, CATEGORY);
     public static final KeyMapping KEY_RETURN = new KeyMapping("key.timetravel_rewritten.return", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_APOSTROPHE, CATEGORY);
     public static final KeyMapping KEY_TOGGLE = new KeyMapping("key.timetravel_rewritten.toggle", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_BACKSLASH, CATEGORY);
-    public static final KeyMapping[] ALL_KEYS = {KEY_TOGGLE, KEY_RETURN, KEY_BACK, KEY_FORWARD, KEY_CONFIRM, KEY_CANCEL};
+    public static final KeyMapping KEY_PRESENT = new KeyMapping("key.timetravel_rewritten.present", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_SEMICOLON, CATEGORY);
+    public static final KeyMapping[] ALL_KEYS = {KEY_TOGGLE, KEY_RETURN, KEY_PRESENT, KEY_BACK, KEY_FORWARD, KEY_CONFIRM, KEY_CANCEL};
 
     private static final long NO_PREVIEW = -1L;
 
@@ -85,6 +87,9 @@ public final class TimelineClient {
     private static boolean showTicks = false;
     private static boolean showHud = true;
     private static long displayTick = 0;
+    private static long serverTick = 0;
+    private static long presentTick = 0;
+    private static boolean individualTime = false;
     private static long previewTick = NO_PREVIEW;
     private static long previewVisual = NO_PREVIEW;
     private static long viewCenterVisual = Long.MIN_VALUE;
@@ -101,6 +106,7 @@ public final class TimelineClient {
         running = payload.running();
         showTicks = payload.showTicks();
         showHud = payload.showHud();
+        individualTime = payload.individualTime();
         if (synced && Math.abs(payload.tick() - displayTick) > 40) {
             if (payload.tick() == 0 && !payload.running()) {
                 history.clear();
@@ -112,6 +118,8 @@ public final class TimelineClient {
         }
         synced = true;
         displayTick = payload.tick();
+        serverTick = payload.serverTick();
+        presentTick = payload.presentTick();
         if (!running) {
             previewTick = NO_PREVIEW;
             previewVisual = NO_PREVIEW;
@@ -127,6 +135,9 @@ public final class TimelineClient {
         returnTick = NO_PREVIEW;
         running = false;
         displayTick = 0;
+        serverTick = 0;
+        presentTick = 0;
+        individualTime = false;
         previewTick = NO_PREVIEW;
         previewVisual = NO_PREVIEW;
         viewCenterVisual = Long.MIN_VALUE;
@@ -183,7 +194,11 @@ public final class TimelineClient {
             return;
         }
 
-        if (running && !mc.isPaused()) displayTick++;
+        if (running && !mc.isPaused()) {
+            displayTick++;
+            serverTick++;
+            presentTick++;
+        }
 
         if (previewTick == NO_PREVIEW) {
             previewVisual = NO_PREVIEW;
@@ -226,6 +241,10 @@ public final class TimelineClient {
             }
         }
 
+        while (KEY_PRESENT.consumeClick()) {
+            returnToPresent();
+        }
+
         while (KEY_CANCEL.consumeClick()) {
             previewTick = NO_PREVIEW;
         }
@@ -236,6 +255,16 @@ public final class TimelineClient {
                 previewTick = NO_PREVIEW;
             }
         }
+    }
+
+    public static boolean canReturnToPresent() {
+        return running && synced && presentTick > displayTick;
+    }
+
+    public static void returnToPresent() {
+        if (!canReturnToPresent()) return;
+        TimelineNet.sendToServer(ReturnPresentPayload.INSTANCE);
+        previewTick = NO_PREVIEW;
     }
 
     public static void render(GuiGraphics graphics, DeltaTracker deltaTracker) {
@@ -249,20 +278,32 @@ public final class TimelineClient {
         boolean dark = TimeTravel.isDarkHud;
 
         if (compact) {
-            Component line = previewing ? Component.translatable("hud.timetravel_rewritten.target", TimeFormat.format(previewTick, showTicks), TimeFormat.delta(previewTick - displayTick, showTicks)) : buildLine1(displayTick);
+            Component line = previewing ? Component.translatable("hud.timetravel_rewritten.target", TimeFormat.format(previewTick, showTicks), TimeFormat.delta(previewTick - displayTick, showTicks))
+                    : individualTime ? currentLine() : buildLine1(displayTick);
             renderCompact(graphics, mc, line, previewing);
             return;
         }
 
-        Component line1 = buildLine1(displayTick);
+        Component line1 = buildLine1(individualTime ? serverTick : displayTick);
         Component line2 = null;
+        int line1Color = COLOR_TEXT;
+        int line2Color = COLOR_TEXT;
+        if (individualTime && !previewing) {
+            line2 = currentLine();
+            line2Color = currentColor();
+        }
         if (previewing) {
+            if (individualTime) {
+                line1 = currentLine();
+                line1Color = currentColor();
+            }
             String key = previewTick < displayTick ? "hud.timetravel_rewritten.target.past" : "hud.timetravel_rewritten.target.future";
             line2 = Component.translatable(key, TimeFormat.format(previewTick, showTicks), TimeFormat.delta(previewTick - displayTick, showTicks));
         }
 
         int panelW = PANEL_W;
-        int panelH = previewing ? PANEL_H_PREVIEW : PANEL_H_NORMAL;
+        boolean tall = line2 != null;
+        int panelH = tall ? PANEL_H_PREVIEW : PANEL_H_NORMAL;
 
         int gw = graphics.guiWidth();
         int gh = graphics.guiHeight();
@@ -282,26 +323,34 @@ public final class TimelineClient {
 
         try {
             ResourceLocation tex = dark ? HUD_DARK_TEXTURE : HUD_TEXTURE;
-            int vOff = previewing ? TEX_PREVIEW_V : TEX_NORMAL_V;
+            int vOff = tall ? TEX_PREVIEW_V : TEX_NORMAL_V;
             graphics.blit(tex, px, py, 0, vOff, panelW, panelH, TEX_W, TEX_H);
 
-            int wb = previewing ? WINDOW_BOTTOM_PREVIEW : WINDOW_BOTTOM_NORMAL;
+            int wb = tall ? WINDOW_BOTTOM_PREVIEW : WINDOW_BOTTOM_NORMAL;
             graphics.fill(px + WINDOW_LEFT, py + WINDOW_TOP, px + WINDOW_RIGHT, py + wb, WINDOW_FILL);
 
             int cx = px + panelW / 2;
 
-            drawCenteredNoShadow(graphics, mc.font, line1, cx, py + 6, COLOR_TEXT);
+            drawCenteredNoShadow(graphics, mc.font, line1, cx, py + 6, line1Color);
 
             if (line2 != null) {
-                drawCenteredNoShadow(graphics, mc.font, line2, cx, py + 16, COLOR_TEXT);
+                drawCenteredNoShadow(graphics, mc.font, line2, cx, py + 16, line2Color);
             }
 
             long previewPos = previewing ? (previewVisual != NO_PREVIEW ? previewVisual : previewTick) : NO_PREVIEW;
-            int barY = py + (previewing ? 35 : 25);
+            int barY = py + (tall ? 35 : 25);
             renderTimelineBar(graphics, tex, cx, barY, panelW - 12, displayTick, viewCenterVisual, previewPos, returnTick, previewing);
         } finally {
             if (scaled) graphics.pose().popPose();
         }
+    }
+
+    private static Component currentLine() {
+        return Component.translatable("hud.timetravel_rewritten.current_time", TimeFormat.format(displayTick, showTicks));
+    }
+
+    private static int currentColor() {
+        return displayTick < serverTick ? COLOR_PAST : COLOR_TEXT;
     }
 
     private static void renderCompact(GuiGraphics graphics, Minecraft mc, Component line, boolean previewing) {

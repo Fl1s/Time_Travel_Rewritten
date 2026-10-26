@@ -3,6 +3,9 @@ package com.fl1s.rewritten.timetravel.mixin;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.journal.PastContainers;
+import com.fl1s.rewritten.timetravel.time.HeadScope;
+import com.fl1s.rewritten.timetravel.time.HeadScopeSupport;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ClientboundBlockChangedAckPacket;
@@ -38,6 +41,23 @@ public abstract class ServerPlayerGameModeMixin {
     private boolean tt$enteredDestroy = false;
 
     @Unique
+    private boolean tt$scopedUseItemOn = false;
+
+    @Unique
+    private boolean tt$scopedUseItem = false;
+
+    @Unique
+    private boolean tt$scopedDestroy = false;
+
+    @Unique
+    private boolean tt$openScope() {
+        long head = HeadScopeSupport.headFor(player);
+        if (head <= 0) return false;
+        HeadScope.push(head);
+        return true;
+    }
+
+    @Unique
     private int tt$lastSequence = 0;
 
     @Unique
@@ -64,24 +84,41 @@ public abstract class ServerPlayerGameModeMixin {
         }
     }
 
-    @Inject(method = "useItemOn", at = @At("HEAD"))
+    @Inject(method = "useItemOn", at = @At("HEAD"), cancellable = true)
     private void tt$enterUseItemOn(ServerPlayer player, Level level, ItemStack stack, InteractionHand hand, BlockHitResult hitResult, CallbackInfoReturnable<InteractionResult> cir) {
+        if (hand == InteractionHand.MAIN_HAND && PastContainers.tryOpenGhost(player, hitResult.getBlockPos())) {
+            cir.setReturnValue(InteractionResult.SUCCESS);
+            return;
+        }
         if (tt$isRealPlayer()) BlockJournal.enterAction();
+        tt$scopedUseItemOn = tt$openScope();
+        if (tt$scopedUseItemOn) {
+            BlockJournal.materialize(player.serverLevel(), hitResult.getBlockPos());
+        }
     }
 
     @Inject(method = "useItemOn", at = @At("RETURN"))
     private void tt$exitUseItemOn(ServerPlayer player, Level level, ItemStack stack, InteractionHand hand, BlockHitResult hitResult, CallbackInfoReturnable<InteractionResult> cir) {
         if (tt$isRealPlayer()) BlockJournal.exitAction();
+        if (tt$scopedUseItemOn) {
+            tt$scopedUseItemOn = false;
+            HeadScope.pop();
+        }
     }
 
     @Inject(method = "useItem", at = @At("HEAD"))
     private void tt$enterUseItem(ServerPlayer player, Level level, ItemStack stack, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
         if (tt$isRealPlayer()) BlockJournal.enterAction();
+        tt$scopedUseItem = tt$openScope();
     }
 
     @Inject(method = "useItem", at = @At("RETURN"))
     private void tt$exitUseItem(ServerPlayer player, Level level, ItemStack stack, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
         if (tt$isRealPlayer()) BlockJournal.exitAction();
+        if (tt$scopedUseItem) {
+            tt$scopedUseItem = false;
+            HeadScope.pop();
+        }
     }
 
     @Inject(method = "handleBlockBreakAction", at = @At("HEAD"), cancellable = true)
@@ -106,6 +143,8 @@ public abstract class ServerPlayerGameModeMixin {
         }
         BlockJournal.enterAction();
         tt$enteredDestroy = true;
+        tt$scopedDestroy = tt$openScope();
+        if (tt$scopedDestroy) BlockJournal.materialize(player.serverLevel(), pos);
     }
 
     @Inject(method = "destroyBlock", at = @At("RETURN"))
@@ -113,6 +152,10 @@ public abstract class ServerPlayerGameModeMixin {
         if (tt$enteredDestroy) {
             tt$enteredDestroy = false;
             BlockJournal.exitAction();
+        }
+        if (tt$scopedDestroy) {
+            tt$scopedDestroy = false;
+            HeadScope.pop();
         }
     }
 }

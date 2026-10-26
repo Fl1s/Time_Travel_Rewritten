@@ -1,8 +1,11 @@
 package com.fl1s.rewritten.timetravel.timeline;
 
+import com.fl1s.rewritten.timetravel.clone.HeadCarry;
 import com.fl1s.rewritten.timetravel.*;
 import com.fl1s.rewritten.timetravel.api.TimelineEventBus;
 import com.fl1s.rewritten.timetravel.clone.CloneManager;
+import com.fl1s.rewritten.timetravel.clone.HeadTracking;
+import com.fl1s.rewritten.timetravel.clone.TravelFx;
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
@@ -10,19 +13,37 @@ import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
+import com.fl1s.rewritten.timetravel.entity.ExemptEntities;
 import com.fl1s.rewritten.timetravel.journal.*;
 import com.fl1s.rewritten.timetravel.mob.*;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
+import com.fl1s.rewritten.timetravel.time.HeadScope;
+import com.fl1s.rewritten.timetravel.time.TimeHead;
+import com.fl1s.rewritten.timetravel.time.TimeHeads;
 import com.fl1s.rewritten.timetravel.util.TimeFormat;
+import com.fl1s.rewritten.timetravel.vehicle.HeadVehicleView;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleSpawnJournal;
 import com.fl1s.rewritten.timetravel.vehicle.VehicleTrailJournal;
 import net.minecraft.network.chat.Component;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameRules;
 
 /**
  * Core timeline: shared clock, jump orchestration, and per-server-tick work.
  */
 public final class Timeline {
+
+    private static void advancePresent(long tick) {
+        if (tick > TimeTravel.presentTick) {
+            TimeTravel.presentTick = tick;
+            TimeTravel.config.presentTick = tick;
+        }
+    }
 
     public void start() {
         if (TimeTravel.isLooping) {
@@ -36,7 +57,8 @@ public final class Timeline {
 
         TimeTravel.isLooping = true;
         TimeTravel.config.isLooping = true;
-        TimeTravel.dayTimeOrigin = TimeTravel.serverLevel.getDayTime() - TimeTravel.timelineTick;
+        HeadTracking.markDirty();
+        TimeTravel.dayTimeOrigin = TimeTravel.serverLevel.getDayTime() - TimeTravel.sharedTick;
         TimeTravel.config.dayTimeOrigin = TimeTravel.dayTimeOrigin;
 
         MobSpawnJournal.snapshotInitial();
@@ -58,13 +80,13 @@ public final class Timeline {
         ProcessJournal.snapshotOrigins(TimeTravel.server.getPlayerList().getPlayers());
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
-        TimeTravel.TIMELINE_LOGGER.info("Timeline started at tick {}", TimeTravel.timelineTick);
+        TimeTravel.TIMELINE_LOGGER.info("Timeline started at tick {}", TimeTravel.sharedTick);
         TimelineEventBus.fireStart();
     }
 
     public void stop() {
         if (!TimeTravel.isLooping) return;
-        TimeTravel.TIMELINE_LOGGER.info("Stopping timeline at tick {}", TimeTravel.timelineTick);
+        TimeTravel.TIMELINE_LOGGER.info("Stopping timeline at tick {}", TimeTravel.sharedTick);
 
         TimelineSession s = TimeTravel.session();
         BlockJournal.flushWatches();
@@ -77,7 +99,15 @@ public final class Timeline {
 
         TimeTravel.isLooping = false;
         TimeTravel.config.isLooping = false;
-        TimeTravel.config.timelineTick = TimeTravel.timelineTick;
+        TravelFx.clear();
+        HeadWorldView.clear();
+        HeadMobView.clear();
+        HeadItemView.clear();
+        HeadVehicleView.clear();
+        HeadCarry.clear();
+        PastContainers.clear();
+        HeadTracking.markDirty();
+        TimeTravel.config.timelineTick = TimeTravel.sharedTick;
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         VoicechatInteractionCompat.clearCooldowns();
         TimeTravel.config.save();
@@ -99,27 +129,147 @@ public final class Timeline {
         VoicechatCompat.deleteAllAudio();
         TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.getVisits().clear());
 
-        TimeTravel.timelineTick = 0;
+        TimeTravel.sharedTick = 0;
         TimeTravel.config.timelineTick = 0;
+        TimeTravel.presentTick = 0;
+        TimeTravel.config.presentTick = 0;
+        s.heads.resetAll();
         TimeTravel.config.nextVisitId = 1;
         TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> pd.setLastJumpServerTick(-1));
         s.lastJumpOrigin = -1;
-        s.clones.markNeedsRebuild();
         TimeTravel.config.save();
         TimeTravel.broadcastSync();
     }
 
+    private static void relocate(TimelineSession s, PlayerData pd, long from, long target, int dir, boolean fx) {
+        ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(pd.getName());
+        if (pd.getCurrentVisit() != null) s.visits.endVisit(pd, dir);
+        pd.setLastJumpOrigin(from);
+        long fromOffset = pd.getTimeOffset();
+        long toOffset = Math.max(0, TimeTravel.presentTick - target);
+        s.heads.move(pd, toOffset);
+        if (player != null) {
+            if (fx) TravelFx.onTravel(player, fromOffset, toOffset, dir);
+            HeadWorldView.onTravel(player, fromOffset, toOffset);
+            HeadMobView.onTravel(player);
+            HeadCarry.onTravel(player, fromOffset, toOffset);
+            s.visits.beginVisit(player, pd, dir);
+            TimeTravel.sendSync(player);
+            ChatTimeline.resendFor(player);
+        }
+    }
+
+    private String jumpHead(long target, String initiatorName, List<ServerPlayer> bring) {
+        TimelineSession s = TimeTravel.session();
+        PlayerData pd = TimeTravel.timelineSceneManager.getRecordingPlayer(initiatorName);
+        if (pd == null) return "Only recorded players can travel while individualTime is on";
+
+        long from = s.heads.positionOf(pd);
+        if (TimeTravel.maxJumpTicks > 0) {
+            long min = Math.max(0, from - TimeTravel.maxJumpTicks);
+            long max = from + TimeTravel.maxJumpTicks;
+            target = Math.min(max, Math.max(min, target));
+        }
+        if (target == from) return "Already at " + TimeFormat.clock(target);
+
+        long nowServerTick = TimeTravel.server.getTickCount();
+        if (TimeTravel.jumpCooldownTicks > 0 && pd.getLastJumpServerTick() >= 0
+                && nowServerTick - pd.getLastJumpServerTick() < TimeTravel.jumpCooldownTicks) {
+            return "Time jump cooldown - wait a moment";
+        }
+        pd.setLastJumpServerTick(nowServerTick);
+
+        int dir = target > from ? 1 : -1;
+        long skipped = Math.max(0, target - TimeTravel.presentTick);
+        Set<String> moved = new HashSet<>();
+        if (skipped > 0) {
+            Component note = Component.literal(initiatorName + " skipped ahead to "
+                    + TimeFormat.format(target, TimeTravel.displayTimeInTicks) + " and brought the present along");
+            for (PlayerData present : skipAhead(s, skipped)) {
+                relocate(s, present, s.heads.positionOf(present), target, dir, false);
+                moved.add(present.getName());
+                ServerPlayer player = TimeTravel.server.getPlayerList().getPlayerByName(present.getName());
+                if (player != null && present != pd) player.displayClientMessage(note, true);
+            }
+        }
+        if (!moved.contains(pd.getName())) relocate(s, pd, from, target, dir, true);
+
+        int brought = 0;
+        for (ServerPlayer passenger : bring) {
+            String name = passenger.getName().getString();
+            if (name.equalsIgnoreCase(pd.getName())) continue;
+            PlayerData ppd = TimeTravel.timelineSceneManager.getRecordingPlayer(name);
+            if (ppd == null || !ppd.getActive() || moved.contains(ppd.getName())) continue;
+            relocate(s, ppd, s.heads.positionOf(ppd), target, dir, true);
+            passenger.displayClientMessage(Component.literal(initiatorName + " brought you to "
+                    + TimeFormat.format(target, TimeTravel.displayTimeInTicks)), true);
+            brought++;
+        }
+        if (skipped > 0) TimeTravel.broadcastSync();
+
+        TimeTravel.timelineSceneManager.saveRecordingPlayers();
+        TimeTravel.config.save();
+
+        TimeTravel.TIMELINE_LOGGER.info("Individual time jump by {}: {} -> {} (offset {}, brought {}, skipped {})",
+                initiatorName, from, target, pd.getTimeOffset(), brought, skipped);
+        return null;
+    }
+
+    private static List<PlayerData> skipAhead(TimelineSession s, long skipped) {
+        List<PlayerData> present = new ArrayList<>();
+        List<PlayerData> offline = new ArrayList<>();
+        TimeTravel.timelineSceneManager.forEachRecordingPlayer(pd -> {
+            if (pd.getTimeOffset() != 0) return;
+            boolean online = pd.getActive() && TimeTravel.server.getPlayerList().getPlayerByName(pd.getName()) != null;
+            (online ? present : offline).add(pd);
+        });
+
+        long from = TimeTravel.sharedTick;
+        long to = from + skipped;
+        BlockJournal.flushWatches();
+        ProcessJournal.beforeJump();
+
+        s.heads.shiftAll(skipped);
+        for (PlayerData pd : offline) pd.setTimeOffset(0);
+        Journal.shiftAllHeads(skipped);
+        HeadWorldView.shiftHeads(skipped);
+        HeadItemView.shiftHeads(skipped);
+        HeadVehicleView.shiftHeads(skipped);
+        HeadCarry.shiftHeads(skipped);
+        HeadMobView.shiftHeads(skipped);
+        PastContainers.shiftHeads(skipped);
+        TravelFx.shiftHeads(skipped);
+        s.clones.shiftHeads(skipped);
+
+        advancePresent(TimeTravel.presentTick + skipped);
+        TimeTravel.sharedTick = s.heads.sharedPosition();
+        TimeTravel.config.timelineTick = TimeTravel.sharedTick;
+        if (TimeTravel.syncDayTime && TimeTravel.serverLevel.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
+            TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + TimeTravel.sharedTick);
+        }
+
+        EntityJournal.fastForward(from, to);
+        MobJournal.fastForward(from, to);
+        ProcessJournal.afterJump(from, to);
+        return present;
+    }
+
     public String jumpTo(long target, String initiatorName) {
+        return jumpTo(target, initiatorName, List.of());
+    }
+
+    public String jumpTo(long target, String initiatorName, List<ServerPlayer> bring) {
         if (!TimeTravel.isLooping) return "Timeline is not running (use /timetravel start)";
         if (!MocapAdapter.isReady()) return "Mocap is not ready yet";
 
         target = Math.max(0, target);
+        if (TimeTravel.individualTime) return jumpHead(target, initiatorName, bring);
         if (TimeTravel.maxJumpTicks > 0) {
-            long min = Math.max(0, TimeTravel.timelineTick - TimeTravel.maxJumpTicks);
-            long max = TimeTravel.timelineTick + TimeTravel.maxJumpTicks;
+            long min = Math.max(0, TimeTravel.sharedTick - TimeTravel.maxJumpTicks);
+            long max = TimeTravel.sharedTick + TimeTravel.maxJumpTicks;
             target = Math.min(max, Math.max(min, target));
         }
-        if (target == TimeTravel.timelineTick) return "Already at " + TimeFormat.clock(target);
+        if (target == TimeTravel.sharedTick) return "Already at " + TimeFormat.clock(target);
 
         TimelineSession s = TimeTravel.session();
         PlayerData initiatorPd = TimeTravel.timelineSceneManager.getRecordingPlayer(initiatorName);
@@ -132,8 +282,9 @@ public final class Timeline {
             initiatorPd.setLastJumpServerTick(nowServerTick);
         }
 
-        long from = TimeTravel.timelineTick;
+        long from = TimeTravel.sharedTick;
         s.lastJumpOrigin = from;
+        if (initiatorPd != null) initiatorPd.setLastJumpOrigin(from);
         int dir = target > from ? 1 : -1;
         TimeTravel.TIMELINE_LOGGER.info("Time jump by {}: {} -> {}", initiatorName, from, target);
 
@@ -148,7 +299,9 @@ public final class Timeline {
         CloneManager clones = s.clones;
         clones.stopAll();
 
-        TimeTravel.timelineTick = target;
+        advancePresent(target);
+        s.heads.moveAll(TimeTravel.presentTick - target);
+        TimeTravel.sharedTick = target;
         TimeTravel.config.timelineTick = target;
         if (TimeTravel.syncDayTime && TimeTravel.serverLevel.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
             TimeTravel.serverLevel.setDayTime(TimeTravel.dayTimeOrigin + target);
@@ -160,9 +313,8 @@ public final class Timeline {
         TimeTravel.broadcastStopDragonSound();
 
         TimeTravel.forEachOnlineRecorded((p, pd) -> s.visits.beginVisit(p, pd, dir));
-        clones.rebuild();
-        clones.flushPending();
-        clones.flushSounds();
+        clones.rebuildAll();
+        clones.flushAll();
 
         TimeTravel.timelineSceneManager.saveRecordingPlayers();
         TimeTravel.config.save();
@@ -189,7 +341,16 @@ public final class Timeline {
             }
         }
 
+        HeadScope.reset();
+        ExemptBlocks.tick();
         BlockJournal.flushWatches();
+        TravelFx.tick();
+        HeadTracking.refreshIfDirty();
+        HeadWorldView.tick();
+        HeadMobView.tick();
+        HeadVehicleView.tick();
+        HeadCarry.tick();
+        ExemptEntities.tick();
 
         if (!TimeTravel.isLooping || !MocapAdapter.isReady()) return;
 
@@ -203,13 +364,19 @@ public final class Timeline {
             return;
         }
         clones.setIdle(false);
+        s.visits.rotateTrailing();
 
-        if (clones.consumeNeedsRebuild()) clones.rebuild();
-        clones.flushPending();
-        clones.flushSounds();
+        Set<Long> liveHeads = new HashSet<>();
+        for (TimeHead head : s.heads.occupied()) liveHeads.add(head.offset());
+        clones.retainHeads(liveHeads);
 
-        TimeTravel.timelineTick++;
-        TimeTravel.config.timelineTick = TimeTravel.timelineTick;
+        if (clones.consumeNeedsRebuild()) clones.rebuildAll();
+        clones.flushAll();
+
+        TimeTravel.presentTick++;
+        TimeTravel.config.presentTick = TimeTravel.presentTick;
+        TimeTravel.sharedTick = s.heads.sharedPosition();
+        TimeTravel.config.timelineTick = TimeTravel.sharedTick;
         CloneTracks.pollAll();
         clones.replayEvents();
         TimeTravel.JOURNALS.tickAll();
@@ -219,10 +386,11 @@ public final class Timeline {
         if (TimeTravel.trackVoice) VoicechatCompat.onTick();
         s.deathChain.tick();
 
-        if (TimeTravel.timelineTick % 20 == 0) TimeTravel.broadcastSync();
-        if (TimeTravel.timelineTick % 1200 == 0) TimeTravel.config.save();
-        if (TimeTravel.timelineTick % 1200 == 0) MobBinding.prune();
-        if (TimeTravel.timelineTick % 6000 == 0) {
+
+        if (TimeTravel.sharedTick % 20 == 0) TimeTravel.broadcastSync();
+        if (TimeTravel.sharedTick % 1200 == 0) TimeTravel.config.save();
+        if (TimeTravel.sharedTick % 1200 == 0) MobBinding.prune();
+        if (TimeTravel.sharedTick % 6000 == 0) {
             TimeTravel.JOURNALS.saveIfDirtyAll();
             MobBinding.saveIfDirty();
         }

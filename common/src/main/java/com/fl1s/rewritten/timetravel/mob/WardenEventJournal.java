@@ -1,7 +1,9 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.time.TimeContext;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Exempt;
 import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
@@ -124,11 +126,11 @@ public final class WardenEventJournal {
         if (pd == null || pd.getCurrentVisit() == null) return null;
         Entry e = new Entry();
         e.kind = kind;
-        e.tick = TimeTravel.timelineTick;
+        e.tick = TimeContext.now();
         e.seq = STORE.nextSeq();
         e.visit = pd.getCurrentVisit().id;
         e.uuid = uuid;
-        e.dim = level.dimension().location().toString().intern();
+        e.dim = Levels.canonicalId(level);
         e.x = x;
         e.y = y;
         e.z = z;
@@ -141,7 +143,7 @@ public final class WardenEventJournal {
     }
 
     public static void onSound(Warden warden, SoundEvent sound, float volume, float pitch) {
-        if (!active() || warden.isSilent() || MobTrailJournal.isPuppeted(warden)) return;
+        if (!active() || warden.isSilent() || MobTrailJournal.isPuppeted(warden) || Exempt.is(warden)) return;
         if (!(warden.level() instanceof ServerLevel level)) return;
         ResourceLocation id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
         if (id == null) return;
@@ -160,7 +162,7 @@ public final class WardenEventJournal {
     }
 
     public static void onEvent(Warden warden, byte state) {
-        if (graceOf(state) == 0 || !active() || MobTrailJournal.isPuppeted(warden)) return;
+        if (graceOf(state) == 0 || !active() || MobTrailJournal.isPuppeted(warden) || Exempt.is(warden)) return;
         if (!(warden.level() instanceof ServerLevel level)) return;
         Entry e = create(EVENT, level, warden.getUUID(), warden.getX(), warden.getY(), warden.getZ());
         if (e == null) return;
@@ -183,8 +185,8 @@ public final class WardenEventJournal {
 
     public static void onBoomParticle(ServerLevel level, double x, double y, double z) {
         if (!active()) return;
-        long now = TimeTravel.timelineTick;
-        String dim = level.dimension().location().toString();
+        long now = TimeContext.now();
+        String dim = Levels.canonicalId(level);
         Entry cur = currentBoom;
         if (cur != null && cur.tick == now && cur.dim.equals(dim)) {
             double dx = x - cur.x2, dy = y - cur.y2, dz = z - cur.z2;
@@ -315,9 +317,9 @@ public final class WardenEventJournal {
 
     private static void catchUpPoses(long now) {
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
-            String dim = level.dimension().location().toString();
+            String dim = Levels.canonicalId(level);
             for (Entity entity : level.getAllEntities()) {
-                if (!(entity instanceof Warden warden) || warden.isRemoved()) continue;
+                if (!(entity instanceof Warden warden) || warden.isRemoved() || Exempt.is(warden)) continue;
                 List<MobTrailJournal.Sample> samples = MobTrailJournal.samplesOf(warden.getUUID());
                 if (samples == null || samples.isEmpty()) continue;
                 int idx = -1;
@@ -345,7 +347,7 @@ public final class WardenEventJournal {
         pending.clear();
         currentBoom = null;
         if (TimeTravel.server == null || !TimeTravel.isLooping) return;
-        long now = TimeTravel.timelineTick;
+        long now = TimeContext.now();
         for (Entry e : STORE.entries()) {
             if (e.kind != EVENT || e.tick > now) continue;
             long elapsed = now - e.tick;
@@ -355,6 +357,14 @@ public final class WardenEventJournal {
             else play(e);
         }
         catchUpPoses(now);
+    }
+
+    public static void forget(UUID id) {
+        pending.removeIf(p -> id.equals(p.uuid()));
+        if (STORE.entries().removeIf(e -> id.equals(e.uuid))) {
+            STORE.removeUpcoming(e -> id.equals(e.uuid));
+            STORE.markDirty();
+        }
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

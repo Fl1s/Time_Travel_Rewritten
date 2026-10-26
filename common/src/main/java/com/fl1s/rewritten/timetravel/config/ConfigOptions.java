@@ -32,6 +32,9 @@ public final class ConfigOptions {
             new ConfigOption.Int("display", "maxHistorySize",
                     "Uses dark theme for the timeline overlay.",
                     50, 1, 100, v -> TimeTravel.maxHistorySize = v),
+            new ConfigOption.Bool("display", "showExemptGlow",
+                    "Show a green shimmer and sparkles on items and blocks that are exempt from time.",
+                    true, v -> TimeTravel.showExemptGlow = v),
 
             new ConfigOption.Bool("sounds", "oldSfx",
                     "Use the original vanilla-based time travel sounds (v0.8.9 - v0.11.0).",
@@ -59,6 +62,12 @@ public final class ConfigOptions {
             new ConfigOption.Bool("timeline", "syncDayTime",
                     "Synchronize the world day time with the timeline.",
                     true, v -> TimeTravel.syncDayTime = v),
+            new ConfigOption.Bool("timeline", "individualTime",
+                    "Each player carries their own time offset instead of the whole server sharing one clock.",
+                    false, v -> {
+                        TimeTravel.individualTime = v;
+                        if (!v && TimeTravel.heads() != null) TimeTravel.heads().collapseToShared();
+                    }),
             new ConfigOption.Bool("timeline", "jumpRequiresOp",
                     "Only operators may jump in time.",
                     true, v -> TimeTravel.jumpRequiresOp = v),
@@ -71,6 +80,9 @@ public final class ConfigOptions {
             new ConfigOption.Bool("timeline", "chainDeath",
                     "If a past self dies outside of its recorded death, the timeline collapses from that visit.",
                     true, v -> TimeTravel.chainDeath = v),
+            new ConfigOption.Bool("timeline", "noDuplication",
+                    "Stop travellers from taking items their past self is going to collect.",
+                    false, v -> TimeTravel.noDuplication = v),
 
             new ConfigOption.Bool("recording", "trackItems",
                     "Record item entities in addition to vehicles.",
