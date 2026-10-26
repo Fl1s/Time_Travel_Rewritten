@@ -93,10 +93,12 @@ Requires [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat/).
 - `noDuplication` - Stop travellers from taking items their past self is going to collect (off by default). 
 
 ## Individual Time
-i WAS going to explain how this works in depth but.. its literally so that each player has their own timeline. and believe me. i had to pull some mysterious voodoo client server shit to make this work as intended.
+with `individualTime` enabled every player has their own timeline. You can only interact (directly) with players if you share the time with them.
+
+theres still a few caveats with minecarts and other stuff i simply hadn't thought of so do please report those if you can.
 
 ## Exempt
-Exempt items and entities exist outside the timeline. Nothing about them is recorded, jumps never rewind, remove or respawn them, and every traveller sees the same one. Past selves leave them alone.
+Exempt items and entities exist outside the timeline. nothing about them is recorded, their jumps never rewind, remove or respawn them. Because of this they simply exist on all timelines.
 
 - Entities get the `tt_exempt` tag, so `/tag <targets> add tt_exempt` works too.
 - Items get `tt_exempt` in their custom data, e.g. `/give @s diamond[custom_data={tt_exempt:true}]`. They stay put on the ground, in chests, chest minecarts, item frames and armor stands.
