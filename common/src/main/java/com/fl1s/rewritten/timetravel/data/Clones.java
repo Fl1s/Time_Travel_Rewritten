@@ -37,6 +37,10 @@ public final class Clones {
     }
 
     public static boolean is(Object o) {
-        return o != null && CACHE.computeIfAbsent(o.getClass(), Clones::detect);
+        if (o == null) return false;
+        Class<?> type = o.getClass();
+        Boolean cached = CACHE.get(type);
+        if (cached != null) return cached;
+        return CACHE.computeIfAbsent(type, Clones::detect);
     }
 }

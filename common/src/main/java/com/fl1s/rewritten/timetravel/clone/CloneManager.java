@@ -115,6 +115,9 @@ public final class CloneManager {
         scene.forEachRecordingPlayer(pd -> {
             for (Visit visit : pd.getVisits()) {
                 if (visit.pieces.isEmpty()) continue;
+                if (!isSortedByStartTick(visit.pieces)) {
+                    visit.pieces.sort(Comparator.comparingLong(p -> p.startTick));
+                }
 
                 if (visit.arrivalDir != 0 && visit.startDim != null && visit.startTick >= now) {
                     long arriveTick = Math.max(now, visit.startTick - APPEAR_SOUND_LEAD_TICKS);
@@ -156,6 +159,15 @@ public final class CloneManager {
                 now, pending.size());
     }
 
+    private static boolean isSortedByStartTick(List<Visit.Piece> pieces) {
+        long prev = Long.MIN_VALUE;
+        for (Visit.Piece p : pieces) {
+            if (p.startTick < prev) return false;
+            prev = p.startTick;
+        }
+        return true;
+    }
+
     public void flushPending() {
         final long now = TimeTravel.timelineTick;
         while (!pending.isEmpty()
@@ -183,6 +195,8 @@ public final class CloneManager {
 
     public void tickActive() {
         long now = TimeTravel.timelineTick;
+        roots.removeIf(g -> g.root.isFinished());
+
         for (Clone clone : roots) {
             boolean protect = clone.pendingSkip > 0 || now < clone.fx.graceUntil;
             if (protect) shield(clone);
@@ -199,9 +213,6 @@ public final class CloneManager {
             if (!clone.root.isFinished()) clone.fx.tick();
         }
         touchOrbs();
-        if (now % 100 == 0) {
-            roots.removeIf(g -> g.root.isFinished());
-        }
     }
 
     private static void shield(Clone g) {

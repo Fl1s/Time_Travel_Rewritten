@@ -82,6 +82,7 @@ public final class MobStateJournal {
     }.getType(), e -> e.tick, e -> e.seq, e -> e.visit);
 
     private static final Map<UUID, List<Entry>> byUuid = new HashMap<>();
+    private static final Map<UUID, Long> maxTickByUuid = new HashMap<>();
     private static final Set<UUID> sampledThisTick = new HashSet<>();
     private static boolean applying = false;
 
@@ -114,10 +115,13 @@ public final class MobStateJournal {
 
     private static void index(Entry e) {
         byUuid.computeIfAbsent(e.uuid, k -> new ArrayList<>()).add(e);
+        Long max = maxTickByUuid.get(e.uuid);
+        if (max == null || e.tick > max) maxTickByUuid.put(e.uuid, e.tick);
     }
 
     private static void rebuildIndex() {
         byUuid.clear();
+        maxTickByUuid.clear();
         for (Entry e : STORE.entries()) index(e);
     }
 
@@ -142,12 +146,15 @@ public final class MobStateJournal {
     }
 
     public static boolean hasFutureChange(UUID id, long now) {
+        Long max = maxTickByUuid.get(id);
+        if (max == null || max <= now) return false;
         List<Entry> list = byUuid.get(id);
-        if (list == null || list.isEmpty()) return false;
+        if (list == null) return false;
         Entry at = stateAtOf(list, now);
+        String currentSig = at == null ? null : at.nbt;
         for (Entry e : list) {
             if (e.tick <= now) continue;
-            if (at == null || !e.nbt.equals(at.nbt)) return true;
+            if (currentSig == null || !e.nbt.equals(currentSig)) return true;
         }
         return false;
     }
@@ -326,6 +333,7 @@ public final class MobStateJournal {
 
     public static void clear() {
         byUuid.clear();
+        maxTickByUuid.clear();
         sampledThisTick.clear();
         STORE.clear();
     }

@@ -12,6 +12,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -60,6 +62,36 @@ public final class ItemFlowJournal {
     private static final Set<UUID> tracked = new HashSet<>();
     private static final List<ItemEntity> toDiscard = new ArrayList<>();
 
+    private static final Map<UUID, Entry> dropIndex = new HashMap<>();
+    private static final Map<UUID, Entry> pickupIndex = new HashMap<>();
+    private static final Map<UUID, Entry> destroyIndex = new HashMap<>();
+
+    private static final class Ghost {
+        final String dim;
+        final UUID id;
+        final long dropTick;
+        final long deadline;
+        final int cx, cz;
+        final String key;
+        boolean held;
+
+        Ghost(String dim, UUID id, long dropTick, long deadline, int cx, int cz, String key, boolean held) {
+            this.dim = dim;
+            this.id = id;
+            this.dropTick = dropTick;
+            this.deadline = deadline;
+            this.cx = cx;
+            this.cz = cz;
+            this.key = key;
+            this.held = held;
+        }
+    }
+
+    private static final int GHOST_TIMEOUT_TICKS = 200;
+    private static final int GHOST_LIMIT = 64;
+    private static final List<Ghost> ghosts = new ArrayList<>();
+    private static final Map<String, Integer> forcedByUs = new HashMap<>();
+
     private static boolean applying = false;
     private static boolean suppressDrop = false;
     private static int replayDepth = 0;
@@ -86,6 +118,25 @@ public final class ItemFlowJournal {
         Entity attacker = src.getEntity();
         Entity direct = src.getDirectEntity();
         return (attacker != null && Clones.is(attacker)) || (direct != null && Clones.is(direct));
+    }
+
+    private static void indexEntry(Entry e) {
+        if (e.itemUuid == null) return;
+        switch (e.kind) {
+            case KIND_DROP -> {
+                Entry cur = dropIndex.get(e.itemUuid);
+                if (cur == null || e.tick < cur.tick) dropIndex.put(e.itemUuid, e);
+            }
+            case KIND_PICKUP -> {
+                Entry cur = pickupIndex.get(e.itemUuid);
+                if (cur == null || e.tick < cur.tick) pickupIndex.put(e.itemUuid, e);
+            }
+            case KIND_DESTROY -> {
+                Entry cur = destroyIndex.get(e.itemUuid);
+                if (cur == null || e.tick < cur.tick) destroyIndex.put(e.itemUuid, e);
+            }
+            default -> { }
+        }
     }
 
     public static void onEntitySpawn(ServerLevel level, Entity entity) {
@@ -129,6 +180,7 @@ public final class ItemFlowJournal {
         e.stack = item.getItem().save(TimeTravel.server.registryAccess()).toString();
         e.itemUuid = item.getUUID();
         STORE.entries().add(e);
+        indexEntry(e);
         tracked.add(e.itemUuid);
         STORE.markDirty();
     }
@@ -139,18 +191,10 @@ public final class ItemFlowJournal {
         UUID id = item.getUUID();
         if (!tracked.contains(id)) return;
 
-        Entry drop = null;
-        for (Entry e : STORE.entries()) {
-            if (e.kind == KIND_DROP && id.equals(e.itemUuid)) {
-                if (drop == null || e.tick < drop.tick) drop = e;
-            }
-        }
+        Entry drop = dropIndex.get(id);
         if (drop == null) return;
-
-        for (Entry e : STORE.entries()) {
-            if (e.kind == KIND_PICKUP && id.equals(e.itemUuid)) return;
-            if (e.kind == KIND_DESTROY && id.equals(e.itemUuid)) return;
-        }
+        if (pickupIndex.containsKey(id)) return;
+        if (destroyIndex.containsKey(id)) return;
 
         Entry e = new Entry();
         e.kind = KIND_DESTROY;
@@ -165,6 +209,7 @@ public final class ItemFlowJournal {
         e.stack = drop.stack;
         e.itemUuid = id;
         STORE.entries().add(e);
+        indexEntry(e);
         STORE.markDirty();
     }
 
@@ -191,12 +236,91 @@ public final class ItemFlowJournal {
         e.itemUuid = item.getUUID();
         e.originTick = e.tick - item.getAge();
         STORE.entries().add(e);
+        indexEntry(e);
         tracked.add(e.itemUuid);
         STORE.markDirty();
     }
 
+    private static void scheduleGhost(ServerLevel level, Entry e) {
+        if (e.itemUuid == null || ghosts.size() >= GHOST_LIMIT) return;
+        for (Ghost g : ghosts) if (g.id.equals(e.itemUuid)) return;
+
+        int cx = Mth.floor(e.x) >> 4;
+        int cz = Mth.floor(e.z) >> 4;
+        long chunkKey = ChunkPos.asLong(cx, cz);
+        String key = e.dim + "|" + chunkKey;
+        boolean held = false;
+        try {
+            Integer n = forcedByUs.get(key);
+            if (n != null) {
+                forcedByUs.put(key, n + 1);
+                held = true;
+            } else if (!level.getForcedChunks().contains(chunkKey)) {
+                level.setChunkForced(cx, cz, true);
+                forcedByUs.put(key, 1);
+                held = true;
+            }
+        } catch (Exception ex) {
+            TimeTravel.TIMELINE_LOGGER.error("Failed to force-load chunk for ghost item {}", e.itemUuid, ex);
+            return;
+        }
+        long now = TimeTravel.timelineTick;
+        ghosts.add(new Ghost(e.dim, e.itemUuid, e.tick, now + GHOST_TIMEOUT_TICKS, cx, cz, key, held));
+    }
+
+    private static void processGhosts() {
+        if (ghosts.isEmpty() || TimeTravel.server == null) return;
+        long now = TimeTravel.timelineTick;
+        for (Iterator<Ghost> it = ghosts.iterator(); it.hasNext(); ) {
+            Ghost g = it.next();
+            boolean done = now >= g.dropTick || now >= g.deadline;
+            if (!done) {
+                ServerLevel level = TimeTravel.server.getLevel(Levels.key(g.dim));
+                if (level == null) {
+                    done = true;
+                } else {
+                    Entity item = level.getEntity(g.id);
+                    if (item != null) {
+                        if (!item.isRemoved()) item.discard();
+                        done = true;
+                    }
+                }
+            }
+            if (done) {
+                it.remove();
+                releaseGhostChunk(g);
+            }
+        }
+    }
+
+    private static void releaseGhostChunk(Ghost g) {
+        if (!g.held) return;
+        g.held = false;
+        Integer n = forcedByUs.get(g.key);
+        if (n == null) return;
+        if (n > 1) {
+            forcedByUs.put(g.key, n - 1);
+            return;
+        }
+        forcedByUs.remove(g.key);
+        if (TimeTravel.server == null) return;
+        try {
+            ServerLevel level = TimeTravel.server.getLevel(Levels.key(g.dim));
+            if (level != null) level.setChunkForced(g.cx, g.cz, false);
+        } catch (Exception ex) {
+            TimeTravel.TIMELINE_LOGGER.error("Failed to release forced chunk {}", g.key, ex);
+        }
+    }
+
+    private static void releaseAllGhosts() {
+        for (Ghost g : new ArrayList<>(ghosts)) releaseGhostChunk(g);
+        ghosts.clear();
+        forcedByUs.clear();
+    }
+
     public static void tick() {
         if (!TimeTravel.isLooping) return;
+        processGhosts();
         if (!toDiscard.isEmpty()) {
             for (ItemEntity i : toDiscard) if (!i.isRemoved()) i.discard();
             toDiscard.clear();
@@ -265,15 +389,14 @@ public final class ItemFlowJournal {
     private static long originOf(Entry pickup) {
         if (pickup.originTick != Long.MIN_VALUE) return pickup.originTick;
         if (pickup.itemUuid == null) return Long.MIN_VALUE;
-        for (Entry d : STORE.entries()) {
-            if (d.kind == KIND_DROP && pickup.itemUuid.equals(d.itemUuid)) return d.tick;
-        }
-        return Long.MIN_VALUE;
+        Entry drop = dropIndex.get(pickup.itemUuid);
+        return drop == null ? Long.MIN_VALUE : drop.tick;
     }
 
     public static void onJump(long from, long target) {
         if (TimeTravel.server == null) { rebuildUpcoming(); return; }
         toDiscard.clear();
+        releaseAllGhosts();
 
         if (target < from) {
             for (Entry e : STORE.entries()) {
@@ -284,6 +407,7 @@ public final class ItemFlowJournal {
                 if (e.kind == KIND_DROP) {
                     Entity item = findLoaded(level, e.itemUuid);
                     if (item != null && !item.isRemoved()) item.discard();
+                    else if (item == null && e.tick <= from && from - e.tick < ITEM_LIFESPAN) scheduleGhost(level, e);
                 } else if (e.kind == KIND_PICKUP) {
                     long origin = originOf(e);
                     long age = origin == Long.MIN_VALUE ? 0 : target - origin;
@@ -307,13 +431,8 @@ public final class ItemFlowJournal {
                         applying = false;
                     }
                 } else if (e.kind == KIND_DESTROY) {
-                    Entry drop = null;
-                    for (Entry d : STORE.entries()) {
-                        if (d.kind == KIND_DROP && e.itemUuid.equals(d.itemUuid) && d.tick <= target) {
-                            if (drop == null || d.tick < drop.tick) drop = d;
-                        }
-                    }
-                    if (drop == null) continue;
+                    Entry drop = dropIndex.get(e.itemUuid);
+                    if (drop == null || drop.tick > target) continue;
                     long age = target - drop.tick;
                     if (age < 0 || age >= ITEM_LIFESPAN) continue;
                     Entity item = findLoaded(level, e.itemUuid);
@@ -410,8 +529,12 @@ public final class ItemFlowJournal {
 
     private static void rebuildTracked() {
         tracked.clear();
+        dropIndex.clear();
+        pickupIndex.clear();
+        destroyIndex.clear();
         for (Entry e : STORE.entries()) {
             if (e.itemUuid != null) tracked.add(e.itemUuid);
+            indexEntry(e);
         }
     }
 
@@ -438,7 +561,10 @@ public final class ItemFlowJournal {
         rebuildUpcoming();
     }
 
-    public static void save() { STORE.save(); }
+    public static void save() {
+        releaseAllGhosts();
+        STORE.save();
+    }
     public static void saveIfDirty() { STORE.saveIfDirty(); }
 
     public static void clear() {
@@ -446,7 +572,11 @@ public final class ItemFlowJournal {
         retry.clear();
         toDiscard.clear();
         tracked.clear();
+        dropIndex.clear();
+        pickupIndex.clear();
+        destroyIndex.clear();
         replayDepth = 0;
+        releaseAllGhosts();
         STORE.clear();
     }
 }

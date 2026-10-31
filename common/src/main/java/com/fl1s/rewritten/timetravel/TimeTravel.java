@@ -34,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
@@ -89,6 +90,31 @@ public class TimeTravel {
 	public static final JournalRegistry JOURNALS = new JournalRegistry();
 
 	private static TimelineSession session;
+
+	private static List<ServerPlayer> playersSnapshot;
+	private static long playersSnapshotTick = -1;
+	private static int playersSnapshotActiveCount;
+
+	public static void invalidatePlayersSnapshot() {
+		playersSnapshotTick = -1;
+	}
+
+	private static List<ServerPlayer> playersSnapshot() {
+		long now = timelineTick;
+		if (playersSnapshotTick != now || playersSnapshot == null) {
+			playersSnapshot = new ArrayList<>(server.getPlayerList().getPlayers());
+			int active = 0;
+			for (int i = 0, n = playersSnapshot.size(); i < n; i++) {
+				ServerPlayer p = playersSnapshot.get(i);
+				if (isClone(p)) continue;
+				PlayerData pd = timelineSceneManager.getRecordingPlayer(p.getName().getString());
+				if (pd != null && pd.getActive()) active++;
+			}
+			playersSnapshotActiveCount = active;
+			playersSnapshotTick = now;
+		}
+		return playersSnapshot;
+	}
 
 	public static void resetSession() {
 		session = new TimelineSession();
@@ -196,7 +222,7 @@ public class TimeTravel {
 	}
 
 	public static void forEachOnlineRecorded(BiConsumer<ServerPlayer, PlayerData> action) {
-		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
+		for (ServerPlayer player : playersSnapshot()) {
 			if (isClone(player)) continue;
 			PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getName().getString());
 			if (pd == null || !pd.getActive()) continue;
@@ -205,13 +231,8 @@ public class TimeTravel {
 	}
 
 	public static int countOnlineRecorded() {
-		int count = 0;
-		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-			if (isClone(player)) continue;
-			PlayerData pd = timelineSceneManager.getRecordingPlayer(player.getGameProfile().getName());
-			if (pd != null && pd.getActive()) count++;
-		}
-		return count;
+		playersSnapshot();
+		return playersSnapshotActiveCount;
 	}
 
 	static boolean isClone(ServerPlayer player) {
@@ -261,7 +282,7 @@ public class TimeTravel {
 	public static void broadcastSync() {
 		if (server == null) return;
 		TimelineSyncPayload payload = new TimelineSyncPayload(timelineTick, isLooping, displayTimeInTicks, showTimelineInfo);
-		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
+		for (ServerPlayer player : playersSnapshot()) {
 			if (isClone(player)) continue;
 			TimelineNet.sendToPlayer(player, payload);
 		}
@@ -270,7 +291,7 @@ public class TimeTravel {
 	public static void broadcastStopDragonSound() {
 		if (server == null) return;
 		ClientboundStopSoundPacket packet = new ClientboundStopSoundPacket(SoundEvents.ENDER_DRAGON_DEATH.getLocation(), null);
-		for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
+		for (ServerPlayer player : playersSnapshot()) {
 			if (isClone(player)) continue;
 			player.connection.send(packet);
 		}

@@ -7,6 +7,7 @@ import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -110,8 +111,23 @@ public final class Journal<E> {
     }
 
     public void eraseVisits(Set<Integer> visitIds) {
+        if (visitIds == null || visitIds.isEmpty()) return;
+        if (visitIds.contains(-1)) {
+            HashSet<Integer> filtered = new HashSet<>(visitIds);
+            filtered.remove(-1);
+            if (filtered.isEmpty()) return;
+            eraseVisits(filtered);
+            return;
+        }
+
+        int before = entries.size();
         entries.removeIf(e -> visitIds.contains(visitFn.applyAsInt(e)));
-        upcoming.removeIf(e -> visitIds.contains(visitFn.applyAsInt(e)));
+        if (entries.size() == before) return;
+
+        upcoming.clear();
+        for (E e : entries) {
+            if (tickFn.applyAsLong(e) > TimeTravel.timelineTick) upcoming.add(e);
+        }
         dirty = true;
     }
 }

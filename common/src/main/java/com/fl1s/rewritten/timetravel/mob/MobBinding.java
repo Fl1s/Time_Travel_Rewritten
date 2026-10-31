@@ -34,7 +34,15 @@ public final class MobBinding {
         if (owner >= 0) return visit == owner;
 
         Integer current = bound.get(mob.getUUID());
-        if (current == null || current == visit || !ownerHolds(mob, current)) {
+        if (current == null || current == visit) {
+            bind(mob, visit);
+            return true;
+        }
+        if (!TimeTravel.visitKnown(current) && !TimeTravel.visitPending(current)) {
+            bind(mob, visit);
+            return true;
+        }
+        if (!ownerHolds(mob, current)) {
             bind(mob, visit);
             return true;
         }
@@ -56,8 +64,10 @@ public final class MobBinding {
 
     private static boolean ownerHolds(Mob mob, int visit) {
         Entity owner = TimeTravel.entityOfVisit(visit);
-        if (owner == null) return TimeTravel.visitPending(visit);
-        return owner.isAlive() && owner.level() == mob.level() && owner.distanceToSqr(mob) <= RANGE_SQ;
+        if (owner != null) {
+            return owner.isAlive() && owner.level() == mob.level() && owner.distanceToSqr(mob) <= RANGE_SQ;
+        }
+        return TimeTravel.visitPending(visit);
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

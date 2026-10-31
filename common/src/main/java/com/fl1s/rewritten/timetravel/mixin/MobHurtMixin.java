@@ -112,6 +112,11 @@ public abstract class MobHurtMixin {
 
         if (MobJournal.isApplying()) return;
 
+        if (source.is(DamageTypes.ON_FIRE) && self instanceof Mob m && MobTrailJournal.isPuppeted(m)) {
+            cir.setReturnValue(false);
+            return;
+        }
+
         if (tt$isPuppetAttacker(source.getEntity()) || tt$isPuppetAttacker(source.getDirectEntity())) {
             if (self.level() instanceof ServerLevel sl) {
                 self.hurtDuration = 10;

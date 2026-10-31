@@ -26,11 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Records server-sent spell particles and replays them on the timeline.
- */
 public final class ParticleJournal {
     private ParticleJournal() {
     }
@@ -56,16 +52,9 @@ public final class ParticleJournal {
 
     private static final int MAX_PER_VISIT = 20000;
     private static final Map<Integer, Integer> perVisitCount = new HashMap<>();
-
-    private static final List<String> SOURCE_PREFIXES = new CopyOnWriteArrayList<>(List.of("io.redspace.ironsspellbooks."));
-    private static final StackWalker WALKER = StackWalker.getInstance();
     private static final Set<String> warned = new HashSet<>();
 
     private static boolean replaying = false;
-
-    public static void addSourcePrefix(String prefix) {
-        if (prefix != null && !prefix.isEmpty()) SOURCE_PREFIXES.add(prefix);
-    }
 
     public static boolean isReplaying() {
         return replaying;
@@ -93,6 +82,7 @@ public final class ParticleJournal {
         if (!TimeTravel.isLooping) return;
         if (ReplayState.SUPPRESS) return;
         if (replaying) return;
+        if (!trustedSource) return;
         if (com.fl1s.rewritten.timetravel.mob.MobEventJournal.isCreeperExploding()) return;
         if (TimeTravel.timelineSceneManager == null) return;
         if (count < 0 || options == null) return;
@@ -104,8 +94,6 @@ public final class ParticleJournal {
 
         int used = perVisitCount.getOrDefault(visitId, 0);
         if (used >= MAX_PER_VISIT) return;
-
-        if (!trustedSource && !isFromSpellCode()) return;
 
         String type = null;
         String opts = null;
@@ -137,14 +125,6 @@ public final class ParticleJournal {
         STORE.entries().add(e);
         perVisitCount.put(visitId, used + 1);
         STORE.markDirty();
-    }
-
-    private static boolean isFromSpellCode() {
-        return WALKER.walk(frames -> frames.limit(32).anyMatch(f -> {
-            String name = f.getClassName();
-            for (String prefix : SOURCE_PREFIXES) if (name.startsWith(prefix)) return true;
-            return false;
-        }));
     }
 
     private static String encode(ServerLevel level, ParticleOptions options) {
