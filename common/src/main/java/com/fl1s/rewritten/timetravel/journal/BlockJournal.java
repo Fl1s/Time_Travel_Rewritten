@@ -23,15 +23,14 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.item.JukeboxSongPlayer;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
+import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.BaseRailBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BrewingStandBlock;
 import net.minecraft.world.level.block.ButtonBlock;
-import net.minecraft.world.level.block.FireBlock;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.LevelEvent;
-import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -68,6 +67,8 @@ public final class BlockJournal {
     private static final long DEDUP_TICKS = 40;
     private static final Direction[] DIRECTIONS = Direction.values();
     private static final Map<BlockState, String> SERIALIZED = new ConcurrentHashMap<>();
+    private static final int DRAIN_LIMIT = 8192;
+    private static final int FIRE_DRAIN_LIMIT = 8192;
 
     public static final class Entry {
         String dim;
@@ -121,7 +122,7 @@ public final class BlockJournal {
     private static final Map<ServerLevel, Set<BlockPos>> settleTouched = new HashMap<>();
     private static final Map<ServerLevel, Set<BlockPos>> fluidTouched = new HashMap<>();
     private static final Map<ServerLevel, Map<BlockPos, Fluid>> drainSeeds = new HashMap<>();
-    private static final int DRAIN_LIMIT = 8192;
+    private static final Map<ServerLevel, Set<BlockPos>> fireSeeds = new HashMap<>();
     private static final Map<Long, List<Entry>> byPos = new HashMap<>();
     private static boolean applying = false;
     private static boolean erasing = false;
@@ -277,12 +278,16 @@ public final class BlockJournal {
         if (actionDepth == 0 && old.getBlock() == now.getBlock() && RedstoneJournal.isOutput(now)) return;
         if (derived && ReplayState.isReplaying()) return;
         long tick = TimeTravel.timelineTick;
-        Map<Long, MovingOrigin> inFlight = moving.computeIfAbsent(level, l -> new HashMap<>());
+
         if (now.is(Blocks.MOVING_PISTON)) {
-            if (!old.is(Blocks.MOVING_PISTON)) inFlight.put(pos.asLong(), new MovingOrigin(old, tick));
+            if (!old.is(Blocks.MOVING_PISTON)) {
+                moving.computeIfAbsent(level, l -> new HashMap<>()).put(pos.asLong(), new MovingOrigin(old, tick));
+            }
             return;
         }
         if (old.is(Blocks.MOVING_PISTON)) {
+            Map<Long, MovingOrigin> inFlight = moving.get(level);
+            if (inFlight == null) return;
             MovingOrigin origin = inFlight.remove(pos.asLong());
             if (origin == null) return;
             old = origin.state();
@@ -345,6 +350,10 @@ public final class BlockJournal {
         STORE.markDirty();
     }
 
+    private static boolean isFireBlock(BlockState state) {
+        return state.getBlock() instanceof BaseFireBlock;
+    }
+
     private static boolean isSourceLiquid(BlockState state) {
         return state.getBlock() instanceof LiquidBlock && state.getFluidState().isSource();
     }
@@ -364,8 +373,8 @@ public final class BlockJournal {
             return actionDepth > 0 && (isSourceLiquid(old) || isSourceLiquid(now));
         }
         if (a == b && (a instanceof AbstractFurnaceBlock || a instanceof BrewingStandBlock)) return false;
-        if (a instanceof FireBlock && (b instanceof FireBlock || now.isAir())) return false;
-        if (b instanceof FireBlock && old.isAir()) return false;
+        if (isFireBlock(old) && (isFireBlock(now) || now.isAir())) return false;
+        if (isFireBlock(now) && old.isAir()) return actionDepth > 0;
         return true;
     }
 
@@ -434,8 +443,50 @@ public final class BlockJournal {
         for (BlockPos p : boundary) nudgeOne(level, p);
     }
 
+    private static void drainFireAll() {
+        if (fireSeeds.isEmpty()) return;
+        Map<ServerLevel, Set<BlockPos>> copy = new HashMap<>(fireSeeds);
+        fireSeeds.clear();
+        for (Map.Entry<ServerLevel, Set<BlockPos>> en : copy.entrySet()) {
+            ServerLevel level = en.getKey();
+            for (BlockPos seed : en.getValue()) {
+                drainFire(level, seed);
+            }
+        }
+    }
+
+    private static void drainFire(ServerLevel level, BlockPos origin) {
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        Set<Long> seen = new HashSet<>();
+        List<BlockPos> region = new ArrayList<>();
+        seen.add(origin.asLong());
+        queue.add(origin);
+        while (!queue.isEmpty() && region.size() < FIRE_DRAIN_LIMIT) {
+            BlockPos cur = queue.poll();
+            for (Direction d : DIRECTIONS) {
+                BlockPos next = cur.relative(d);
+                if (!level.isLoaded(next) || !seen.add(next.asLong())) continue;
+                if (!isFireBlock(level.getBlockState(next))) continue;
+                region.add(next);
+                queue.add(next);
+            }
+        }
+        if (region.isEmpty()) return;
+
+        applying = true;
+        try {
+            BlockState air = Blocks.AIR.defaultBlockState();
+            for (BlockPos p : region) level.setBlock(p, air, QUIET_FLAGS);
+        } catch (Exception ex) {
+            TimeTravel.TIMELINE_LOGGER.error("Failed to drain fire around {}", origin, ex);
+        } finally {
+            applying = false;
+        }
+    }
+
     private static void flushFluids() {
         drainAll();
+        drainFireAll();
         if (fluidTouched.isEmpty()) return;
         Map<ServerLevel, Set<BlockPos>> copy = new HashMap<>(fluidTouched);
         fluidTouched.clear();
@@ -596,6 +647,9 @@ public final class BlockJournal {
                 }
                 if (!toNew && isSourceLiquid(current) && !isSourceLiquid(state)) {
                     drainSeeds.computeIfAbsent(level, l -> new HashMap<>()).put(pos.immutable(), sourceOf(current.getFluidState()));
+                }
+                if (!toNew && isFireBlock(current) && !isFireBlock(state)) {
+                    fireSeeds.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
                 }
                 if (rail) {
                     BlockPos ip = pos.immutable();
@@ -882,7 +936,6 @@ public final class BlockJournal {
         jukeboxes.computeIfAbsent(level, l -> new HashSet<>()).add(pos.immutable());
     }
 
-    //am I overthinking it
     private static void flushJukeboxes() {
         if (jukeboxes.isEmpty()) return;
         Map<ServerLevel, Set<BlockPos>> copy = new HashMap<>(jukeboxes);
@@ -960,6 +1013,7 @@ public final class BlockJournal {
         jukeboxes.clear();
         fluidTouched.clear();
         drainSeeds.clear();
+        fireSeeds.clear();
         moving.clear();
         STORE.clear();
     }

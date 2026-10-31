@@ -58,6 +58,7 @@ public final class MobTrailJournal {
         public int phase = -1;
         public int pose = -1;
         public int clientAnger = -1;
+        public int fireTicks;
     }
 
     private static final class Track {
@@ -95,6 +96,7 @@ public final class MobTrailJournal {
     private static final String PUPPET_TAG = "tt_puppet";
     private static final String ORIG_NOAI_TAG = "tt_orig_noai";
     private static final Map<UUID, Boolean> originalNoAi = new HashMap<>();
+    private static final Map<UUID, Integer> originalFire = new HashMap<>();
     private static final Set<UUID> bosses = new HashSet<>();
     private static final Map<UUID, Float> lastBossHealth = new HashMap<>();
     private static boolean wasReplaying = false;
@@ -116,6 +118,7 @@ public final class MobTrailJournal {
             if (e instanceof Mob mob) {
                 boolean orig = mob.isNoAi();
                 originalNoAi.put(e.getUUID(), orig);
+                originalFire.put(e.getUUID(), mob.getRemainingFireTicks());
                 mob.addTag(PUPPET_TAG);
                 if (orig) mob.addTag(ORIG_NOAI_TAG);
             }
@@ -265,11 +268,11 @@ public final class MobTrailJournal {
     }
 
     private static boolean sameState(Sample a, Sample b) {
-        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.angry == b.angry && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell && a.invul == b.invul && a.phase == b.phase && a.pose == b.pose && a.clientAnger == b.clientAnger;
+        return a.x == b.x && a.y == b.y && a.z == b.z && a.yRot == b.yRot && a.xRot == b.xRot && a.yHeadRot == b.yHeadRot && a.yBodyRot == b.yBodyRot && a.health == b.health && a.swinging == b.swinging && a.attackAnim == b.attackAnim && a.aggressive == b.aggressive && a.usingItem == b.usingItem && a.useItemRemaining == b.useItemRemaining && a.angry == b.angry && a.activeHand == b.activeHand && a.swellDir == b.swellDir && a.swell == b.swell && a.invul == b.invul && a.phase == b.phase && a.pose == b.pose && a.clientAnger == b.clientAnger && (a.fireTicks > 0) == (b.fireTicks > 0);
     }
 
     private static boolean cheapSameState(Sample a, Mob mob) {
-        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.angry == angryOf(mob) && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0) && a.invul == (mob instanceof WitherBoss w ? w.getInvulnerableTicks() : 0) && a.phase == phaseOf(mob) && a.pose == WardenSupport.poseOf(mob) && a.clientAnger == WardenSupport.angerOf(mob);
+        return a.x == mob.getX() && a.y == mob.getY() && a.z == mob.getZ() && a.yRot == mob.getYRot() && a.xRot == mob.getXRot() && a.yHeadRot == mob.getYHeadRot() && a.yBodyRot == mob.yBodyRot && a.angry == angryOf(mob) && a.health == mob.getHealth() && a.swinging == mob.swinging && a.attackAnim == mob.attackAnim && a.aggressive == mob.isAggressive() && a.usingItem == mob.isUsingItem() && a.useItemRemaining == mob.getUseItemRemainingTicks() && a.activeHand == mob.getUsedItemHand().ordinal() && a.swellDir == (mob instanceof Creeper c ? c.getSwellDir() : 0) && a.swell == (mob instanceof Creeper c ? ((CreeperAccessor) c).tt$getSwell() : 0) && a.invul == (mob instanceof WitherBoss w ? w.getInvulnerableTicks() : 0) && a.phase == phaseOf(mob) && a.pose == WardenSupport.poseOf(mob) && a.clientAnger == WardenSupport.angerOf(mob) && (a.fireTicks > 0) == (mob.getRemainingFireTicks() > 0);
     }
 
     private static Sample makeSample(Mob mob, long now) {
@@ -303,6 +306,7 @@ public final class MobTrailJournal {
         s.pose = WardenSupport.poseOf(mob);
         s.clientAnger = WardenSupport.angerOf(mob);
         s.angry = angryOf(mob);
+        s.fireTicks = mob.getRemainingFireTicks();
         return s;
     }
 
@@ -346,6 +350,7 @@ public final class MobTrailJournal {
             if (!puppets.contains(id)) {
                 boolean orig = mob.getTags().contains(PUPPET_TAG) ? mob.getTags().contains(ORIG_NOAI_TAG) : mob.isNoAi();
                 originalNoAi.put(id, orig);
+                originalFire.put(id, mob.getRemainingFireTicks());
                 puppets.add(id);
                 mob.addTag(PUPPET_TAG);
                 if (orig) mob.addTag(ORIG_NOAI_TAG);
@@ -369,6 +374,7 @@ public final class MobTrailJournal {
             }
         }
     }
+
     private static void applySpawned() {
         if (spawnedPuppets.isEmpty() || TimeTravel.server == null) return;
         long now = TimeTravel.timelineTick;
@@ -434,6 +440,8 @@ public final class MobTrailJournal {
         mob.setNoAi(!(mob instanceof EnderDragon));
         mob.setDeltaMovement(vel);
         mob.fallDistance = 0;
+
+        if (mob.getRemainingFireTicks() != s.fireTicks) mob.setRemainingFireTicks(s.fireTicks);
 
         if (s.health <= 0) return;
 
@@ -516,11 +524,13 @@ public final class MobTrailJournal {
         if (!puppets.remove(id)) return;
         lastBossHealth.remove(id);
         Boolean orig = originalNoAi.remove(id);
+        Integer origFire = originalFire.remove(id);
         if (TimeTravel.server == null) return;
         for (ServerLevel level : TimeTravel.server.getAllLevels()) {
             Entity e = level.getEntity(id);
             if (e instanceof Mob mob && !mob.isRemoved()) {
                 mob.setNoAi(orig != null && orig);
+                if (origFire != null) mob.setRemainingFireTicks(origFire);
                 mob.removeTag(PUPPET_TAG);
                 mob.removeTag(ORIG_NOAI_TAG);
                 if (mob instanceof Warden w) WardenSupport.settle(w);
@@ -638,6 +648,7 @@ public final class MobTrailJournal {
             if (!(e instanceof Mob mob) || mob.isRemoved()) continue;
 
             mob.setHealth(Math.min(s.health, mob.getMaxHealth()));
+            if (mob.getRemainingFireTicks() != s.fireTicks) mob.setRemainingFireTicks(s.fireTicks);
             applyBossState(mob, s);
             if (mob.deathTime > 0) {
                 mob.deathTime = 0;
@@ -712,6 +723,7 @@ public final class MobTrailJournal {
         puppets.clear();
         spawnedPuppets.clear();
         originalNoAi.clear();
+        originalFire.clear();
         bosses.clear();
         lastBossHealth.clear();
         wasReplaying = false;

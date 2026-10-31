@@ -4,9 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-### [Unreleased]
+## [Unreleased]
 
-## [1.21.1-0.11.5] - 2026-11-25
+## [1.21.1-0.12.0] - 2026-11-1
+
+### Added
+
+ - Fire tracking
+
+### Changed
+
+ - Overall optimization
+ - Mod icon
+
+## [1.21.1-0.11.5] - 2026-10-25
 
 ### Fixed
 
@@ -16,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Vehicles not spawning after creeper's explosion rewind
  - Pistols & projectiles
 
-## [1.21.1-0.11.4] - 2026-11-24
+## [1.21.1-0.11.4] - 2026-10-24
 
 ### Changed
 
@@ -27,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
  - Mob hurt visuals from past self hits
 
-## [1.21.1-0.11.3] - 2026-11-24
+## [1.21.1-0.11.3] - 2026-10-24
 
 ### Added
 
@@ -44,7 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Paradox death chain
  - oldSfx delay
 
-## [1.21.1-0.11.2] - 2026-11-22
+## [1.21.1-0.11.2] - 2026-10-22
 
 ### Added
 
@@ -61,7 +72,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Mobs tame/sit/collar/anger rewind
  - Saddle remain on horse after travel back in time before taming the horse
 
-## [1.21.1-0.11.1] - 2026-11-21
+## [1.21.1-0.11.1] - 2026-10-21
 
 ### Added
 
@@ -76,7 +87,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - doDaylightCycle=false gamerule does nothing
  - Spawners duplicating mobs on replay 
 
-## [1.21.1-0.11.0] - 2026-11-20
+## [1.21.1-0.11.0] - 2026-10-20
 
 ### Added
 
@@ -87,7 +98,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
  - Golems duplicated spawn and flying pumpkin that kills them
 
-## [1.21.1-0.10.8] - 2026-11-19
+## [1.21.1-0.10.8] - 2026-10-19
 
 ### Added
 
@@ -102,7 +113,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
  - Items restoration when jumping forward after an item destruction event
 
-## [1.21.1-0.10.7] - 2026-11-19
+## [1.21.1-0.10.7] - 2026-10-19
 
 ### Added
 
@@ -118,7 +129,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Past selves do not deal enough damage to break carts/boats
  - Loot duplication on containers destruction
 
-## [1.21.1-0.10.6] - 2026-11-18
+## [1.21.1-0.10.6] - 2026-10-18
 
 ### Added
 
@@ -130,7 +141,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Creeper's explosion ignores past selves shields
  - Reduced chance of time desync of mobTrailJournal
 
-## [1.21.1-0.10.5] - 2026-11-18
+## [1.21.1-0.10.5] - 2026-10-18
 
 ### Added
 
@@ -142,7 +153,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Vehicle container polled twice per tick
  - Past selves voices is playing even if the world is paused
 
-## [1.21.1-0.10.4] - 2026-11-18
+## [1.21.1-0.10.4] - 2026-10-18
 
 ### Added
 
@@ -152,13 +163,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
  - Leaves rewind when cut them with shears
 
-## [1.21.1-0.10.3] - 2026-11-18
+## [1.21.1-0.10.3] - 2026-10-18
 
 ### Fixed
 
  - Fixed desync when killing an out-of-time mob while other clones are replaying
 
-## [1.21.1-0.10.2] - 2026-11-17
+## [1.21.1-0.10.2] - 2026-10-17
 
 ### Added
 
@@ -169,12 +180,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  - Desync hat occurs when killing a mob that will canonically die later
  - Dropped items will not disappear if the player missed the event from which they appeared
 
-## [1.21.1-0.10.1] - 2026-11-17
+## [1.21.1-0.10.1] - 2026-10-17
 
 ### Changed
  - Journals optimization (O(1) entity lookup & cached state/nbt parsing)
 
-## [1.21.1-0.10.0] - 2026-11-17
+## [1.21.1-0.10.0] - 2026-10-17
 
 ### Added
 
@@ -191,7 +202,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
  - Fl1s
 
-## [1.21.1-0.9.5] - 2026-11-17
+## [1.21.1-0.9.5] - 2026-10-17
 
 ### Changed
 
@@ -211,7 +222,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Fl1s
 
-## [1.21.1-0.8.9] - 2026-11-16
+## [1.21.1-0.8.9] - 2026-10-16
 
 ### Added
 
