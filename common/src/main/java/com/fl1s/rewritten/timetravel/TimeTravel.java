@@ -104,12 +104,11 @@ public class TimeTravel {
 		if (playersSnapshotTick != now || playersSnapshot == null) {
 			playersSnapshot = new ArrayList<>(server.getPlayerList().getPlayers());
 			int active = 0;
-			for (int i = 0, n = playersSnapshot.size(); i < n; i++) {
-				ServerPlayer p = playersSnapshot.get(i);
-				if (isClone(p)) continue;
-				PlayerData pd = timelineSceneManager.getRecordingPlayer(p.getName().getString());
-				if (pd != null && pd.getActive()) active++;
-			}
+            for (ServerPlayer p : playersSnapshot) {
+                if (isClone(p)) continue;
+                PlayerData pd = timelineSceneManager.getRecordingPlayer(p.getName().getString());
+                if (pd != null && pd.getActive()) active++;
+            }
 			playersSnapshotActiveCount = active;
 			playersSnapshotTick = now;
 		}

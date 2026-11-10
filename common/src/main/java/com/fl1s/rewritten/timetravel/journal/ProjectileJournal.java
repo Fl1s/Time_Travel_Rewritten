@@ -20,6 +20,8 @@ import net.minecraft.world.entity.projectile.FireworkRocketEntity;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ThrownEnderpearl;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -81,6 +83,8 @@ public final class ProjectileJournal {
         String dim;
         boolean landed;
         Entry spawnEntry;
+        BlockPos supportPos;
+        BlockState supportState;
     }
 
     private static boolean skip(Entity e) {
@@ -233,26 +237,45 @@ public final class ProjectileJournal {
             long nowTick = TimeTravel.timelineTick;
             List<Entry> trail = getTrails().get(spawn.uuid);
 
+            BlockPos supportPos = null;
+            BlockState supportState = null;
+
             if (created instanceof AbstractArrow) {
+                Entry last;
                 if (trail != null && !trail.isEmpty()) {
-                    Entry last = trail.get(trail.size() - 1);
-                    boolean stopped = last.vx * last.vx + last.vy * last.vy + last.vz * last.vz < 0.0001;
-                    if (last.tick <= nowTick - 3 || stopped) {
-                        freezeLanded(created, last);
-                        landed = true;
-                    } else {
-                        Entry best = null;
-                        for (Entry s : trail) {
-                            if (s.tick > nowTick) break;
-                            best = s;
-                        }
-                        if (best != null) {
-                            created.moveTo(best.x, best.y, best.z, best.yRot, best.xRot);
-                            created.setDeltaMovement(best.vx, best.vy, best.vz);
-                        }
-                    }
+                    last = trail.getLast();
                 } else {
+                    last = spawn;
+                }
+
+                boolean stopped = last.vx * last.vx + last.vy * last.vy + last.vz * last.vz < 0.0001;
+                if (last == spawn || last.tick <= nowTick - 3 || stopped) {
+                    Vec3 dir = new Vec3(last.vx, last.vy, last.vz);
+                    if (dir.lengthSqr() < 0.0004) {
+                        double yaw = Math.toRadians(last.yRot);
+                        double pitch = Math.toRadians(last.xRot);
+                        dir = new Vec3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+                    }
+                    supportPos = BlockPos.containing(
+                            new Vec3(last.x, last.y, last.z).add(dir.normalize().scale(0.1)));
+                    supportState = level.getBlockState(supportPos);
+
+                    if (supportState.isAir()) {
+                        created.discard();
+                        return;
+                    }
+                    freezeLanded(created, last);
                     landed = true;
+                } else {
+                    Entry best = null;
+                    for (Entry s : trail) {
+                        if (s.tick > nowTick) break;
+                        best = s;
+                    }
+                    if (best != null) {
+                        created.moveTo(best.x, best.y, best.z, best.yRot, best.xRot);
+                        created.setDeltaMovement(best.vx, best.vy, best.vz);
+                    }
                 }
             }
 
@@ -263,14 +286,16 @@ public final class ProjectileJournal {
             p.uuid = spawn.uuid;
             p.dim = spawn.dim;
             p.spawnEntry = spawn;
+            p.supportPos = supportPos;
+            p.supportState = supportState;
             puppets.put(spawn.uuid, p);
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("[TT-PROJ] start failed {}", spawn.uuid, ex);
         }
     }
 
-    private static void freezeLanded(Entity e, Entry last) {
-        if (last == null) return;
+    private static boolean freezeLanded(Entity e, Entry last) {
+        if (last == null) return false;
         e.moveTo(last.x, last.y, last.z, last.yRot, last.xRot);
         Vec3 motion = new Vec3(last.vx, last.vy, last.vz);
         if (motion.lengthSqr() < 0.0004) {
@@ -285,7 +310,24 @@ public final class ProjectileJournal {
             arrow.setCritArrow(false);
             AbstractArrowAccessor acc = (AbstractArrowAccessor) arrow;
             acc.tt$setInGround(true);
-            acc.tt$setLastState(e.level().getBlockState(BlockPos.containing(e.position().add(motion.normalize().scale(0.1)))));
+            BlockState state = e.level().getBlockState(BlockPos.containing(e.position().add(motion.normalize().scale(0.1))));
+            acc.tt$setLastState(state);
+        }
+        return true;
+    }
+
+    private static void computeSupport(Puppet p, Entry last) {
+        if (last == null || !(p.entity instanceof AbstractArrow)) return;
+        Vec3 dir = new Vec3(last.vx, last.vy, last.vz);
+        if (dir.lengthSqr() < 0.0004) {
+            double yaw = Math.toRadians(last.yRot);
+            double pitch = Math.toRadians(last.xRot);
+            dir = new Vec3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+        }
+        p.supportPos = BlockPos.containing(
+                new Vec3(last.x, last.y, last.z).add(dir.normalize().scale(0.1)));
+        if (p.entity.level() instanceof ServerLevel lvl) {
+            p.supportState = lvl.getBlockState(p.supportPos);
         }
     }
 
@@ -303,12 +345,28 @@ public final class ProjectileJournal {
                 puppets.remove(p.uuid);
                 continue;
             }
+
+            if (p.landed && p.supportPos != null) {
+                if (!(p.entity.level() instanceof ServerLevel lvl)) {
+                    releasePuppet(p);
+                    continue;
+                }
+                BlockState nowState = lvl.getBlockState(p.supportPos);
+                boolean broken = nowState.isAir()
+                        || (p.supportState != null && !nowState.is(p.supportState.getBlock()));
+                if (broken) {
+                    releasePuppet(p);
+                    continue;
+                }
+            }
+
             if (p.landed) continue;
 
             List<Entry> trail = trails.get(p.uuid);
             if (trail == null || trail.isEmpty()) {
                 if (p.entity instanceof AbstractArrow && p.spawnEntry != null) {
                     p.landed = true;
+                    computeSupport(p, p.spawnEntry);
                 }
                 continue;
             }
@@ -325,11 +383,26 @@ public final class ProjectileJournal {
                     && best.tick <= now - 2) {
                 freezeLanded(p.entity, best);
                 p.landed = true;
+                computeSupport(p, best);
                 continue;
             }
 
             p.entity.moveTo(best.x, best.y, best.z, best.yRot, best.xRot);
             p.entity.setDeltaMovement(best.vx, best.vy, best.vz);
+        }
+    }
+
+    private static void releasePuppet(Puppet p) {
+        puppets.remove(p.uuid);
+        if (p.entity == null || p.entity.isRemoved()) return;
+
+        p.entity.removeTag(EntityJournal.TAG);
+        p.entity.setNoGravity(false);
+        p.entity.setDeltaMovement(Vec3.ZERO);
+        if (p.entity instanceof AbstractArrow arrow) {
+            AbstractArrowAccessor acc = (AbstractArrowAccessor) arrow;
+            acc.tt$setInGround(false);
+            acc.tt$setLastState(Blocks.AIR.defaultBlockState());
         }
     }
 
