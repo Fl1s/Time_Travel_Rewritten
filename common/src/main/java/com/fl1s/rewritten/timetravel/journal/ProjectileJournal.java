@@ -40,6 +40,7 @@ public final class ProjectileJournal {
     public static final int KIND_SPAWN = 0;
     public static final int KIND_SAMPLE = 1;
     public static final int KIND_END = 2;
+    public static final int KIND_LAND = 3;
 
     public static final class Entry {
         public long tick;
@@ -52,6 +53,7 @@ public final class ProjectileJournal {
         public double x, y, z;
         public double vx, vy, vz;
         public float yRot, xRot;
+        public long supportPos;
     }
 
     private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_projectiles.json", new TypeToken<ArrayList<Entry>>() {
@@ -195,12 +197,56 @@ public final class ProjectileJournal {
                 s.vz = v.z;
                 s.yRot = e.getYRot();
                 s.xRot = e.getXRot();
+
+                if (e instanceof AbstractArrow arrow && ((AbstractArrowAccessor) arrow).tt$isInGround()) {
+                    if (!hasLandEntry(e.getUUID())) {
+                        BlockPos support = BlockPos.containing(
+                                arrow.position().add(v.normalize().scale(0.1)));
+                        Entry land = new Entry();
+                        land.tick = now;
+                        land.seq = STORE.nextSeq();
+                        land.visit = spawnVisitOf(e.getUUID());
+                        land.kind = KIND_LAND;
+                        land.uuid = e.getUUID();
+                        land.dim = dim;
+                        land.supportPos = support.asLong();
+                        STORE.entries().add(land);
+                        STORE.markDirty();
+                    }
+                }
                 STORE.entries().add(s);
                 lastSamples.put(s.uuid, s);
                 STORE.markDirty();
             }
         }
         ReplayState.observe(now);
+    }
+
+    private static boolean hasLandEntry(UUID uuid){
+        for (Entry e : STORE.entries()){
+            if (e.kind == KIND_LAND && e.uuid.equals(uuid)) return true;
+        }
+        return false;
+    }
+
+    private static int spawnVisitOf(UUID uuid){
+        for (Entry e : STORE.entries()){
+            if (e.kind == KIND_SPAWN && e.uuid.equals(uuid)) return e.visit;
+        }
+        return -1;
+    }
+
+    public static boolean isDoomedSupport(ServerLevel level, BlockPos pos, long now){
+        String dim = level.dimension().location().toString();
+        long packed = pos.asLong();
+        for (Entry e : STORE.entries()){
+            if (e.kind != KIND_LAND) continue;
+            if (!e.dim.equals(dim)) continue;
+            if (e.tick < now) continue;
+            if (e.supportPos != packed) continue;
+            return true;
+        }
+        return false;
     }
 
     public static void tick() {
@@ -450,6 +496,7 @@ public final class ProjectileJournal {
 
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
+        STORE.upcoming().removeIf(e -> e.kind == KIND_LAND);
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {

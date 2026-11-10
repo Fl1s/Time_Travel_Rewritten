@@ -172,6 +172,7 @@ public final class BlockJournal {
 
     public static boolean isLocked(ServerLevel level, BlockPos pos, BlockState requested) {
         if (!TimeTravel.isLooping || applying || replayingLive || buildDepth > 0) return false;
+        if (requested.isAir() && ProjectileJournal.isDoomedSupport(level, pos, TimeTravel.timelineTick)) return true;
         List<Entry> list = byPos.get(pos.asLong());
         if (list == null) return false;
         BlockState current = level.getBlockState(pos);
