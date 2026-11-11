@@ -10,6 +10,9 @@ public interface AbstractArrowAccessor {
     @Accessor("inGround")
     void tt$setInGround(boolean inGround);
 
+    @Accessor("inGround")
+    boolean tt$isInGround();
+
     @Accessor("lastState")
     void tt$setLastState(BlockState state);
 }

@@ -1,17 +1,13 @@
 package com.fl1s.rewritten.timetravel.mob;
 
-import com.fl1s.rewritten.timetravel.*;
-import com.fl1s.rewritten.timetravel.data.PlayerData;
-import com.fl1s.rewritten.timetravel.data.ReplayState;
-import com.fl1s.rewritten.timetravel.journal.BlockJournal;
-import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
-import com.fl1s.rewritten.timetravel.journal.Journal;
-import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
+import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.data.ReplayState;
+import com.fl1s.rewritten.timetravel.journal.*;
+import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.google.gson.reflect.TypeToken;
-import com.fl1s.rewritten.timetravel.journal.EffectJournal;
-import com.fl1s.rewritten.timetravel.journal.ParticleJournal;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;

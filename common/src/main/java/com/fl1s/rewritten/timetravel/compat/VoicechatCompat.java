@@ -1,7 +1,7 @@
 package com.fl1s.rewritten.timetravel.compat;
 
-import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
 import net.minecraft.world.entity.Entity;
 
 import java.util.Collections;

@@ -1,7 +1,8 @@
 package com.fl1s.rewritten.timetravel.clone;
 
-import com.fl1s.rewritten.timetravel.*;
+import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
+import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.data.Visit;
@@ -9,7 +10,6 @@ import com.fl1s.rewritten.timetravel.journal.ItemFlowJournal;
 import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.timeline.ChatTimeline;
-import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;

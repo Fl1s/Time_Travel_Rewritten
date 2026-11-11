@@ -5,15 +5,10 @@ import com.fl1s.rewritten.timetravel.util.JsonStore;
 
 import java.lang.reflect.Type;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.PriorityQueue;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.ToLongFunction;
 import java.util.function.ToIntFunction;
+import java.util.function.ToLongFunction;
 
 /**
  * Shared storage for a timeline journal.

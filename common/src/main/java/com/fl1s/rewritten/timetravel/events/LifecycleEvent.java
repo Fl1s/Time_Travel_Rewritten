@@ -1,6 +1,7 @@
 package com.fl1s.rewritten.timetravel.events;
 
-import com.fl1s.rewritten.timetravel.*;
+import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.TimeTravelConfig;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.journal.ProcessJournal;
@@ -12,6 +13,7 @@ import net.minecraft.world.level.storage.LevelResource;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
 public class LifecycleEvent {
     public static void onServerStart(MinecraftServer server) {
         TimeTravel.resetSession();

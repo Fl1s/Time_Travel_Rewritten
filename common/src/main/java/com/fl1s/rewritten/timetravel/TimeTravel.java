@@ -5,8 +5,9 @@ import com.fl1s.rewritten.timetravel.clone.CloneManager;
 import com.fl1s.rewritten.timetravel.compat.VoicechatInteractionCompat;
 import com.fl1s.rewritten.timetravel.compat.anim.AnimRelay;
 import com.fl1s.rewritten.timetravel.compat.anim.AttackRelay;
-import com.fl1s.rewritten.timetravel.compat.anim.BetterCombatIdleRelay;
+import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.data.Skin;
 import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.JournalRegistry;
@@ -15,8 +16,6 @@ import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.net.TimelineSyncPayload;
-import com.fl1s.rewritten.timetravel.data.Clones;
-import com.fl1s.rewritten.timetravel.data.Skin;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.network.protocol.game.ClientboundStopSoundPacket;
 import net.minecraft.resources.ResourceKey;
@@ -104,12 +103,11 @@ public class TimeTravel {
 		if (playersSnapshotTick != now || playersSnapshot == null) {
 			playersSnapshot = new ArrayList<>(server.getPlayerList().getPlayers());
 			int active = 0;
-			for (int i = 0, n = playersSnapshot.size(); i < n; i++) {
-				ServerPlayer p = playersSnapshot.get(i);
-				if (isClone(p)) continue;
-				PlayerData pd = timelineSceneManager.getRecordingPlayer(p.getName().getString());
-				if (pd != null && pd.getActive()) active++;
-			}
+            for (ServerPlayer p : playersSnapshot) {
+                if (isClone(p)) continue;
+                PlayerData pd = timelineSceneManager.getRecordingPlayer(p.getName().getString());
+                if (pd != null && pd.getActive()) active++;
+            }
 			playersSnapshotActiveCount = active;
 			playersSnapshotTick = now;
 		}

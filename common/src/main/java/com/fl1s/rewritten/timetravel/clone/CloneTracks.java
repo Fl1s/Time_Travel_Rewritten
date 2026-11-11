@@ -1,11 +1,11 @@
 package com.fl1s.rewritten.timetravel.clone;
 
+import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.compat.anim.AttackRelay;
 import com.fl1s.rewritten.timetravel.compat.anim.BetterCombatIdleRelay;
-import com.fl1s.rewritten.timetravel.data.PlayerData;
-import com.fl1s.rewritten.timetravel.TimeTravel;
-import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.entity.FishingHookExt;
 import com.fl1s.rewritten.timetravel.util.TimelineSceneManager;
 import net.minecraft.core.particles.ParticleTypes;

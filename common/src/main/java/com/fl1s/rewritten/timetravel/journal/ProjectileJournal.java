@@ -8,28 +8,19 @@ import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.mixin.AbstractArrowAccessor;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.projectile.AbstractArrow;
 import com.google.gson.reflect.TypeToken;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.projectile.FireworkRocketEntity;
-import net.minecraft.world.entity.projectile.FishingHook;
-import net.minecraft.world.entity.projectile.Projectile;
-import net.minecraft.world.entity.projectile.ThrownEnderpearl;
+import net.minecraft.world.entity.projectile.*;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public final class ProjectileJournal {
     private ProjectileJournal() {
@@ -38,6 +29,7 @@ public final class ProjectileJournal {
     public static final int KIND_SPAWN = 0;
     public static final int KIND_SAMPLE = 1;
     public static final int KIND_END = 2;
+    public static final int KIND_LAND = 3;
 
     public static final class Entry {
         public long tick;
@@ -50,6 +42,7 @@ public final class ProjectileJournal {
         public double x, y, z;
         public double vx, vy, vz;
         public float yRot, xRot;
+        public long supportPos;
     }
 
     private static final Journal<Entry> STORE = new Journal<>("timetravel_rewritten_projectiles.json", new TypeToken<ArrayList<Entry>>() {
@@ -81,6 +74,8 @@ public final class ProjectileJournal {
         String dim;
         boolean landed;
         Entry spawnEntry;
+        BlockPos supportPos;
+        BlockState supportState;
     }
 
     private static boolean skip(Entity e) {
@@ -191,12 +186,56 @@ public final class ProjectileJournal {
                 s.vz = v.z;
                 s.yRot = e.getYRot();
                 s.xRot = e.getXRot();
+
+                if (e instanceof AbstractArrow arrow && ((AbstractArrowAccessor) arrow).tt$isInGround()) {
+                    if (!hasLandEntry(e.getUUID())) {
+                        BlockPos support = BlockPos.containing(
+                                arrow.position().add(v.normalize().scale(0.1)));
+                        Entry land = new Entry();
+                        land.tick = now;
+                        land.seq = STORE.nextSeq();
+                        land.visit = spawnVisitOf(e.getUUID());
+                        land.kind = KIND_LAND;
+                        land.uuid = e.getUUID();
+                        land.dim = dim;
+                        land.supportPos = support.asLong();
+                        STORE.entries().add(land);
+                        STORE.markDirty();
+                    }
+                }
                 STORE.entries().add(s);
                 lastSamples.put(s.uuid, s);
                 STORE.markDirty();
             }
         }
         ReplayState.observe(now);
+    }
+
+    private static boolean hasLandEntry(UUID uuid){
+        for (Entry e : STORE.entries()){
+            if (e.kind == KIND_LAND && e.uuid.equals(uuid)) return true;
+        }
+        return false;
+    }
+
+    private static int spawnVisitOf(UUID uuid){
+        for (Entry e : STORE.entries()){
+            if (e.kind == KIND_SPAWN && e.uuid.equals(uuid)) return e.visit;
+        }
+        return -1;
+    }
+
+    public static boolean isDoomedSupport(ServerLevel level, BlockPos pos, long now){
+        String dim = level.dimension().location().toString();
+        long packed = pos.asLong();
+        for (Entry e : STORE.entries()){
+            if (e.kind != KIND_LAND) continue;
+            if (!e.dim.equals(dim)) continue;
+            if (e.tick < now) continue;
+            if (e.supportPos != packed) continue;
+            return true;
+        }
+        return false;
     }
 
     public static void tick() {
@@ -233,26 +272,45 @@ public final class ProjectileJournal {
             long nowTick = TimeTravel.timelineTick;
             List<Entry> trail = getTrails().get(spawn.uuid);
 
+            BlockPos supportPos = null;
+            BlockState supportState = null;
+
             if (created instanceof AbstractArrow) {
+                Entry last;
                 if (trail != null && !trail.isEmpty()) {
-                    Entry last = trail.get(trail.size() - 1);
-                    boolean stopped = last.vx * last.vx + last.vy * last.vy + last.vz * last.vz < 0.0001;
-                    if (last.tick <= nowTick - 3 || stopped) {
-                        freezeLanded(created, last);
-                        landed = true;
-                    } else {
-                        Entry best = null;
-                        for (Entry s : trail) {
-                            if (s.tick > nowTick) break;
-                            best = s;
-                        }
-                        if (best != null) {
-                            created.moveTo(best.x, best.y, best.z, best.yRot, best.xRot);
-                            created.setDeltaMovement(best.vx, best.vy, best.vz);
-                        }
-                    }
+                    last = trail.getLast();
                 } else {
+                    last = spawn;
+                }
+
+                boolean stopped = last.vx * last.vx + last.vy * last.vy + last.vz * last.vz < 0.0001;
+                if (last == spawn || last.tick <= nowTick - 3 || stopped) {
+                    Vec3 dir = new Vec3(last.vx, last.vy, last.vz);
+                    if (dir.lengthSqr() < 0.0004) {
+                        double yaw = Math.toRadians(last.yRot);
+                        double pitch = Math.toRadians(last.xRot);
+                        dir = new Vec3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+                    }
+                    supportPos = BlockPos.containing(
+                            new Vec3(last.x, last.y, last.z).add(dir.normalize().scale(0.1)));
+                    supportState = level.getBlockState(supportPos);
+
+                    if (supportState.isAir()) {
+                        created.discard();
+                        return;
+                    }
+                    freezeLanded(created, last);
                     landed = true;
+                } else {
+                    Entry best = null;
+                    for (Entry s : trail) {
+                        if (s.tick > nowTick) break;
+                        best = s;
+                    }
+                    if (best != null) {
+                        created.moveTo(best.x, best.y, best.z, best.yRot, best.xRot);
+                        created.setDeltaMovement(best.vx, best.vy, best.vz);
+                    }
                 }
             }
 
@@ -263,14 +321,16 @@ public final class ProjectileJournal {
             p.uuid = spawn.uuid;
             p.dim = spawn.dim;
             p.spawnEntry = spawn;
+            p.supportPos = supportPos;
+            p.supportState = supportState;
             puppets.put(spawn.uuid, p);
         } catch (Exception ex) {
             TimeTravel.TIMELINE_LOGGER.error("[TT-PROJ] start failed {}", spawn.uuid, ex);
         }
     }
 
-    private static void freezeLanded(Entity e, Entry last) {
-        if (last == null) return;
+    private static boolean freezeLanded(Entity e, Entry last) {
+        if (last == null) return false;
         e.moveTo(last.x, last.y, last.z, last.yRot, last.xRot);
         Vec3 motion = new Vec3(last.vx, last.vy, last.vz);
         if (motion.lengthSqr() < 0.0004) {
@@ -285,7 +345,24 @@ public final class ProjectileJournal {
             arrow.setCritArrow(false);
             AbstractArrowAccessor acc = (AbstractArrowAccessor) arrow;
             acc.tt$setInGround(true);
-            acc.tt$setLastState(e.level().getBlockState(BlockPos.containing(e.position().add(motion.normalize().scale(0.1)))));
+            BlockState state = e.level().getBlockState(BlockPos.containing(e.position().add(motion.normalize().scale(0.1))));
+            acc.tt$setLastState(state);
+        }
+        return true;
+    }
+
+    private static void computeSupport(Puppet p, Entry last) {
+        if (last == null || !(p.entity instanceof AbstractArrow)) return;
+        Vec3 dir = new Vec3(last.vx, last.vy, last.vz);
+        if (dir.lengthSqr() < 0.0004) {
+            double yaw = Math.toRadians(last.yRot);
+            double pitch = Math.toRadians(last.xRot);
+            dir = new Vec3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+        }
+        p.supportPos = BlockPos.containing(
+                new Vec3(last.x, last.y, last.z).add(dir.normalize().scale(0.1)));
+        if (p.entity.level() instanceof ServerLevel lvl) {
+            p.supportState = lvl.getBlockState(p.supportPos);
         }
     }
 
@@ -303,12 +380,28 @@ public final class ProjectileJournal {
                 puppets.remove(p.uuid);
                 continue;
             }
+
+            if (p.landed && p.supportPos != null) {
+                if (!(p.entity.level() instanceof ServerLevel lvl)) {
+                    releasePuppet(p);
+                    continue;
+                }
+                BlockState nowState = lvl.getBlockState(p.supportPos);
+                boolean broken = nowState.isAir()
+                        || (p.supportState != null && !nowState.is(p.supportState.getBlock()));
+                if (broken) {
+                    releasePuppet(p);
+                    continue;
+                }
+            }
+
             if (p.landed) continue;
 
             List<Entry> trail = trails.get(p.uuid);
             if (trail == null || trail.isEmpty()) {
                 if (p.entity instanceof AbstractArrow && p.spawnEntry != null) {
                     p.landed = true;
+                    computeSupport(p, p.spawnEntry);
                 }
                 continue;
             }
@@ -325,11 +418,26 @@ public final class ProjectileJournal {
                     && best.tick <= now - 2) {
                 freezeLanded(p.entity, best);
                 p.landed = true;
+                computeSupport(p, best);
                 continue;
             }
 
             p.entity.moveTo(best.x, best.y, best.z, best.yRot, best.xRot);
             p.entity.setDeltaMovement(best.vx, best.vy, best.vz);
+        }
+    }
+
+    private static void releasePuppet(Puppet p) {
+        puppets.remove(p.uuid);
+        if (p.entity == null || p.entity.isRemoved()) return;
+
+        p.entity.removeTag(EntityJournal.TAG);
+        p.entity.setNoGravity(false);
+        p.entity.setDeltaMovement(Vec3.ZERO);
+        if (p.entity instanceof AbstractArrow arrow) {
+            AbstractArrowAccessor acc = (AbstractArrowAccessor) arrow;
+            acc.tt$setInGround(false);
+            acc.tt$setLastState(Blocks.AIR.defaultBlockState());
         }
     }
 
@@ -377,6 +485,7 @@ public final class ProjectileJournal {
 
     public static void rebuildUpcoming() {
         STORE.rebuildUpcoming();
+        STORE.upcoming().removeIf(e -> e.kind == KIND_LAND);
     }
 
     public static void eraseVisits(Set<Integer> visitIds) {
