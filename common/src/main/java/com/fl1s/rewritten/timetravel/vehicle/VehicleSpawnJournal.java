@@ -1,30 +1,20 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
-import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.data.*;
 import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.mob.MobEventJournal;
-import com.fl1s.rewritten.timetravel.data.Clones;
-import com.fl1s.rewritten.timetravel.data.Levels;
-import com.fl1s.rewritten.timetravel.data.Removal;
-import com.fl1s.rewritten.timetravel.data.ReplayState;
-import net.minecraft.server.level.ServerPlayer;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Records the initial state of every vehicle ({@code AbstractMinecart} and

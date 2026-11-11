@@ -25,11 +25,7 @@ import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public final class WardenEventJournal {
     private WardenEventJournal() {

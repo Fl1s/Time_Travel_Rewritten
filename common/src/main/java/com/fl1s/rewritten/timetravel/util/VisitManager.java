@@ -1,10 +1,10 @@
 package com.fl1s.rewritten.timetravel.util;
 
 import com.fl1s.rewritten.timetravel.TimeTravel;
-import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.clone.CloneTracks;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.data.TimelineSession;
 import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.server.level.ServerPlayer;

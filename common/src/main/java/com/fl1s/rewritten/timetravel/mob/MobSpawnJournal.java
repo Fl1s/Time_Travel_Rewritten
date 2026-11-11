@@ -1,13 +1,13 @@
 package com.fl1s.rewritten.timetravel.mob;
 
+import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.compat.ironsspells.IrSpellsCompat;
 import com.fl1s.rewritten.timetravel.data.Clones;
-import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.data.Levels;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
-import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.journal.Journal;
-import com.fl1s.rewritten.timetravel.data.Levels;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;

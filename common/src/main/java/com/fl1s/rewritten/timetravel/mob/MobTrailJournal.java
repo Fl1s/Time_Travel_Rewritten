@@ -1,13 +1,13 @@
 package com.fl1s.rewritten.timetravel.mob;
 
-import com.fl1s.rewritten.timetravel.journal.BlockJournal;
-import com.fl1s.rewritten.timetravel.journal.BossFightJournal;
+import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.data.ReplayState;
-import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.journal.BossFightJournal;
 import com.fl1s.rewritten.timetravel.mixin.CreeperAccessor;
 import com.fl1s.rewritten.timetravel.mixin.LivingEntityAccessor;
-import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.core.registries.Registries;

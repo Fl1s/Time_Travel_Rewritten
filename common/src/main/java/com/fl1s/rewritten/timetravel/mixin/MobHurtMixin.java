@@ -1,6 +1,8 @@
 package com.fl1s.rewritten.timetravel.mixin;
 
+import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.clone.CloneFx;
+import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.entity.EntityJournal;
 import com.fl1s.rewritten.timetravel.journal.ProjectileJournal;
 import com.fl1s.rewritten.timetravel.journal.TrackedEntityJournal;
@@ -8,11 +10,9 @@ import com.fl1s.rewritten.timetravel.mob.MobBinding;
 import com.fl1s.rewritten.timetravel.mob.MobJournal;
 import com.fl1s.rewritten.timetravel.mob.MobSpawnJournal;
 import com.fl1s.rewritten.timetravel.mob.MobTrailJournal;
-import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.net.HurtFlashPayload;
 import com.fl1s.rewritten.timetravel.net.TimelineNet;
 import com.fl1s.rewritten.timetravel.util.DoomedFeedback;
-import com.fl1s.rewritten.timetravel.data.Clones;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;

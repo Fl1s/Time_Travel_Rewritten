@@ -1,7 +1,7 @@
 package com.fl1s.rewritten.timetravel.events;
 
-import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;

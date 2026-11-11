@@ -1,11 +1,11 @@
 package com.fl1s.rewritten.timetravel.journal;
 
-import com.fl1s.rewritten.timetravel.data.PlayerData;
-import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
-import com.fl1s.rewritten.timetravel.mixin.BaseRailBlockAccessor;
 import com.fl1s.rewritten.timetravel.data.Clones;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.data.ReplayState;
+import com.fl1s.rewritten.timetravel.mixin.BaseRailBlockAccessor;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
@@ -22,17 +22,7 @@ import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.item.JukeboxSongPlayer;
-import net.minecraft.world.level.block.AbstractFurnaceBlock;
-import net.minecraft.world.level.block.BaseFireBlock;
-import net.minecraft.world.level.block.BaseRailBlock;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.BrewingStandBlock;
-import net.minecraft.world.level.block.ButtonBlock;
-import net.minecraft.world.level.block.JukeboxBlock;
-import net.minecraft.world.level.block.LevelEvent;
-import net.minecraft.world.level.block.LiquidBlock;
-import net.minecraft.world.level.block.RedStoneWireBlock;
+import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
@@ -45,16 +35,7 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class BlockJournal {

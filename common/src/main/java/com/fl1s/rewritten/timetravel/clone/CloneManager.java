@@ -1,8 +1,11 @@
 package com.fl1s.rewritten.timetravel.clone;
 
-import com.fl1s.rewritten.timetravel.*;
+import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.compat.VoicechatCompat;
-import com.fl1s.rewritten.timetravel.data.*;
+import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.data.PlayerData;
+import com.fl1s.rewritten.timetravel.data.Visit;
 import com.fl1s.rewritten.timetravel.mocap.ClonePlayback;
 import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.fl1s.rewritten.timetravel.net.CloneAppearPayload;

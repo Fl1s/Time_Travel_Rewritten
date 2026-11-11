@@ -1,9 +1,9 @@
 package com.fl1s.rewritten.timetravel.vehicle;
 
-import com.fl1s.rewritten.timetravel.data.Levels;
-import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.TimeTravel;
 import com.fl1s.rewritten.timetravel.data.Clones;
+import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.data.ReplayState;
 import com.fl1s.rewritten.timetravel.util.JsonStore;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
@@ -12,13 +12,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.lang.reflect.Type;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Dense per-tick trail of every vehicle in a loaded chunk, plus a coarse seed

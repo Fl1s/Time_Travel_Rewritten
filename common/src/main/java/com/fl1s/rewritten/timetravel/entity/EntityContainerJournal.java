@@ -1,10 +1,10 @@
 package com.fl1s.rewritten.timetravel.entity;
 
-import com.fl1s.rewritten.timetravel.journal.BlockJournal;
 import com.fl1s.rewritten.timetravel.TimeTravel;
-import com.fl1s.rewritten.timetravel.data.Visit;
-import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.fl1s.rewritten.timetravel.data.Levels;
+import com.fl1s.rewritten.timetravel.data.Visit;
+import com.fl1s.rewritten.timetravel.journal.BlockJournal;
+import com.fl1s.rewritten.timetravel.journal.Journal;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -13,13 +13,7 @@ import net.minecraft.world.entity.vehicle.ContainerEntity;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Journal for the contents of entity containers (chest minecarts, chest boats,

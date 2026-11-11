@@ -1,12 +1,12 @@
 package com.fl1s.rewritten.timetravel.commands;
 
+import com.fl1s.rewritten.timetravel.TimeTravel;
+import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import com.fl1s.rewritten.timetravel.mocap.MocapAdapter;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import com.fl1s.rewritten.timetravel.TimeTravel;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
